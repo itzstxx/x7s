@@ -1,16 +1,3 @@
---[[
-    ╔══════════════════════════════════════════════════════╗
-    ║              x7s  —  Loader  V1.0                   ║
-    ╠══════════════════════════════════════════════════════╣
-    ║  USO EN EJECUTOR:                                    ║
-    ║                                                      ║
-    ║    loadstring(game:HttpGet(                          ║
-    ║      "https://raw.githubusercontent.com/             ║
-    ║       itzstxx/x7s/main/x7s.lua"                  ║
-    ║    ))()                                              ║
-    ╚══════════════════════════════════════════════════════╝
-]]
-
 local RAW_URL = "https://raw.githubusercontent.com/itzstxx/x7s/main/x7s.lua"
 
 local source do
@@ -26,7 +13,6 @@ local source do
     source = result
 end
 
--- Strip UTF-8 BOM (U+FEFF) if present — GitHub sometimes adds it
 source = source:gsub("^" .. string.char(0xEF, 0xBB, 0xBF), "")
 
 local fn, compileErr = loadstring(source, "x7s")

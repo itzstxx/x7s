@@ -1,4 +1,3 @@
-﻿
 local MaintenanceEnabled = false
 
 if MaintenanceEnabled then
@@ -26,7 +25,7 @@ if MaintenanceEnabled then
         l.TextSize=sz; l.TextWrapped=true; l.TextXAlignment=Enum.TextXAlignment.Center
         return l
     end
-    _lbl("âœ  Sistema en Mantenimiento  âœ",22,Color3.fromRGB(141,122,174),40)
+    _lbl("✝  Sistema en Mantenimiento  ✝",22,Color3.fromRGB(141,122,174),40)
     local _div=Instance.new("Frame",_m); _div.Size=UDim2.new(1,-60,0,1)
     _div.Position=UDim2.new(0,30,0,90); _div.BackgroundColor3=Color3.fromRGB(141,122,174)
     _div.BackgroundTransparency=0.6; _div.BorderSizePixel=0
@@ -48,7 +47,7 @@ if MaintenanceEnabled then
     _sm.Font=Enum.Font.GothamBold; _sm.TextSize=20; _sm.TextXAlignment=Enum.TextXAlignment.Left
     local _cb=Instance.new("TextButton",_m); _cb.Size=UDim2.fromOffset(30,30)
     _cb.Position=UDim2.new(1,-40,0,10); _cb.BackgroundColor3=Color3.fromRGB(30,22,42)
-    _cb.BorderSizePixel=0; _cb.Text="âœ•"; _cb.TextColor3=Color3.fromRGB(200,170,220)
+    _cb.BorderSizePixel=0; _cb.Text="✕"; _cb.TextColor3=Color3.fromRGB(200,170,220)
     _cb.Font=Enum.Font.GothamBold; _cb.TextSize=13
     Instance.new("UICorner",_cb).CornerRadius=UDim.new(1,0)
     _cb.MouseButton1Click:Connect(function()
@@ -94,45 +93,51 @@ local function save() pcall(function() writefile(CONFIG_FILE,HttpService:JSONEnc
 local Locale = {
     English = {
         tab_esp="ESP", tab_hbx="HBX", tab_trg="TRG", tab_evt="EVT", tab_kll="KILL", tab_cfg="CFG",
+        
         esp_on="Enable ESP",        esp_on_d="Show enemies through walls.",
         esp_names="Show Enemy Name",
         esp_lines="ESP Lines",      esp_lines_d="Draw lines from your character to enemy positions.",
         esp_key="ESP Keybind",
+        
         hbx_on="Enable Hitbox",     hbx_on_d="Show and expand enemy hitboxes.",
         hbx_size="Hitbox Size",
         hbx_show="Show Hitbox",
         hbx_key="Hitbox Keybind",
+        
         trg_on="Triggerbot",        trg_on_d="Shoots when your cursor is directly over a visible enemy.",
         trg_key="Triggerbot Keybind",
+        
         ev_sum="Summer 2026",       ev_sum_d="Collects Summer 2026 drops automatically. Only in matches.",
-
+        
         kl_on="Kill All Enemies",   kl_on_d="Instantly eliminates enemies when enabled.",
         kl_keep="Keep Enabled",     kl_keep_d="Keeps Kill All enabled and prevents it from turning off.",
         kl_bbl="Kill All Bubble",   kl_bbl_d="Show a small Kill All button on screen.",
+        
         st_bg="Toggle Panel Background",
         st_notif="Enable Notifications",
         st_lang="Language",
         st_key="Toggle UI",
         st_r1="Reset Toggle UI Keybind",  st_r1_d="Reset this keybind to its default value.",
         st_r2="Reset All Keybinds",       st_r2_d="Reset all keybinds to their default values.",
+        
         n_on="Enabled", n_off="Disabled", n_reset="Keybind reset",
     },
-    EspaÃ±ol = {
+    Español = {
         tab_esp="ESP", tab_hbx="HBX", tab_trg="TRG", tab_evt="EVT", tab_kll="MATAR", tab_cfg="CFG",
-        esp_on="Activar ESP",        esp_on_d="Muestra enemigos a travÃ©s de paredes.",
+        esp_on="Activar ESP",        esp_on_d="Muestra enemigos a través de paredes.",
         esp_names="Nombre del Enemigo",
-        esp_lines="LÃ­neas ESP",      esp_lines_d="Dibuja lÃ­neas desde tu personaje hasta los enemigos.",
+        esp_lines="Líneas ESP",      esp_lines_d="Dibuja líneas desde tu personaje hasta los enemigos.",
         esp_key="Tecla ESP",
         hbx_on="Activar Hitbox",    hbx_on_d="Muestra y expande las hitboxes enemigas.",
-        hbx_size="TamaÃ±o Hitbox",
+        hbx_size="Tamaño Hitbox",
         hbx_show="Mostrar Hitbox",
         hbx_key="Tecla Hitbox",
-        trg_on="Triggerbot",         trg_on_d="Dispara cuando el cursor estÃ¡ sobre un enemigo visible.",
+        trg_on="Triggerbot",         trg_on_d="Dispara cuando el cursor está sobre un enemigo visible.",
         trg_key="Tecla Triggerbot",
-        ev_sum="Verano 2026",        ev_sum_d="Recoge drops de Verano 2026 automÃ¡ticamente. Solo en partidas.",
-        kl_on="Matar a Todos",       kl_on_d="Elimina instantÃ¡neamente a los enemigos cuando estÃ¡ activado.",
+        ev_sum="Verano 2026",        ev_sum_d="Recoge drops de Verano 2026 automáticamente. Solo en partidas.",
+        kl_on="Matar a Todos",       kl_on_d="Elimina instantáneamente a los enemigos cuando está activado.",
         kl_keep="Mantener Activo",   kl_keep_d="Mantiene Matar Todos activo e impide que se desactive.",
-        kl_bbl="Burbuja Matar",      kl_bbl_d="Muestra un pequeÃ±o botÃ³n en pantalla.",
+        kl_bbl="Burbuja Matar",      kl_bbl_d="Muestra un pequeño botón en pantalla.",
         st_bg="Fondo del Panel",
         st_notif="Activar Notificaciones",
         st_lang="Idioma",
@@ -205,7 +210,7 @@ local function showNotif(title, body, isGood)
             toast.BorderSizePixel = 0; toast.ZIndex = 200
             Instance.new("UICorner", toast).CornerRadius = UDim.new(0, 10)
             local ts = Instance.new("UIStroke", toast); ts.Color = col; ts.Transparency = 0.5; ts.Thickness = 1
-
+            
             local bar = Instance.new("Frame", toast); bar.Size = UDim2.new(0, 3, 1, -16)
             bar.Position = UDim2.new(0, 0, 0, 8); bar.BackgroundColor3 = col
             bar.BorderSizePixel = 0; Instance.new("UICorner", bar).CornerRadius = UDim.new(1, 0)
@@ -298,7 +303,7 @@ task.delay(2, function()
         logoImg.Image = ""
         local fl = Instance.new("TextLabel", header)
         fl.Size = UDim2.fromOffset(36, 36); fl.Position = logoImg.Position
-        fl.BackgroundTransparency = 1; fl.Text = "âœ"
+        fl.BackgroundTransparency = 1; fl.Text = "✝"
         fl.TextColor3 = C.ACCENT; fl.Font = Enum.Font.Fantasy
         fl.TextSize = 28; fl.TextXAlignment = Enum.TextXAlignment.Center
     end
@@ -308,7 +313,7 @@ local titleLbl = Instance.new("TextLabel", header)
 titleLbl.Size = UDim2.new(1, -130, 0, 24)
 titleLbl.Position = UDim2.fromOffset(54, 8)
 titleLbl.BackgroundTransparency = 1
-titleLbl.Text = "âœ  x7s  âœ"
+titleLbl.Text = "✝  x7s  ✝"
 titleLbl.TextColor3 = C.ACCENT; titleLbl.Font = Enum.Font.GothamBlack
 titleLbl.TextSize = 16; titleLbl.TextXAlignment = Enum.TextXAlignment.Left
 
@@ -316,7 +321,7 @@ local subLbl = Instance.new("TextLabel", header)
 subLbl.Size = UDim2.new(1, -130, 0, 14)
 subLbl.Position = UDim2.fromOffset(54, 32)
 subLbl.BackgroundTransparency = 1
-subLbl.Text = "v1.0  Â·  by stx  Â·  "..player.Name
+subLbl.Text = "v1.0  ·  by stx  ·  "..player.Name
 subLbl.TextColor3 = C.DIM; subLbl.Font = Enum.Font.Gotham
 subLbl.TextSize = 10; subLbl.TextXAlignment = Enum.TextXAlignment.Left
 
@@ -324,15 +329,15 @@ local igBtn = Instance.new("TextButton", header)
 igBtn.Size = UDim2.fromOffset(88, 12)
 igBtn.Position = UDim2.fromOffset(54, 47)
 igBtn.BackgroundTransparency = 1; igBtn.BorderSizePixel = 0
-igBtn.Text = "ðŸ“· @itzstxx"; igBtn.TextColor3 = Color3.fromRGB(100, 85, 130)
+igBtn.Text = "📷 @itzstxx"; igBtn.TextColor3 = Color3.fromRGB(100, 85, 130)
 igBtn.Font = Enum.Font.GothamBold; igBtn.TextSize = 9
 igBtn.TextXAlignment = Enum.TextXAlignment.Left; igBtn.AutoButtonColor = false
 local _igc = false
 igBtn.MouseButton1Click:Connect(function()
     if _igc then return end; _igc = true
     pcall(function() setclipboard("@itzstxx") end)
-    igBtn.Text = "âœ“ Copiado"; igBtn.TextColor3 = C.ACCENT
-    task.delay(1.8, function() igBtn.Text = "ðŸ“· @itzstxx"; igBtn.TextColor3 = Color3.fromRGB(100,85,130); _igc = false end)
+    igBtn.Text = "✓ Copiado"; igBtn.TextColor3 = C.ACCENT
+    task.delay(1.8, function() igBtn.Text = "📷 @itzstxx"; igBtn.TextColor3 = Color3.fromRGB(100,85,130); _igc = false end)
 end)
 igBtn.MouseEnter:Connect(function() if not _igc then igBtn.TextColor3 = C.ACCENT2 end end)
 igBtn.MouseLeave:Connect(function() if not _igc then igBtn.TextColor3 = Color3.fromRGB(100,85,130) end end)
@@ -341,7 +346,7 @@ local closeBtn = Instance.new("TextButton", header)
 closeBtn.Size = UDim2.fromOffset(30, 30)
 closeBtn.Position = UDim2.new(1, -40, 0.5, -15)
 closeBtn.BackgroundColor3 = Color3.fromRGB(28, 16, 22); closeBtn.BorderSizePixel = 0
-closeBtn.Text = "âœ•"; closeBtn.TextColor3 = C.RED
+closeBtn.Text = "✕"; closeBtn.TextColor3 = C.RED
 closeBtn.Font = Enum.Font.GothamBold; closeBtn.TextSize = 12
 closeBtn.AutoButtonColor = false
 Instance.new("UICorner", closeBtn).CornerRadius = UDim.new(1, 0)
@@ -366,7 +371,7 @@ tabBarLine.BackgroundColor3 = C.BORDER; tabBarLine.BackgroundTransparency = 0.3
 tabBarLine.BorderSizePixel = 0
 
 local TAB_COUNT = 6
-local tabW = PW / TAB_COUNT
+local tabW = PW / TAB_COUNT  
 
 local tabIndicator = Instance.new("Frame", tabBar)
 tabIndicator.Size = UDim2.fromOffset(tabW - 8, 2)
@@ -401,7 +406,7 @@ local function makeTabPage()
 end
 
 for i = 1, TAB_COUNT do
-
+    
     local btn = Instance.new("TextButton", tabBar)
     btn.Size = UDim2.fromOffset(tabW, TABBAR_H)
     btn.Position = UDim2.fromOffset((i - 1) * tabW, 0)
@@ -435,7 +440,7 @@ local function secLabel(parent, text)
     l.Text = text:upper(); l.TextColor3 = C.DIM
     l.Font = Enum.Font.GothamBold; l.TextSize = 10
     l.TextXAlignment = Enum.TextXAlignment.Left
-    local ls = Instance.new("UIStroke", l); ls.Color = C.DIM; ls.Transparency = 1
+    local ls = Instance.new("UIStroke", l); ls.Color = C.DIM; ls.Transparency = 1  
     return f
 end
 
@@ -449,7 +454,7 @@ local function makeCard(parent)
     cs.Color = C.BORDER; cs.Transparency = 0.6; cs.Thickness = 1
     local lay = Instance.new("UIListLayout", card)
     lay.SortOrder = Enum.SortOrder.LayoutOrder; lay.Padding = UDim.new(0, 0)
-
+    
     card.ClipsDescendants = true
     return card
 end
@@ -490,7 +495,7 @@ local function makeToggle(parent, titleKey, descKey, stateKey, cb)
     end
 
     local TW, TH = 46, 26
-    local TS = 20
+    local TS = 20  
     local track = Instance.new("Frame", row)
     track.Size = UDim2.fromOffset(TW, TH)
     track.Position = UDim2.new(1, -(TW + 14), 0.5, -(TH/2))
@@ -518,10 +523,10 @@ local function makeToggle(parent, titleKey, descKey, stateKey, cb)
     hit.MouseButton1Click:Connect(function()
         S[stateKey] = not S[stateKey]; refresh(); save()
         local state = S[stateKey]
-        showNotif("âœ  "..title, state and L("n_on") or L("n_off"), state)
+        showNotif("✝  "..title, state and L("n_on") or L("n_off"), state)
         if cb then cb(state) end
     end)
-
+    
     hit.MouseEnter:Connect(function()
         TweenService:Create(row, TI, {BackgroundColor3 = Color3.fromRGB(20,16,30)}):Play()
         row.BackgroundTransparency = 0
@@ -625,7 +630,7 @@ local function makeKeybind(parent, titleKey, stateKey)
                 local kn = inp.KeyCode.Name
                 S[stateKey] = kn; keyBtn.Text = kn; keyBtn.TextColor3 = C.KEY_TXT
                 listening = false; conn:Disconnect()
-                save(); showNotif("âœ  "..title, kn, true)
+                save(); showNotif("✝  "..title, kn, true)
             end
         end)
     end)
@@ -661,7 +666,7 @@ local function makeDropdown(parent, titleKey, stateKey, options, cb)
     local arrow = Instance.new("TextLabel", row)
     arrow.BackgroundTransparency = 1; arrow.Size = UDim2.fromOffset(14, 18)
     arrow.Position = UDim2.new(1, -18, 0, 16)
-    arrow.Text = "â–¾"; arrow.TextColor3 = C.DIM
+    arrow.Text = "▾"; arrow.TextColor3 = C.DIM
     arrow.Font = Enum.Font.GothamBold; arrow.TextSize = 11
 
     local optH = 36
@@ -689,7 +694,7 @@ local function makeDropdown(parent, titleKey, stateKey, options, cb)
             end
             TweenService:Create(dropFrame, TIF, {Size = UDim2.new(1, 0, 0, 0)}):Play()
             task.delay(0.25, function() dropFrame.Visible = false end)
-            container.Size = UDim2.new(1, 0, 0, 50); arrow.Text = "â–¾"
+            container.Size = UDim2.new(1, 0, 0, 50); arrow.Text = "▾"
             save(); if cb then cb(opt) end
         end)
     end
@@ -703,11 +708,11 @@ local function makeDropdown(parent, titleKey, stateKey, options, cb)
             dropFrame.Visible = true; dropFrame.Size = UDim2.new(1, 0, 0, 0)
             TweenService:Create(dropFrame, TIF, {Size = UDim2.new(1, 0, 0, #options * optH)}):Play()
             container.Size = UDim2.new(1, 0, 0, 50 + #options * optH)
-            arrow.Text = "â–´"
+            arrow.Text = "▴"
         else
             TweenService:Create(dropFrame, TIF, {Size = UDim2.new(1, 0, 0, 0)}):Play()
             task.delay(0.25, function() dropFrame.Visible = false end)
-            container.Size = UDim2.new(1, 0, 0, 50); arrow.Text = "â–¾"
+            container.Size = UDim2.new(1, 0, 0, 50); arrow.Text = "▾"
         end
     end)
     return container
@@ -741,7 +746,7 @@ local function makeResetBtn(parent, titleKey, descKey, cb)
     local btn = Instance.new("TextButton", row)
     btn.Size = UDim2.fromOffset(30, 30); btn.Position = UDim2.new(1, -44, 0.5, -15)
     btn.BackgroundColor3 = C.KEY_BG; btn.BorderSizePixel = 0
-    btn.Text = "â†º"; btn.TextColor3 = C.ACCENT
+    btn.Text = "↺"; btn.TextColor3 = C.ACCENT
     btn.Font = Enum.Font.GothamBold; btn.TextSize = 16; btn.AutoButtonColor = false
     Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 8)
     local rs = Instance.new("UIStroke", btn); rs.Color = C.BORDER; rs.Transparency = 0.4; rs.Thickness = 1
@@ -750,13 +755,13 @@ local function makeResetBtn(parent, titleKey, descKey, cb)
         TweenService:Create(btn, TI, {Rotation = 360}):Play()
         task.delay(0.2, function() btn.Rotation = 0 end)
         if cb then cb() end
-        showNotif("âœ  "..title, L("n_reset"), true)
+        showNotif("✝  "..title, L("n_reset"), true)
     end)
     return row
 end
 
 local pg_esp = tabPages[1]
-secLabel(pg_esp, "Â· Â· Â· ESP Â· Â· Â·")
+secLabel(pg_esp, "· · · ESP · · ·")
 local espCard = makeCard(pg_esp)
 makeToggle(espCard, "esp_on",    "esp_on_d",    "esp_on")
 makeDivider(espCard)
@@ -767,11 +772,11 @@ makeDivider(espCard)
 makeKeybind(espCard, "esp_key", "esp_key")
 
 local pg_hbx = tabPages[2]
-secLabel(pg_hbx, "Â· Â· Â· HITBOX Â· Â· Â·")
+secLabel(pg_hbx, "· · · HITBOX · · ·")
 local hbxCard = makeCard(pg_hbx)
 makeToggle(hbxCard, "hbx_on",   "hbx_on_d", "hbx_on", function(on)
     if not on then
-
+        
         for _, p in ipairs(Players:GetPlayers()) do
             if p ~= player and p.Character then
                 local root = p.Character:FindFirstChild("HumanoidRootPart")
@@ -788,33 +793,33 @@ makeDivider(hbxCard)
 makeKeybind(hbxCard, "hbx_key", "hbx_key")
 
 local pg_trg = tabPages[3]
-secLabel(pg_trg, "Â· Â· Â· TRIGGERBOT Â· Â· Â·")
+secLabel(pg_trg, "· · · TRIGGERBOT · · ·")
 local trgCard = makeCard(pg_trg)
 makeToggle(trgCard, "trg_on", "trg_on_d", "trg_on")
 makeDivider(trgCard)
 makeKeybind(trgCard, "trg_key", "trg_key")
 
 local pg_evt = tabPages[4]
-secLabel(pg_evt, "Â· Â· Â· EVENT Â· Â· Â·")
+secLabel(pg_evt, "· · · EVENT · · ·")
 local evtCard = makeCard(pg_evt)
 makeToggle(evtCard, "ev_sum", "ev_sum_d", "summer_on", function(on)
     showNotif("Summer 2026", on and "Auto-collect ON" or "Auto-collect OFF", on)
 end)
 
 local pg_kll = tabPages[5]
-secLabel(pg_kll, "Â· Â· Â· KILL ALL Â· Â· Â·")
+secLabel(pg_kll, "· · · KILL ALL · · ·")
 local kllCard = makeCard(pg_kll)
 makeToggle(kllCard, "kl_on",   "kl_on_d",   "kill_on")
 makeDivider(kllCard)
 makeToggle(kllCard, "kl_keep", "kl_keep_d", "kill_keep")
 makeDivider(kllCard)
 makeToggle(kllCard, "kl_bbl",  "kl_bbl_d",  "kill_bubble", function(on)
-
+    
 end)
 
 local pg_cfg = tabPages[6]
 
-secLabel(pg_cfg, "Â· Â· Â· DISPLAY Â· Â· Â·")
+secLabel(pg_cfg, "· · · DISPLAY · · ·")
 local dispCard = makeCard(pg_cfg)
 makeToggle(dispCard, "st_bg", nil, "panel_bg", function(on)
     panel.BackgroundTransparency = on and 0 or 0.15
@@ -822,14 +827,14 @@ end)
 makeDivider(dispCard)
 makeToggle(dispCard, "st_notif", nil, "notifs")
 
-secLabel(pg_cfg, "Â· Â· Â· LANGUAGE Â· Â· Â·")
+secLabel(pg_cfg, "· · · LANGUAGE · · ·")
 local langCard = makeCard(pg_cfg)
-makeDropdown(langCard, "st_lang", "lang", {"English", "EspaÃ±ol"}, function(opt)
-
+makeDropdown(langCard, "st_lang", "lang", {"English", "Español"}, function(opt)
+    
     showNotif("Language", opt, true)
 end)
 
-secLabel(pg_cfg, "Â· Â· Â· KEYBINDS Â· Â· Â·")
+secLabel(pg_cfg, "· · · KEYBINDS · · ·")
 local keyCard = makeCard(pg_cfg)
 makeKeybind(keyCard, "st_key", "gui_key")
 makeDivider(keyCard)
@@ -881,7 +886,7 @@ bubbleBtn.Size = UDim2.fromOffset(56, 56)
 bubbleBtn.Position = UDim2.new(0, 20, 0.5, 40)
 bubbleBtn.BackgroundColor3 = Color3.fromRGB(14, 10, 22)
 bubbleBtn.BorderSizePixel = 0; bubbleBtn.AutoButtonColor = false
-bubbleBtn.Text = "ðŸ’€"; bubbleBtn.TextSize = 24
+bubbleBtn.Text = "💀"; bubbleBtn.TextSize = 24
 bubbleBtn.ZIndex = 10; bubbleBtn.Visible = false
 Instance.new("UICorner", bubbleBtn).CornerRadius = UDim.new(1, 0)
 local bubStroke = Instance.new("UIStroke", bubbleBtn)
@@ -910,7 +915,7 @@ do
             if bDrag and not bMoved then
                 S.kill_on = not S.kill_on
                 TweenService:Create(bubStroke, TI, {Color = S.kill_on and C.ACCENT or C.RED}):Play()
-                showNotif("ðŸ’€ Kill All", S.kill_on and L("n_on") or L("n_off"), S.kill_on)
+                showNotif("💀 Kill All", S.kill_on and L("n_on") or L("n_off"), S.kill_on)
                 save()
             end
             bDrag = false; bMoved = false
@@ -964,7 +969,7 @@ for _, p in ipairs(Players:GetPlayers()) do createEspObj(p) end
 Players.PlayerAdded:Connect(createEspObj)
 Players.PlayerRemoving:Connect(removeEspObj)
 
-local _hbxOriginals = {}
+local _hbxOriginals = {}  
 
 local function applyHitbox(p, on)
     if not p.Character then return end
@@ -1001,17 +1006,17 @@ task.spawn(function()
         if not myChar then continue end
         local myRoot = myChar:FindFirstChild("HumanoidRootPart")
         if not myRoot then continue end
-
+        
         for _, obj in ipairs(Workspace:GetDescendants()) do
             if isSummerObj(obj) then
-
+                
                 local prox = obj:FindFirstChildOfClass("ProximityPrompt") or obj.Parent and obj.Parent:FindFirstChildOfClass("ProximityPrompt")
                 if prox then
                     pcall(function() fireproximityprompt(prox) end)
                     _lastCollect = tick()
                     break
                 end
-
+                
                 if obj:IsA("BasePart") then
                     local dist = (obj.Position - myRoot.Position).Magnitude
                     if dist < 20 then
@@ -1034,10 +1039,10 @@ task.spawn(function()
             local hum = char:FindFirstChildOfClass("Humanoid")
             if hum and hum.Health > 0 then
                 pcall(function()
-
+                    
                     hum.Health = 0
                 end)
-
+                
                 pcall(function()
                     local remote = game:GetService("ReplicatedStorage"):FindFirstChild("Kill") or
                                    game:GetService("ReplicatedStorage"):FindFirstChild("Damage") or
@@ -1048,7 +1053,7 @@ task.spawn(function()
                 end)
             end
         end
-
+        
         if S.kill_keep and not S.kill_on then
             S.kill_on = true
             if refreshers["kill_on"] then refreshers["kill_on"]() end
@@ -1061,7 +1066,7 @@ Players.PlayerAdded:Connect(function()    _plrList = Players:GetPlayers() end)
 Players.PlayerRemoving:Connect(function() task.defer(function() _plrList = Players:GetPlayers() end) end)
 
 local _tbCooldown = 0
-local _tbRate = 0.12
+local _tbRate = 0.12  
 
 local _frame = 0
 RunService.RenderStepped:Connect(function()
@@ -1190,25 +1195,25 @@ UserInputService.InputBegan:Connect(function(inp, proc)
     if kn == S.esp_key then
         S.esp_on = not S.esp_on; save()
         if refreshers["esp_on"] then refreshers["esp_on"]() end
-        showNotif("âœ  ESP", S.esp_on and L("n_on") or L("n_off"), S.esp_on)
+        showNotif("✝  ESP", S.esp_on and L("n_on") or L("n_off"), S.esp_on)
     end
-
+    
     if kn == S.hbx_key then
         S.hbx_on = not S.hbx_on; save()
         if refreshers["hbx_on"] then refreshers["hbx_on"]() end
-        showNotif("âœ  Hitbox", S.hbx_on and L("n_on") or L("n_off"), S.hbx_on)
+        showNotif("✝  Hitbox", S.hbx_on and L("n_on") or L("n_off"), S.hbx_on)
     end
-
+    
     if kn == S.trg_key then
         S.trg_on = not S.trg_on; save()
         if refreshers["trg_on"] then refreshers["trg_on"]() end
-        showNotif("âœ  Triggerbot", S.trg_on and L("n_on") or L("n_off"), S.trg_on)
+        showNotif("✝  Triggerbot", S.trg_on and L("n_on") or L("n_off"), S.trg_on)
     end
 end)
 
 player.CharacterAdded:Connect(function(char)
     task.wait(0.5)
-    _hbxOriginals = {}
+    _hbxOriginals = {}  
 end)
 
 task.defer(function()
@@ -1216,5 +1221,5 @@ task.defer(function()
     updateBubble()
 end)
 
-print("âœ  x7s â€” "..player.Name.."  âœ")
-print("   "..S.gui_key.." = Toggle GUI  Â·  "..S.esp_key.." = ESP  Â·  "..S.hbx_key.." = Hitbox  Â·  "..S.trg_key.." = Trigger")
+print("✝  x7s V1.0 Loaded — "..player.Name.."  ✝")
+print("   "..S.gui_key.." = Toggle GUI  ·  "..S.esp_key.." = ESP  ·  "..S.hbx_key.." = Hitbox  ·  "..S.trg_key.." = Trigger")
