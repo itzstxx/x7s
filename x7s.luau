@@ -77,9 +77,9 @@ local function mkDefault()
     return {
         esp_on=false, esp_names=false, esp_lines=false, esp_key="T",
         hbx_on=false, hbx_size=5, hbx_show=false, hbx_key="G",
+        hbx_vis_check=true,   -- Visible Check: no matar si está detrás de pared
         trg_on=false, trg_key="R",
         summer_on=false,
-        kill_on=false, kill_keep=false, kill_bubble=false,
         panel_bg=true, notifs=true, lang="English", gui_key="RightShift",
     }
 end
@@ -92,38 +92,35 @@ local function save() pcall(function() writefile(CONFIG_FILE,HttpService:JSONEnc
 
 local Locale = {
     English = {
-        tab_esp="ESP", tab_hbx="HBX", tab_trg="TRG", tab_evt="EVT", tab_kll="KILL", tab_cfg="CFG",
-        
+        tab_esp="ESP", tab_hbx="HBX", tab_trg="TRG", tab_cfg="CFG",
+
         esp_on="Enable ESP",        esp_on_d="Show enemies through walls.",
         esp_names="Show Enemy Name",
         esp_lines="ESP Lines",      esp_lines_d="Draw lines from your character to enemy positions.",
         esp_key="ESP Keybind",
-        
+
         hbx_on="Enable Hitbox",     hbx_on_d="Show and expand enemy hitboxes.",
         hbx_size="Hitbox Size",
         hbx_show="Show Hitbox",
         hbx_key="Hitbox Keybind",
-        
+        hbx_vis="Visible Check",    hbx_vis_d="Only register hits when the enemy is actually visible. Prevents kills through walls.",
+
         trg_on="Triggerbot",        trg_on_d="Shoots when your cursor is directly over a visible enemy.",
         trg_key="Triggerbot Keybind",
-        
+
         ev_sum="Summer 2026",       ev_sum_d="Collects Summer 2026 drops automatically. Only in matches.",
-        
-        kl_on="Kill All Enemies",   kl_on_d="Instantly eliminates enemies when enabled.",
-        kl_keep="Keep Enabled",     kl_keep_d="Keeps Kill All enabled and prevents it from turning off.",
-        kl_bbl="Kill All Bubble",   kl_bbl_d="Show a small Kill All button on screen.",
-        
+
         st_bg="Toggle Panel Background",
         st_notif="Enable Notifications",
         st_lang="Language",
         st_key="Toggle UI",
         st_r1="Reset Toggle UI Keybind",  st_r1_d="Reset this keybind to its default value.",
         st_r2="Reset All Keybinds",       st_r2_d="Reset all keybinds to their default values.",
-        
+
         n_on="Enabled", n_off="Disabled", n_reset="Keybind reset",
     },
     ["Español"] = {
-        tab_esp="ESP", tab_hbx="HBX", tab_trg="TRG", tab_evt="EVT", tab_kll="MATAR", tab_cfg="CFG",
+        tab_esp="ESP", tab_hbx="HBX", tab_trg="TRG", tab_cfg="CFG",
         esp_on="Activar ESP",        esp_on_d="Muestra enemigos a través de paredes.",
         esp_names="Nombre del Enemigo",
         esp_lines="Líneas ESP",      esp_lines_d="Dibuja líneas desde tu personaje hasta los enemigos.",
@@ -132,12 +129,10 @@ local Locale = {
         hbx_size="Tamaño Hitbox",
         hbx_show="Mostrar Hitbox",
         hbx_key="Tecla Hitbox",
+        hbx_vis="Visible Check",    hbx_vis_d="Solo registra el hit si el enemigo está a la vista. Evita matar a través de paredes.",
         trg_on="Triggerbot",         trg_on_d="Dispara cuando el cursor está sobre un enemigo visible.",
         trg_key="Tecla Triggerbot",
         ev_sum="Verano 2026",        ev_sum_d="Recoge drops de Verano 2026 automáticamente. Solo en partidas.",
-        kl_on="Matar a Todos",       kl_on_d="Elimina instantáneamente a los enemigos cuando está activado.",
-        kl_keep="Mantener Activo",   kl_keep_d="Mantiene Matar Todos activo e impide que se desactive.",
-        kl_bbl="Burbuja Matar",      kl_bbl_d="Muestra un pequeño botón en pantalla.",
         st_bg="Fondo del Panel",
         st_notif="Activar Notificaciones",
         st_lang="Idioma",
@@ -210,7 +205,6 @@ local function showNotif(title, body, isGood)
             toast.BorderSizePixel = 0; toast.ZIndex = 200
             Instance.new("UICorner", toast).CornerRadius = UDim.new(0, 10)
             local ts = Instance.new("UIStroke", toast); ts.Color = col; ts.Transparency = 0.5; ts.Thickness = 1
-            
             local bar = Instance.new("Frame", toast); bar.Size = UDim2.new(0, 3, 1, -16)
             bar.Position = UDim2.new(0, 0, 0, 8); bar.BackgroundColor3 = col
             bar.BorderSizePixel = 0; Instance.new("UICorner", bar).CornerRadius = UDim.new(1, 0)
@@ -232,7 +226,7 @@ local function showNotif(title, body, isGood)
     end)
 end
 
-local PW, PH = 300, 502
+local PW, PH = 300, 480
 
 local glow = Instance.new("Frame", gui)
 glow.Size = UDim2.fromOffset(PW + 24, PH + 24)
@@ -370,8 +364,9 @@ tabBarLine.Size = UDim2.new(1, 0, 0, 1); tabBarLine.Position = UDim2.new(0, 0, 1
 tabBarLine.BackgroundColor3 = C.BORDER; tabBarLine.BackgroundTransparency = 0.3
 tabBarLine.BorderSizePixel = 0
 
-local TAB_COUNT = 6
-local tabW = PW / TAB_COUNT  
+-- 4 tabs: ESP / HBX / TRG / CFG  (sin KILL, sin EVT visible aquí — EVT dentro de CFG si se desea)
+local TAB_COUNT = 4
+local tabW = PW / TAB_COUNT
 
 local tabIndicator = Instance.new("Frame", tabBar)
 tabIndicator.Size = UDim2.fromOffset(tabW - 8, 2)
@@ -379,7 +374,7 @@ tabIndicator.Position = UDim2.fromOffset(4, TABBAR_H - 2)
 tabIndicator.BackgroundColor3 = C.ACCENT; tabIndicator.BorderSizePixel = 0
 Instance.new("UICorner", tabIndicator).CornerRadius = UDim.new(1, 0)
 
-local tabNames = {"ESP", "HBX", "TRG", "EVT", "KILL", "CFG"}
+local tabNames = {"ESP", "HBX", "TRG", "CFG"}
 local tabBtns = {}
 local tabPages = {}
 local activeTab = 1
@@ -406,7 +401,6 @@ local function makeTabPage()
 end
 
 for i = 1, TAB_COUNT do
-    
     local btn = Instance.new("TextButton", tabBar)
     btn.Size = UDim2.fromOffset(tabW, TABBAR_H)
     btn.Position = UDim2.fromOffset((i - 1) * tabW, 0)
@@ -440,7 +434,6 @@ local function secLabel(parent, text)
     l.Text = text:upper(); l.TextColor3 = C.DIM
     l.Font = Enum.Font.GothamBold; l.TextSize = 10
     l.TextXAlignment = Enum.TextXAlignment.Left
-    local ls = Instance.new("UIStroke", l); ls.Color = C.DIM; ls.Transparency = 1  
     return f
 end
 
@@ -454,7 +447,6 @@ local function makeCard(parent)
     cs.Color = C.BORDER; cs.Transparency = 0.6; cs.Thickness = 1
     local lay = Instance.new("UIListLayout", card)
     lay.SortOrder = Enum.SortOrder.LayoutOrder; lay.Padding = UDim.new(0, 0)
-    
     card.ClipsDescendants = true
     return card
 end
@@ -495,7 +487,7 @@ local function makeToggle(parent, titleKey, descKey, stateKey, cb)
     end
 
     local TW, TH = 46, 26
-    local TS = 20  
+    local TS = 20
     local track = Instance.new("Frame", row)
     track.Size = UDim2.fromOffset(TW, TH)
     track.Position = UDim2.new(1, -(TW + 14), 0.5, -(TH/2))
@@ -526,7 +518,6 @@ local function makeToggle(parent, titleKey, descKey, stateKey, cb)
         showNotif("✝  "..title, state and L("n_on") or L("n_off"), state)
         if cb then cb(state) end
     end)
-    
     hit.MouseEnter:Connect(function()
         TweenService:Create(row, TI, {BackgroundColor3 = Color3.fromRGB(20,16,30)}):Play()
         row.BackgroundTransparency = 0
@@ -760,6 +751,9 @@ local function makeResetBtn(parent, titleKey, descKey, cb)
     return row
 end
 
+-- ══════════════════════════════════════════════
+--  TAB 1 — ESP
+-- ══════════════════════════════════════════════
 local pg_esp = tabPages[1]
 secLabel(pg_esp, "· · · ESP · · ·")
 local espCard = makeCard(pg_esp)
@@ -771,12 +765,14 @@ makeToggle(espCard, "esp_lines", "esp_lines_d", "esp_lines")
 makeDivider(espCard)
 makeKeybind(espCard, "esp_key", "esp_key")
 
+-- ══════════════════════════════════════════════
+--  TAB 2 — HITBOX  (con Visible Check)
+-- ══════════════════════════════════════════════
 local pg_hbx = tabPages[2]
 secLabel(pg_hbx, "· · · HITBOX · · ·")
 local hbxCard = makeCard(pg_hbx)
-makeToggle(hbxCard, "hbx_on",   "hbx_on_d", "hbx_on", function(on)
+makeToggle(hbxCard, "hbx_on", "hbx_on_d", "hbx_on", function(on)
     if not on then
-        
         for _, p in ipairs(Players:GetPlayers()) do
             if p ~= player and p.Character then
                 local root = p.Character:FindFirstChild("HumanoidRootPart")
@@ -790,8 +786,14 @@ makeSlider(hbxCard, "hbx_size", "hbx_size", 1, 20)
 makeDivider(hbxCard)
 makeToggle(hbxCard, "hbx_show", nil, "hbx_show")
 makeDivider(hbxCard)
+-- ► Visible Check — opción nueva
+makeToggle(hbxCard, "hbx_vis", "hbx_vis_d", "hbx_vis_check")
+makeDivider(hbxCard)
 makeKeybind(hbxCard, "hbx_key", "hbx_key")
 
+-- ══════════════════════════════════════════════
+--  TAB 3 — TRIGGERBOT
+-- ══════════════════════════════════════════════
 local pg_trg = tabPages[3]
 secLabel(pg_trg, "· · · TRIGGERBOT · · ·")
 local trgCard = makeCard(pg_trg)
@@ -799,25 +801,10 @@ makeToggle(trgCard, "trg_on", "trg_on_d", "trg_on")
 makeDivider(trgCard)
 makeKeybind(trgCard, "trg_key", "trg_key")
 
-local pg_evt = tabPages[4]
-secLabel(pg_evt, "· · · EVENT · · ·")
-local evtCard = makeCard(pg_evt)
-makeToggle(evtCard, "ev_sum", "ev_sum_d", "summer_on", function(on)
-    showNotif("Summer 2026", on and "Auto-collect ON" or "Auto-collect OFF", on)
-end)
-
-local pg_kll = tabPages[5]
-secLabel(pg_kll, "· · · KILL ALL · · ·")
-local kllCard = makeCard(pg_kll)
-makeToggle(kllCard, "kl_on",   "kl_on_d",   "kill_on")
-makeDivider(kllCard)
-makeToggle(kllCard, "kl_keep", "kl_keep_d", "kill_keep")
-makeDivider(kllCard)
-makeToggle(kllCard, "kl_bbl",  "kl_bbl_d",  "kill_bubble", function(on)
-    
-end)
-
-local pg_cfg = tabPages[6]
+-- ══════════════════════════════════════════════
+--  TAB 4 — CFG  (Settings + Event, sin Kill)
+-- ══════════════════════════════════════════════
+local pg_cfg = tabPages[4]
 
 secLabel(pg_cfg, "· · · DISPLAY · · ·")
 local dispCard = makeCard(pg_cfg)
@@ -830,7 +817,6 @@ makeToggle(dispCard, "st_notif", nil, "notifs")
 secLabel(pg_cfg, "· · · LANGUAGE · · ·")
 local langCard = makeCard(pg_cfg)
 makeDropdown(langCard, "st_lang", "lang", {"English", "Español"}, function(opt)
-    
     showNotif("Language", opt, true)
 end)
 
@@ -852,6 +838,15 @@ makeResetBtn(keyCard, "st_r2", "st_r2_d", function()
     save()
 end)
 
+secLabel(pg_cfg, "· · · EVENT · · ·")
+local evtCard = makeCard(pg_cfg)
+makeToggle(evtCard, "ev_sum", "ev_sum_d", "summer_on", function(on)
+    showNotif("Summer 2026", on and "Auto-collect ON" or "Auto-collect OFF", on)
+end)
+
+-- ══════════════════════════════════════════════
+--  DRAG — mover panel
+-- ══════════════════════════════════════════════
 do
     local drag, dragStart, startPos = false, nil, nil
     local dh = Instance.new("TextButton", header)
@@ -881,61 +876,10 @@ do
     end)
 end
 
-local bubbleBtn = Instance.new("TextButton", gui)
-bubbleBtn.Size = UDim2.fromOffset(56, 56)
-bubbleBtn.Position = UDim2.new(0, 20, 0.5, 40)
-bubbleBtn.BackgroundColor3 = Color3.fromRGB(14, 10, 22)
-bubbleBtn.BorderSizePixel = 0; bubbleBtn.AutoButtonColor = false
-bubbleBtn.Text = "💀"; bubbleBtn.TextSize = 24
-bubbleBtn.ZIndex = 10; bubbleBtn.Visible = false
-Instance.new("UICorner", bubbleBtn).CornerRadius = UDim.new(1, 0)
-local bubStroke = Instance.new("UIStroke", bubbleBtn)
-bubStroke.Color = C.RED; bubStroke.Transparency = 0.5; bubStroke.Thickness = 2
-
-do
-    local bDrag, bStart, bPos = false, nil, nil
-    local bMoved = false
-    bubbleBtn.InputBegan:Connect(function(inp)
-        if inp.UserInputType == Enum.UserInputType.MouseButton1 or inp.UserInputType == Enum.UserInputType.Touch then
-            bDrag = true; bMoved = false; bStart = inp.Position; bPos = bubbleBtn.Position
-        end
-    end)
-    UserInputService.InputChanged:Connect(function(inp)
-        if bDrag and (inp.UserInputType == Enum.UserInputType.MouseMovement or inp.UserInputType == Enum.UserInputType.Touch) then
-            local d = inp.Position - bStart
-            if d.Magnitude > 6 then bMoved = true end
-            if bMoved then
-                local sc = gui.AbsoluteSize
-                bubbleBtn.Position = UDim2.new(0, math.clamp(bPos.X.Offset + d.X, 4, sc.X - 60), 0, math.clamp(bPos.Y.Offset + d.Y, 4, sc.Y - 60))
-            end
-        end
-    end)
-    UserInputService.InputEnded:Connect(function(inp)
-        if inp.UserInputType == Enum.UserInputType.MouseButton1 or inp.UserInputType == Enum.UserInputType.Touch then
-            if bDrag and not bMoved then
-                S.kill_on = not S.kill_on
-                TweenService:Create(bubStroke, TI, {Color = S.kill_on and C.ACCENT or C.RED}):Play()
-                showNotif("💀 Kill All", S.kill_on and L("n_on") or L("n_off"), S.kill_on)
-                save()
-            end
-            bDrag = false; bMoved = false
-        end
-    end)
-end
-
-local function updateBubble()
-    bubbleBtn.Visible = S.kill_bubble
-end
-updateBubble()
-if refreshers["kill_bubble"] then
-    local old = refreshers["kill_bubble"]
-    refreshers["kill_bubble"] = function() if old then old() end; updateBubble() end
-else
-    refreshers["kill_bubble"] = updateBubble
-end
-
+-- ══════════════════════════════════════════════
+--  ESP DRAWING OBJECTS
+-- ══════════════════════════════════════════════
 local espObjects = {}
-local hitboxDrawings = {}
 
 local function newLine()
     local l = Drawing.new("Line"); l.Visible = false; l.Thickness = 1.5
@@ -969,7 +913,34 @@ for _, p in ipairs(Players:GetPlayers()) do createEspObj(p) end
 Players.PlayerAdded:Connect(createEspObj)
 Players.PlayerRemoving:Connect(removeEspObj)
 
-local _hbxOriginals = {}  
+local _hbxOriginals = {}
+
+-- ══════════════════════════════════════════════
+--  VISIBLE CHECK — raycast desde cámara al root
+--  Devuelve true si el enemigo NO está tapado por
+--  geometría del mundo (paredes, suelo, etc.)
+-- ══════════════════════════════════════════════
+local function isVisible(targetRoot, myChar)
+    if not targetRoot or not myChar then return false end
+    local origin = camera.CFrame.Position
+    local target = targetRoot.Position
+    local direction = (target - origin)
+    local dist = direction.Magnitude
+    if dist > 2000 then return false end
+
+    local rcParams = RaycastParams.new()
+    rcParams.FilterType = Enum.RaycastFilterType.Exclude
+    -- Excluir el propio personaje del jugador y el personaje enemigo
+    -- para que el ray no choque con la hitbox expandida
+    local excludeList = {myChar, targetRoot.Parent}
+    rcParams.FilterDescendantsInstances = excludeList
+
+    local result = Workspace:Raycast(origin, direction.Unit * dist, rcParams)
+    -- Si el raycast no golpea nada antes del target → visible
+    -- Si golpea pero la distancia al hit es ≥ dist → visible
+    if result == nil then return true end
+    return result.Distance >= dist - 1  -- 1 stud de tolerancia
+end
 
 local function applyHitbox(p, on)
     if not p.Character then return end
@@ -986,6 +957,9 @@ local function applyHitbox(p, on)
     end
 end
 
+-- ══════════════════════════════════════════════
+--  SUMMER EVENT AUTO-COLLECT
+-- ══════════════════════════════════════════════
 task.spawn(function()
     local summerKeys = {"summer","drop","collect","item2026","event","prize","gift"}
     local function isSummerObj(obj)
@@ -1006,17 +980,13 @@ task.spawn(function()
         if not myChar then continue end
         local myRoot = myChar:FindFirstChild("HumanoidRootPart")
         if not myRoot then continue end
-        
         for _, obj in ipairs(Workspace:GetDescendants()) do
             if isSummerObj(obj) then
-                
                 local prox = obj:FindFirstChildOfClass("ProximityPrompt") or obj.Parent and obj.Parent:FindFirstChildOfClass("ProximityPrompt")
                 if prox then
                     pcall(function() fireproximityprompt(prox) end)
-                    _lastCollect = tick()
-                    break
+                    _lastCollect = tick(); break
                 end
-                
                 if obj:IsA("BasePart") then
                     local dist = (obj.Position - myRoot.Position).Magnitude
                     if dist < 20 then
@@ -1029,45 +999,19 @@ task.spawn(function()
     end
 end)
 
-task.spawn(function()
-    while true do
-        task.wait(0.08)
-        if not S.kill_on then continue end
-        for _, p in ipairs(Players:GetPlayers()) do
-            if p == player then continue end
-            local char = p.Character; if not char then continue end
-            local hum = char:FindFirstChildOfClass("Humanoid")
-            if hum and hum.Health > 0 then
-                pcall(function()
-                    
-                    hum.Health = 0
-                end)
-                
-                pcall(function()
-                    local remote = game:GetService("ReplicatedStorage"):FindFirstChild("Kill") or
-                                   game:GetService("ReplicatedStorage"):FindFirstChild("Damage") or
-                                   game:GetService("ReplicatedStorage"):FindFirstChild("KillPlayer")
-                    if remote and remote:IsA("RemoteEvent") then
-                        remote:FireServer(p)
-                    end
-                end)
-            end
-        end
-        
-        if S.kill_keep and not S.kill_on then
-            S.kill_on = true
-            if refreshers["kill_on"] then refreshers["kill_on"]() end
-        end
-    end
-end)
-
+-- ══════════════════════════════════════════════
+--  PLAYER LIST actualizada
+-- ══════════════════════════════════════════════
 local _plrList = Players:GetPlayers()
 Players.PlayerAdded:Connect(function()    _plrList = Players:GetPlayers() end)
 Players.PlayerRemoving:Connect(function() task.defer(function() _plrList = Players:GetPlayers() end) end)
 
 local _tbCooldown = 0
-local _tbRate = 0.12  
+local _tbRate = 0.12
 
+-- ══════════════════════════════════════════════
+--  RENDER LOOP
+-- ══════════════════════════════════════════════
 local _frame = 0
 RunService.RenderStepped:Connect(function()
     _frame = _frame + 1
@@ -1077,12 +1021,14 @@ RunService.RenderStepped:Connect(function()
     local mousePos = UserInputService:GetMouseLocation()
     local now = tick()
 
+    -- Aplicar hitbox cada 60 frames
     if _frame % 60 == 0 then
         for _, p in ipairs(_plrList) do
             if p ~= player then applyHitbox(p, S.hbx_on) end
         end
     end
 
+    -- Triggerbot
     if S.trg_on and myChar and now - _tbCooldown > _tbRate then
         local unitRay = camera:ScreenPointToRay(mousePos.X, mousePos.Y)
         local rcParams = RaycastParams.new()
@@ -1116,6 +1062,7 @@ RunService.RenderStepped:Connect(function()
 
     if _frame % 2 ~= 0 then return end
 
+    -- ESP + Hitbox touch detection con Visible Check
     for p, obj in pairs(espObjects) do
         local char = p.Character
         local function allOff()
@@ -1136,6 +1083,22 @@ RunService.RenderStepped:Connect(function()
         local height = math.abs(sp2.Y - topY) * 2.2
         local width  = height * 0.5
 
+        -- ▸ Visible Check aplicado al hitbox:
+        -- si está activo y el enemigo no es visible, la hitbox expandida
+        -- NO registra el hit (se remueve/restaura el tamaño real)
+        if S.hbx_on and S.hbx_vis_check then
+            local visible = isVisible(root, myChar)
+            if not visible and _hbxOriginals[p] then
+                -- Restaurar tamaño temporalmente sin borrar el registro
+                pcall(function() root.Size = _hbxOriginals[p] end)
+            elseif visible and _hbxOriginals[p] then
+                -- Reaplicar hitbox cuando vuelve a ser visible
+                local s = S.hbx_size
+                pcall(function() root.Size = Vector3.new(s*2, s*2, s*2) end)
+            end
+        end
+
+        -- Dibujos ESP
         if S.esp_on then
             obj.box.Visible = true
             obj.box.Color = C.ACCENT
@@ -1162,13 +1125,22 @@ RunService.RenderStepped:Connect(function()
             local hbxH = height * (S.hbx_size / 2)
             local hbxW = hbxH * 0.8
             obj.hbx.Visible = true
-            obj.hbx.Color = Color3.fromRGB(255, 100, 100)
+            -- Color verde si visible, rojo si detrás de pared (solo informativo)
+            if S.hbx_vis_check then
+                local vis = isVisible(root, myChar)
+                obj.hbx.Color = vis and Color3.fromRGB(100, 220, 100) or Color3.fromRGB(220, 80, 80)
+            else
+                obj.hbx.Color = Color3.fromRGB(255, 100, 100)
+            end
             obj.hbx.Size = Vector2.new(hbxW, hbxH)
             obj.hbx.Position = Vector2.new(hbxSp.X - hbxW/2, hbxSp.Y - hbxH/2)
         else obj.hbx.Visible = false end
     end
 end)
 
+-- ══════════════════════════════════════════════
+--  KEYBINDS globales
+-- ══════════════════════════════════════════════
 UserInputService.InputBegan:Connect(function(inp, proc)
     if proc then return end
     if inp.UserInputType ~= Enum.UserInputType.Keyboard then return end
@@ -1197,13 +1169,13 @@ UserInputService.InputBegan:Connect(function(inp, proc)
         if refreshers["esp_on"] then refreshers["esp_on"]() end
         showNotif("✝  ESP", S.esp_on and L("n_on") or L("n_off"), S.esp_on)
     end
-    
+
     if kn == S.hbx_key then
         S.hbx_on = not S.hbx_on; save()
         if refreshers["hbx_on"] then refreshers["hbx_on"]() end
         showNotif("✝  Hitbox", S.hbx_on and L("n_on") or L("n_off"), S.hbx_on)
     end
-    
+
     if kn == S.trg_key then
         S.trg_on = not S.trg_on; save()
         if refreshers["trg_on"] then refreshers["trg_on"]() end
@@ -1211,14 +1183,13 @@ UserInputService.InputBegan:Connect(function(inp, proc)
     end
 end)
 
-player.CharacterAdded:Connect(function(char)
+player.CharacterAdded:Connect(function()
     task.wait(0.5)
-    _hbxOriginals = {}  
+    _hbxOriginals = {}
 end)
 
 task.defer(function()
     panel.BackgroundTransparency = S.panel_bg and 0 or 0.15
-    updateBubble()
 end)
 
 print("✝  x7s V1.0 Loaded — "..player.Name.."  ✝")
