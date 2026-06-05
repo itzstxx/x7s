@@ -26,6 +26,9 @@ local source do
     source = result
 end
 
+-- Strip UTF-8 BOM (U+FEFF) if present — GitHub sometimes adds it
+source = source:gsub("^" .. string.char(0xEF, 0xBB, 0xBF), "")
+
 local fn, compileErr = loadstring(source, "x7s")
 if not fn then
     error("[x7s Loader] Error al compilar:\n  "..tostring(compileErr), 2)
@@ -38,4 +41,4 @@ if not ok2 then
     return
 end
 
-print("[x7s] Cargado — "..game.Players.LocalPlayer.Name)
+print("[x7s Loader] Cargado — "..game.Players.LocalPlayer.Name)
