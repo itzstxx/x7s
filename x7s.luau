@@ -122,7 +122,7 @@ local Locale = {
         
         n_on="Enabled", n_off="Disabled", n_reset="Keybind reset",
     },
-    Español = {
+    ["Español"] = {
         tab_esp="ESP", tab_hbx="HBX", tab_trg="TRG", tab_evt="EVT", tab_kll="MATAR", tab_cfg="CFG",
         esp_on="Activar ESP",        esp_on_d="Muestra enemigos a través de paredes.",
         esp_names="Nombre del Enemigo",
