@@ -1933,6 +1933,14 @@ local BODY_PARTS = {"Head","Torso","UpperTorso","LowerTorso","LeftArm","RightArm
     "RightUpperArm","RightLowerArm","RightHand","LeftUpperLeg","LeftLowerLeg",
     "LeftFoot","RightUpperLeg","RightLowerLeg","RightFoot","HumanoidRootPart"}
 
+local HAS_DRAWING = type(Drawing) == "table" and type(Drawing.new) == "function"
+local function newDrawingFallback()
+    return {
+        Visible = false,
+        Remove = function() end,
+    }
+end
+
 local function getEspColor()
     return Color3.fromRGB(S.esp_char_r, S.esp_char_g, S.esp_char_b)
 end
@@ -2014,15 +2022,18 @@ local function createAvatarBillboard(p, char)
 end
 
 local function newLine()
+    if not HAS_DRAWING then return newDrawingFallback() end
     local l = Drawing.new("Line"); l.Visible = false; l.Thickness = 1.5
     l.Color = getEspColor(); return l
 end
 local function newText()
+    if not HAS_DRAWING then return newDrawingFallback() end
     local t = Drawing.new("Text"); t.Visible = false; t.Size = 13
     t.Color = Color3.fromRGB(200, 190, 220); t.Outline = true
     t.OutlineColor = Color3.fromRGB(0, 0, 0); return t
 end
 local function newBox()
+    if not HAS_DRAWING then return newDrawingFallback() end
     local b = Drawing.new("Square"); b.Visible = false; b.Filled = false
     b.Thickness = 1.5; b.Color = getEspColor(); return b
 end

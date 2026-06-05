@@ -1,5 +1,11 @@
 local RAW_URL = "https://raw.githubusercontent.com/itzstxx/x7s/refs/heads/main/x7s.lua"
 
+local loader = loadstring or load
+if type(loader) ~= "function" then
+    error("[x7s Loader] Este executor no soporta loadstring/load.", 2)
+    return
+end
+
 local source do
     local ok, result = pcall(function()
         return game:HttpGet(RAW_URL, true)
@@ -15,7 +21,7 @@ end
 
 source = source:gsub("^" .. string.char(0xEF, 0xBB, 0xBF), "")
 
-local fn, compileErr = loadstring(source, "x7s")
+local fn, compileErr = loader(source, "x7s")
 if not fn then
     error("[x7s Loader] Error al compilar:\n  "..tostring(compileErr), 2)
     return
