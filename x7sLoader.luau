@@ -1,4 +1,4 @@
-local RAW_URL = "https://raw.githubusercontent.com/itzstxx/x7s/main/x7s.lua"
+local RAW_URL = "https://raw.githubusercontent.com/itzstxx/x7s/refs/heads/main/x7s.luau"
 
 local source do
     local ok, result = pcall(function()
