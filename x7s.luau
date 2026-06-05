@@ -76,8 +76,6 @@ local CONFIG_FILE = "x7s_v1.json"
 local function mkDefault()
     return {
         esp_on=false, esp_names=false, esp_lines=false, esp_key="T",
-        esp_char_r=100, esp_char_g=220, esp_char_b=100,  -- Color del Character ESP (verde por defecto)
-        esp_avatar=true,   -- Mostrar thumbnail del avatar en el ESP
         hbx_on=false, hbx_size=5, hbx_show=false, hbx_key="G",
         hbx_vis_check=true,   -- Visible Check: no matar si está detrás de pared
         trg_on=false, trg_key="R",
@@ -100,8 +98,6 @@ local Locale = {
         esp_names="Show Enemy Name",
         esp_lines="ESP Lines",      esp_lines_d="Draw lines from your character to enemy positions.",
         esp_key="ESP Keybind",
-        esp_color="ESP Color",      esp_color_d="Customize the character highlight color.",
-        esp_avatar="Show Avatar",   esp_avatar_d="Show player avatar thumbnail above ESP.",
 
         hbx_on="Enable Hitbox",     hbx_on_d="Show and expand enemy hitboxes.",
         hbx_size="Hitbox Size",
@@ -129,8 +125,6 @@ local Locale = {
         esp_names="Nombre del Enemigo",
         esp_lines="Líneas ESP",      esp_lines_d="Dibuja líneas desde tu personaje hasta los enemigos.",
         esp_key="Tecla ESP",
-        esp_color="Color ESP",       esp_color_d="Personaliza el color del resaltado del personaje.",
-        esp_avatar="Mostrar Avatar", esp_avatar_d="Muestra el avatar del jugador sobre el ESP.",
         hbx_on="Activar Hitbox",    hbx_on_d="Muestra y expande las hitboxes enemigas.",
         hbx_size="Tamaño Hitbox",
         hbx_show="Mostrar Hitbox",
@@ -758,125 +752,6 @@ local function makeResetBtn(parent, titleKey, descKey, cb)
 end
 
 -- ══════════════════════════════════════════════
---  COLOR PICKER (RGB Sliders) para ESP
--- ══════════════════════════════════════════════
-local function makeColorPicker(parent, titleKey, descKey, rKey, gKey, bKey, onChange)
-    local title = L(titleKey) or titleKey
-    local desc  = descKey and (L(descKey) or descKey) or nil
-
-    local wrap = Instance.new("Frame", parent)
-    wrap.Size = UDim2.new(1, 0, 0, 0)
-    wrap.AutomaticSize = Enum.AutomaticSize.Y
-    wrap.BackgroundTransparency = 1
-
-    -- Header row with preview swatch
-    local hRow = Instance.new("Frame", wrap)
-    hRow.Size = UDim2.new(1, 0, 0, 50); hRow.BackgroundTransparency = 1
-
-    local tl = Instance.new("TextLabel", hRow)
-    tl.BackgroundTransparency = 1; tl.Size = UDim2.new(1, -70, 0, 18)
-    tl.Position = UDim2.fromOffset(16, 10)
-    tl.Text = title; tl.TextColor3 = C.TEXT
-    tl.Font = Enum.Font.GothamMedium; tl.TextSize = 13
-    tl.TextXAlignment = Enum.TextXAlignment.Left
-
-    if desc and desc ~= "" then
-        local dl = Instance.new("TextLabel", hRow)
-        dl.BackgroundTransparency = 1; dl.Size = UDim2.new(1, -70, 0, 20)
-        dl.Position = UDim2.fromOffset(16, 28)
-        dl.Text = desc; dl.TextColor3 = C.DIM
-        dl.Font = Enum.Font.Gotham; dl.TextSize = 11
-        dl.TextXAlignment = Enum.TextXAlignment.Left; dl.TextWrapped = true
-    end
-
-    -- Color swatch
-    local swatch = Instance.new("Frame", hRow)
-    swatch.Size = UDim2.fromOffset(28, 28)
-    swatch.Position = UDim2.new(1, -44, 0.5, -14)
-    swatch.BackgroundColor3 = Color3.fromRGB(S[rKey], S[gKey], S[bKey])
-    swatch.BorderSizePixel = 0
-    Instance.new("UICorner", swatch).CornerRadius = UDim.new(0, 8)
-    local ss = Instance.new("UIStroke", swatch); ss.Color = C.BORDER; ss.Transparency = 0.2; ss.Thickness = 1
-
-    local function updateSwatch()
-        swatch.BackgroundColor3 = Color3.fromRGB(S[rKey], S[gKey], S[bKey])
-        if onChange then onChange() end
-    end
-
-    -- Slider builder (inline, no stateKey in S, manual)
-    local function makeRGBSlider(parent2, label, valKey, colorFn)
-        local sRow = Instance.new("Frame", parent2)
-        sRow.Size = UDim2.new(1, 0, 0, 44); sRow.BackgroundTransparency = 1
-
-        local vLbl = Instance.new("TextLabel", sRow)
-        vLbl.BackgroundTransparency = 1; vLbl.Size = UDim2.fromOffset(30, 16)
-        vLbl.Position = UDim2.new(1, -44, 0, 6)
-        vLbl.Text = tostring(S[valKey]); vLbl.TextColor3 = colorFn()
-        vLbl.Font = Enum.Font.GothamBold; vLbl.TextSize = 12
-        vLbl.TextXAlignment = Enum.TextXAlignment.Right
-
-        local lbl = Instance.new("TextLabel", sRow)
-        lbl.BackgroundTransparency = 1; lbl.Size = UDim2.new(0, 60, 0, 16)
-        lbl.Position = UDim2.fromOffset(16, 6)
-        lbl.Text = label; lbl.TextColor3 = colorFn()
-        lbl.Font = Enum.Font.GothamBold; lbl.TextSize = 11
-        lbl.TextXAlignment = Enum.TextXAlignment.Left
-
-        local trk = Instance.new("Frame", sRow)
-        trk.Size = UDim2.new(1, -32, 0, 4); trk.Position = UDim2.fromOffset(16, 28)
-        trk.BackgroundColor3 = Color3.fromRGB(30, 24, 44); trk.BorderSizePixel = 0
-        Instance.new("UICorner", trk).CornerRadius = UDim.new(1, 0)
-
-        local fill = Instance.new("Frame", trk)
-        fill.BackgroundColor3 = colorFn(); fill.BorderSizePixel = 0
-        Instance.new("UICorner", fill).CornerRadius = UDim.new(1, 0)
-
-        local thumb2 = Instance.new("Frame", trk)
-        thumb2.Size = UDim2.fromOffset(14, 14); thumb2.BackgroundColor3 = colorFn()
-        thumb2.BorderSizePixel = 0; Instance.new("UICorner", thumb2).CornerRadius = UDim.new(1, 0)
-
-        local function setV(v)
-            v = math.clamp(math.floor(v + 0.5), 0, 255)
-            S[valKey] = v; vLbl.Text = tostring(v)
-            local pct = v / 255
-            TweenService:Create(fill,   TweenInfo.new(0.1), {Size = UDim2.new(pct, 0, 1, 0)}):Play()
-            TweenService:Create(thumb2, TweenInfo.new(0.1), {Position = UDim2.new(pct, -7, 0.5, -7)}):Play()
-            updateSwatch(); save()
-        end
-        setV(S[valKey])
-
-        local sliding2 = false
-        local function slide2(inp)
-            local abs = trk.AbsolutePosition; local sz = trk.AbsoluteSize
-            if sz.X <= 0 then return end
-            setV((inp.Position.X - abs.X) / sz.X * 255)
-        end
-        trk.InputBegan:Connect(function(inp)
-            if inp.UserInputType == Enum.UserInputType.MouseButton1 then sliding2 = true; slide2(inp) end
-        end)
-        UserInputService.InputChanged:Connect(function(inp)
-            if sliding2 and inp.UserInputType == Enum.UserInputType.MouseMovement then slide2(inp) end
-        end)
-        UserInputService.InputEnded:Connect(function(inp)
-            if inp.UserInputType == Enum.UserInputType.MouseButton1 and sliding2 then sliding2 = false end
-        end)
-    end
-
-    local sliderWrap = Instance.new("Frame", wrap)
-    sliderWrap.Size = UDim2.new(1, 0, 0, 0)
-    sliderWrap.AutomaticSize = Enum.AutomaticSize.Y
-    sliderWrap.BackgroundTransparency = 1
-    local slay = Instance.new("UIListLayout", sliderWrap); slay.SortOrder = Enum.SortOrder.LayoutOrder
-    local sp2 = Instance.new("UIPadding", sliderWrap); sp2.PaddingLeft = UDim.new(0, 8)
-
-    makeRGBSlider(sliderWrap, "R", rKey, function() return Color3.fromRGB(220, 80, 80) end)
-    makeRGBSlider(sliderWrap, "G", gKey, function() return Color3.fromRGB(80, 200, 80) end)
-    makeRGBSlider(sliderWrap, "B", bKey, function() return Color3.fromRGB(80, 120, 220) end)
-
-    return wrap
-end
-
--- ══════════════════════════════════════════════
 --  TAB 1 — ESP
 -- ══════════════════════════════════════════════
 local pg_esp = tabPages[1]
@@ -886,11 +761,7 @@ makeToggle(espCard, "esp_on",    "esp_on_d",    "esp_on")
 makeDivider(espCard)
 makeToggle(espCard, "esp_names", nil,           "esp_names")
 makeDivider(espCard)
-makeToggle(espCard, "esp_avatar","esp_avatar_d","esp_avatar")
-makeDivider(espCard)
 makeToggle(espCard, "esp_lines", "esp_lines_d", "esp_lines")
-makeDivider(espCard)
-makeColorPicker(espCard, "esp_color", "esp_color_d", "esp_char_r", "esp_char_g", "esp_char_b", nil)
 makeDivider(espCard)
 makeKeybind(espCard, "esp_key", "esp_key")
 
@@ -1006,98 +877,13 @@ do
 end
 
 -- ══════════════════════════════════════════════
---  CHARACTER ESP — Highlight por partes + Avatar
+--  ESP DRAWING OBJECTS
 -- ══════════════════════════════════════════════
 local espObjects = {}
 
-local BODY_PARTS = {"Head","Torso","UpperTorso","LowerTorso","LeftArm","RightArm",
-    "LeftLeg","RightLeg","LeftUpperArm","LeftLowerArm","LeftHand",
-    "RightUpperArm","RightLowerArm","RightHand","LeftUpperLeg","LeftLowerLeg",
-    "LeftFoot","RightUpperLeg","RightLowerLeg","RightFoot","HumanoidRootPart"}
-
-local function getEspColor()
-    return Color3.fromRGB(S.esp_char_r, S.esp_char_g, S.esp_char_b)
-end
-
--- Crea/actualiza SelectionBox highlights en todos los parts del personaje
-local function applyHighlights(obj, char, isVis)
-    if not char then return end
-    local col = getEspColor()
-    for _, partName in ipairs(BODY_PARTS) do
-        local part = char:FindFirstChild(partName)
-        if part and part:IsA("BasePart") then
-            if not obj.highlights[partName] then
-                local sb = Instance.new("SelectionBox")
-                sb.Color3 = col
-                sb.LineThickness = 0.04
-                sb.SurfaceTransparency = isVis and 0.82 or 1
-                sb.SurfaceColor3 = col
-                sb.Adornee = part
-                sb.Parent = gui
-                obj.highlights[partName] = sb
-            else
-                local sb = obj.highlights[partName]
-                sb.Color3 = col; sb.SurfaceColor3 = col
-                sb.SurfaceTransparency = isVis and 0.82 or 1
-                sb.Visible = S.esp_on
-            end
-        end
-    end
-end
-
--- Crea avatar BillboardGui sobre la cabeza del enemigo
-local function createAvatarBillboard(p, char)
-    if not char then return nil end
-    local head = char:FindFirstChild("Head"); if not head then return nil end
-    local bb = Instance.new("BillboardGui")
-    bb.Name = "x7sESP_"..p.Name
-    bb.Size = UDim2.fromOffset(90, 112)
-    bb.StudsOffset = Vector3.new(0, 3.2, 0)
-    bb.AlwaysOnTop = true; bb.ResetOnSpawn = false
-    bb.Adornee = head; bb.Parent = gui
-
-    local bg = Instance.new("Frame", bb)
-    bg.Size = UDim2.new(1, 0, 1, 0)
-    bg.BackgroundColor3 = Color3.fromRGB(6, 5, 10)
-    bg.BackgroundTransparency = 0.35; bg.BorderSizePixel = 0
-    Instance.new("UICorner", bg).CornerRadius = UDim.new(0, 10)
-    local bgStroke = Instance.new("UIStroke", bg)
-    bgStroke.Color = getEspColor(); bgStroke.Transparency = 0.3; bgStroke.Thickness = 1.5
-
-    local avatarImg = Instance.new("ImageLabel", bg)
-    avatarImg.Name = "AvatarImg"
-    avatarImg.Size = UDim2.fromOffset(60, 60)
-    avatarImg.Position = UDim2.new(0.5, -30, 0, 6)
-    avatarImg.BackgroundTransparency = 1
-    avatarImg.Image = "https://www.roblox.com/headshot-thumbnail/image?userId="..p.UserId.."&width=150&height=150&format=png"
-    avatarImg.ScaleType = Enum.ScaleType.Fit
-    Instance.new("UICorner", avatarImg).CornerRadius = UDim.new(0, 8)
-    local imgStroke = Instance.new("UIStroke", avatarImg)
-    imgStroke.Color = getEspColor(); imgStroke.Transparency = 0.4; imgStroke.Thickness = 1
-
-    local nameLbl = Instance.new("TextLabel", bg)
-    nameLbl.Name = "NameLbl"
-    nameLbl.Size = UDim2.new(1, -6, 0, 16); nameLbl.Position = UDim2.fromOffset(3, 70)
-    nameLbl.BackgroundTransparency = 1; nameLbl.Text = p.Name
-    nameLbl.TextColor3 = Color3.fromRGB(230, 220, 245); nameLbl.Font = Enum.Font.GothamBold
-    nameLbl.TextSize = 11; nameLbl.TextXAlignment = Enum.TextXAlignment.Center
-    nameLbl.TextTruncate = Enum.TextTruncate.AtEnd
-
-    local dispLbl = Instance.new("TextLabel", bg)
-    dispLbl.Name = "DispLbl"
-    dispLbl.Size = UDim2.new(1, -6, 0, 14); dispLbl.Position = UDim2.fromOffset(3, 86)
-    dispLbl.BackgroundTransparency = 1
-    dispLbl.Text = p.DisplayName ~= p.Name and ("@"..p.DisplayName) or ""
-    dispLbl.TextColor3 = Color3.fromRGB(140, 130, 160); dispLbl.Font = Enum.Font.Gotham
-    dispLbl.TextSize = 9; dispLbl.TextXAlignment = Enum.TextXAlignment.Center
-    dispLbl.TextTruncate = Enum.TextTruncate.AtEnd
-
-    return bb
-end
-
 local function newLine()
     local l = Drawing.new("Line"); l.Visible = false; l.Thickness = 1.5
-    l.Color = getEspColor(); return l
+    l.Color = Color3.fromRGB(141, 122, 174); return l
 end
 local function newText()
     local t = Drawing.new("Text"); t.Visible = false; t.Size = 13
@@ -1106,37 +892,20 @@ local function newText()
 end
 local function newBox()
     local b = Drawing.new("Square"); b.Visible = false; b.Filled = false
-    b.Thickness = 1.5; b.Color = getEspColor(); return b
+    b.Thickness = 1.5; b.Color = Color3.fromRGB(141, 122, 174); return b
 end
 
 local function createEspObj(p)
     if p == player then return end
     espObjects[p] = {
-        highlights = {},
-        billboard  = nil,
         box  = newBox(),
         name = newText(),
         line = newLine(),
         hbx  = newBox(),
     }
-    if p.Character then
-        espObjects[p].billboard = createAvatarBillboard(p, p.Character)
-    end
-    p.CharacterAdded:Connect(function(char)
-        local obj2 = espObjects[p]; if not obj2 then return end
-        for _, hl in pairs(obj2.highlights) do pcall(function() hl:Destroy() end) end
-        obj2.highlights = {}
-        if obj2.billboard then obj2.billboard:Destroy(); obj2.billboard = nil end
-        task.wait(0.5)
-        if espObjects[p] then
-            espObjects[p].billboard = createAvatarBillboard(p, char)
-        end
-    end)
 end
 local function removeEspObj(p)
     local obj = espObjects[p]; if not obj then return end
-    for _, hl in pairs(obj.highlights) do pcall(function() hl:Destroy() end) end
-    if obj.billboard then obj.billboard:Destroy() end
     obj.box:Remove(); obj.name:Remove(); obj.line:Remove(); obj.hbx:Remove()
     espObjects[p] = nil
 end
@@ -1297,12 +1066,7 @@ RunService.RenderStepped:Connect(function()
     for p, obj in pairs(espObjects) do
         local char = p.Character
         local function allOff()
-            -- Ocultar todos los highlights
-            for _, hl in pairs(obj.highlights) do
-                pcall(function() hl.Visible = false end)
-            end
-            if obj.billboard then obj.billboard.Visible = false end
-            obj.name.Visible = false
+            obj.box.Visible = false; obj.name.Visible = false
             obj.line.Visible = false; obj.hbx.Visible = false
         end
         if not char or not S.esp_on then allOff(); continue end
@@ -1319,59 +1083,39 @@ RunService.RenderStepped:Connect(function()
         local height = math.abs(sp2.Y - topY) * 2.2
         local width  = height * 0.5
 
-        -- Visible check para hitbox
+        -- ▸ Visible Check aplicado al hitbox:
+        -- si está activo y el enemigo no es visible, la hitbox expandida
+        -- NO registra el hit (se remueve/restaura el tamaño real)
         if S.hbx_on and S.hbx_vis_check then
             local visible = isVisible(root, myChar)
             if not visible and _hbxOriginals[p] then
+                -- Restaurar tamaño temporalmente sin borrar el registro
                 pcall(function() root.Size = _hbxOriginals[p] end)
             elseif visible and _hbxOriginals[p] then
+                -- Reaplicar hitbox cuando vuelve a ser visible
                 local s = S.hbx_size
                 pcall(function() root.Size = Vector3.new(s*2, s*2, s*2) end)
             end
         end
 
-        -- ▸ CHARACTER ESP — Highlights por partes del cuerpo
+        -- Dibujos ESP
         if S.esp_on then
-            local vis = isVisible(root, myChar)
-            applyHighlights(obj, char, vis)
-            -- Actualizar visibilidad de cada highlight
-            for _, hl in pairs(obj.highlights) do
-                pcall(function() hl.Visible = true end)
-            end
+            obj.box.Visible = true
+            obj.box.Color = C.ACCENT
+            obj.box.Size = Vector2.new(width, height)
+            obj.box.Position = Vector2.new(sp2.X - width/2, sp2.Y - height/2)
+        else obj.box.Visible = false end
 
-            -- Avatar BillboardGui
-            if obj.billboard then
-                obj.billboard.Visible = S.esp_avatar
-                -- Actualizar color del stroke del billboard
-                local bgFrame = obj.billboard:FindFirstChildOfClass("Frame")
-                if bgFrame then
-                    local stroke = bgFrame:FindFirstChildOfClass("UIStroke")
-                    if stroke then stroke.Color = getEspColor() end
-                    local imgLabel = bgFrame:FindFirstChild("AvatarImg")
-                    if imgLabel then
-                        local imgStroke = imgLabel:FindFirstChildOfClass("UIStroke")
-                        if imgStroke then imgStroke.Color = getEspColor() end
-                    end
-                end
-            end
-        else
-            for _, hl in pairs(obj.highlights) do
-                pcall(function() hl.Visible = false end)
-            end
-            if obj.billboard then obj.billboard.Visible = false end
-        end
-
-        -- Nombre flotante (Drawing, por encima del billboard si avatar está off)
-        if S.esp_names and not S.esp_avatar then
+        if S.esp_names then
             obj.name.Visible = true
             obj.name.Text = p.Name
-            obj.name.Color = getEspColor()
+            obj.name.Color = C.TEXT
             obj.name.Position = Vector2.new(sp2.X, sp2.Y - height/2 - 18)
         else obj.name.Visible = false end
 
         if S.esp_lines then
             obj.line.Visible = true
-            obj.line.Color = getEspColor()
+            obj.line.Color = C.ACCENT
             obj.line.From = Vector2.new(vpSize.X/2, vpSize.Y)
             obj.line.To = sp2
         else obj.line.Visible = false end
@@ -1381,9 +1125,10 @@ RunService.RenderStepped:Connect(function()
             local hbxH = height * (S.hbx_size / 2)
             local hbxW = hbxH * 0.8
             obj.hbx.Visible = true
+            -- Color verde si visible, rojo si detrás de pared (solo informativo)
             if S.hbx_vis_check then
-                local vis2 = isVisible(root, myChar)
-                obj.hbx.Color = vis2 and Color3.fromRGB(100, 220, 100) or Color3.fromRGB(220, 80, 80)
+                local vis = isVisible(root, myChar)
+                obj.hbx.Color = vis and Color3.fromRGB(100, 220, 100) or Color3.fromRGB(220, 80, 80)
             else
                 obj.hbx.Color = Color3.fromRGB(255, 100, 100)
             end
