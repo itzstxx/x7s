@@ -1,6 +1,17 @@
+--[[
+    ╔══════════════════════════════════════════════════════╗
+    ║              x7s  —  Loader  V1.0                   ║
+    ╠══════════════════════════════════════════════════════╣
+    ║  USO EN EJECUTOR:                                    ║
+    ║                                                      ║
+    ║    loadstring(game:HttpGet(                          ║
+    ║      "https://raw.githubusercontent.com/             ║
+    ║       itzstxx/x7s/main/x7s.lua"                  ║
+    ║    ))()                                              ║
+    ╚══════════════════════════════════════════════════════╝
+]]
 
-
-local RAW_URL = "https://raw.githubusercontent.com/itzstxx/x7s/main/NexusV1.lua"
+local RAW_URL = "https://raw.githubusercontent.com/itzstxx/x7s/main/x7s.lua"
 
 local source do
     local ok, result = pcall(function()
@@ -27,4 +38,4 @@ if not ok2 then
     return
 end
 
-print("[x7s Loader] Cargado — "..game.Players.LocalPlayer.Name)
+print("[x7s] Cargado — "..game.Players.LocalPlayer.Name)
