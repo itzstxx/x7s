@@ -6,9 +6,22 @@ if type(loader) ~= "function" then
     return
 end
 
+local function getSource(url)
+    if game and type(game.HttpGet) == "function" then
+        return game:HttpGet(url, true)
+    end
+    if type(httpget) == "function" then
+        return httpget(url)
+    end
+    if type(HttpGet) == "function" then
+        return HttpGet(url)
+    end
+    error("[x7s Loader] Este executor no soporta game:HttpGet/httpget.", 2)
+end
+
 local source do
     local ok, result = pcall(function()
-        return game:HttpGet(RAW_URL, true)
+        return getSource(RAW_URL)
     end)
     if not ok or type(result) ~= "string" or #result < 10 then
         error("[x7s Loader] No se pudo descargar NexusV1.\n"..
