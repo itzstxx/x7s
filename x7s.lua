@@ -85,6 +85,7 @@ local function mkDefault()
         hbx_vis_check=true,   -- Visible Check: no matar si está detrás de pared
         trg_on=false, trg_key="R",
         summer_on=false,
+        stream_mode=false,  -- Stream Mode: oculta GUI y desactiva ESP visual
         panel_bg=true, notifs=true, lang="English", gui_key="L",
     }
 end
@@ -122,6 +123,7 @@ local Locale = {
         st_notif="Enable Notifications",
         st_lang="Language",
         st_key="Toggle UI",
+        st_stream="Stream Mode",       st_stream_d="Hides GUI and disables all ESP visuals. Hotkey: RightAlt.",
         st_r1="Reset Toggle UI Keybind",  st_r1_d="Reset this keybind to its default value.",
         st_r2="Reset All Keybinds",       st_r2_d="Reset all keybinds to their default values.",
 
@@ -148,6 +150,7 @@ local Locale = {
         st_notif="Activar Notificaciones",
         st_lang="Idioma",
         st_key="Alternar UI",
+        st_stream="Stream Mode",       st_stream_d="Oculta la GUI y desactiva el ESP visual. Tecla: RightAlt.",
         st_r1="Restablecer Tecla UI",     st_r1_d="Restablece esta tecla a su valor predeterminado.",
         st_r2="Restablecer Todas",        st_r2_d="Restablece todas las teclas a sus valores predeterminados.",
         n_on="Activado", n_off="Desactivado", n_reset="Tecla restablecida",
@@ -238,8 +241,55 @@ local function showNotif(title, body, isGood)
 end
 
 -- ══════════════════════════════════════════════
---  GOTHIC SIDEBAR GUI  (diseño HTML reference)
+--  STREAM MODE (igual que SyyPC)
+--  Guarda estado de ESP/avatar/nombres/líneas y oculta todo
 -- ══════════════════════════════════════════════
+local streamModeOn = false
+local streamSaved = {esp_on=nil, esp_avatar=nil, esp_names=nil, esp_lines=nil}
+
+local function applyStreamMode(on)
+    on = on and true or false
+    if streamModeOn == on then return end
+    streamModeOn = on
+    S.stream_mode = on
+    if on then
+        -- Guardar y desactivar
+        streamSaved.esp_on    = S.esp_on
+        streamSaved.esp_avatar = S.esp_avatar
+        streamSaved.esp_names  = S.esp_names
+        streamSaved.esp_lines  = S.esp_lines
+        S.esp_on = false; S.esp_avatar = false; S.esp_names = false; S.esp_lines = false
+        -- Ocultar GUI completa
+        panel.Visible = false; glow.Visible = false
+        -- Ocultar todos los ESP inmediatamente
+        for _, obj in pairs(espObjects) do
+            for _, hl in pairs(obj.highlights) do pcall(function() hl.Enabled = false end) end
+            if obj.billboard     then obj.billboard.Enabled     = false end
+            if obj.nameBillboard then obj.nameBillboard.Enabled = false end
+            obj.line.Visible = false; obj.hbx.Visible = false
+        end
+    else
+        -- Restaurar
+        if streamSaved.esp_on    ~= nil then S.esp_on    = streamSaved.esp_on    end
+        if streamSaved.esp_avatar ~= nil then S.esp_avatar = streamSaved.esp_avatar end
+        if streamSaved.esp_names  ~= nil then S.esp_names  = streamSaved.esp_names  end
+        if streamSaved.esp_lines  ~= nil then S.esp_lines  = streamSaved.esp_lines  end
+        -- Mostrar GUI
+        panel.Visible = true; glow.Visible = true
+        panel.BackgroundTransparency = 1
+        TweenService:Create(panel, TweenInfo.new(0.2, Enum.EasingStyle.Quad), {BackgroundTransparency=0}):Play()
+        TweenService:Create(glow,  TweenInfo.new(0.2), {BackgroundTransparency=0.93}):Play()
+    end
+    -- Actualizar toggles visuales
+    if refreshers["esp_on"]    then refreshers["esp_on"]()    end
+    if refreshers["esp_avatar"] then refreshers["esp_avatar"]() end
+    if refreshers["esp_names"]  then refreshers["esp_names"]()  end
+    if refreshers["esp_lines"]  then refreshers["esp_lines"]()  end
+    if refreshers["stream_mode"] then refreshers["stream_mode"]() end
+    save()
+end
+
+
 local GW, GH = 660, 520          -- ancho total, alto total
 local SB_W   = 160                -- ancho sidebar
 local HDR_H  = 34                 -- altura header
@@ -1208,9 +1258,9 @@ makeSecHeader(espCard, "†", "ESP")
 makeToggle(espCard, "esp_on", "esp_on_d", "esp_on", function(on)
     if not on then
         for _, obj in pairs(espObjects) do
-            for _, hl in pairs(obj.highlights) do pcall(function() hl.Visible = false end) end
-            if obj.billboard     then obj.billboard.Visible     = false end
-            if obj.nameBillboard then obj.nameBillboard.Visible = false end
+            for _, hl in pairs(obj.highlights) do pcall(function() hl.Enabled = false end) end
+            if obj.billboard     then obj.billboard.Enabled     = false end
+            if obj.nameBillboard then obj.nameBillboard.Enabled = false end
             obj.line.Visible = false
             obj.hbx.Visible  = false
         end
@@ -1284,6 +1334,10 @@ makeToggle(cfgCard, "st_bg", nil, "panel_bg", function(on)
 end)
 makeDivider(cfgCard)
 makeToggle(cfgCard, "st_notif", nil, "notifs")
+makeDivider(cfgCard)
+makeToggle(cfgCard, "st_stream", "st_stream_d", "stream_mode", function(on)
+    applyStreamMode(on)
+end)
 
 secLabel(cfgCard, "· · · LANGUAGE · · ·")
 makeDropdown(cfgCard, "st_lang", "lang", {"English","Español"}, function(opt)
@@ -1422,7 +1476,7 @@ local function applyHighlights(obj, char, isVis)
         hl.FillTransparency = isVis and 0.55 or 0.85
         hl.OutlineTransparency = isVis and 0.0 or 0.3
         hl.Adornee = char
-        hl.Visible = S.esp_on
+        hl.Enabled = S.esp_on
     end
 end
 
@@ -1436,6 +1490,8 @@ local function createNameBillboard(p, char)
     bb.StudsOffset = Vector3.new(0, 3.2, 0)
     bb.AlwaysOnTop = true; bb.ResetOnSpawn = false
     bb.Adornee = head; bb.Parent = gui
+    -- Oculto por defecto hasta que ESP esté activo
+    bb.Enabled = false
 
     local nameLbl = Instance.new("TextLabel", bb)
     nameLbl.Name = "NameLbl"
@@ -1461,6 +1517,8 @@ local function createAvatarBillboard(p, char)
     bb.StudsOffset = Vector3.new(0, 3.6, 0)
     bb.AlwaysOnTop = true; bb.ResetOnSpawn = false
     bb.Adornee = head; bb.Parent = gui
+    -- Oculto por defecto hasta que ESP esté activo
+    bb.Enabled = false
 
     local bg = Instance.new("Frame", bb)
     bg.Size = UDim2.new(1, 0, 1, 0)
@@ -1555,18 +1613,29 @@ local function isVisible(targetRoot, myChar)
     local dist = direction.Magnitude
     if dist > 2000 then return false end
 
+    -- Intentar primero con GetPartsObscuringTarget (más fiable con hitboxes expandidas)
+    local ok, obs = pcall(function()
+        return camera:GetPartsObscuringTarget({target}, {myChar, targetRoot.Parent})
+    end)
+    if ok then
+        return #obs == 0
+    end
+
+    -- Fallback: raycast excluyendo el personaje local Y el modelo enemigo completo
     local rcParams = RaycastParams.new()
     rcParams.FilterType = Enum.RaycastFilterType.Exclude
-    -- Excluir el propio personaje del jugador y el personaje enemigo
-    -- para que el ray no choque con la hitbox expandida
     local excludeList = {myChar, targetRoot.Parent}
+    -- Excluir también cada parte del enemigo para evitar colisión con hitbox expandida
+    for _, part in ipairs(targetRoot.Parent:GetDescendants()) do
+        if part:IsA("BasePart") then
+            table.insert(excludeList, part)
+        end
+    end
     rcParams.FilterDescendantsInstances = excludeList
 
     local result = Workspace:Raycast(origin, direction.Unit * dist, rcParams)
-    -- Si el raycast no golpea nada antes del target → visible
-    -- Si golpea pero la distancia al hit es ≥ dist → visible
     if result == nil then return true end
-    return result.Distance >= dist - 1  -- 1 stud de tolerancia
+    return result.Distance >= dist - 0.5
 end
 
 local function applyHitbox(p, on)
@@ -1574,17 +1643,17 @@ local function applyHitbox(p, on)
     local root = p.Character:FindFirstChild("HumanoidRootPart"); if not root then return end
     if on then
         if not _hbxOriginals[p] then _hbxOriginals[p] = root.Size end
-        -- Si Visible Check está activo, solo expandir cuando el enemigo es visible
         if S.hbx_vis_check then
             local myChar2 = player.Character
+            -- Restaurar tamaño original ANTES de hacer el raycast
+            -- para que la hitbox expandida no interfiera con la detección
+            pcall(function() root.Size = _hbxOriginals[p] end)
             local vis = isVisible(root, myChar2)
             if vis then
                 local s = S.hbx_size
                 pcall(function() root.Size = Vector3.new(s * 2, s * 2, s * 2) end)
-            else
-                -- Restaurar tamaño original si está detrás de pared
-                pcall(function() root.Size = _hbxOriginals[p] end)
             end
+            -- Si no es visible, el tamaño ya fue restaurado arriba → no mata por pared
         else
             local s = S.hbx_size
             pcall(function() root.Size = Vector3.new(s * 2, s * 2, s * 2) end)
@@ -1717,9 +1786,9 @@ RunService.RenderStepped:Connect(function()
     for p, obj in pairs(espObjects) do
         local char = p.Character
         local function allOff()
-            for _, hl in pairs(obj.highlights) do pcall(function() hl.Visible = false end) end
-            if obj.billboard      then obj.billboard.Visible      = false end
-            if obj.nameBillboard  then obj.nameBillboard.Visible  = false end
+            for _, hl in pairs(obj.highlights) do pcall(function() hl.Enabled = false end) end
+            if obj.billboard      then obj.billboard.Enabled      = false end
+            if obj.nameBillboard  then obj.nameBillboard.Enabled  = false end
             obj.line.Visible = false
             obj.hbx.Visible  = false
         end
@@ -1729,21 +1798,21 @@ RunService.RenderStepped:Connect(function()
         if not root or not hum or hum.Health <= 0 then allOff(); continue end
 
         -- ▸ Highlight aura (a través de paredes)
-        if S.esp_on then
+        if S.esp_on and not streamModeOn then
             applyHighlights(obj, char, true)
             for _, hl in pairs(obj.highlights) do
-                pcall(function() hl.Visible = true end)
+                pcall(function() hl.Enabled = true end)
             end
         else
             for _, hl in pairs(obj.highlights) do
-                pcall(function() hl.Visible = false end)
+                pcall(function() hl.Enabled = false end)
             end
         end
 
         -- ▸ Nombre encima del personaje — solo si esp_on Y esp_names
         if obj.nameBillboard then
-            local showName = S.esp_on and S.esp_names
-            obj.nameBillboard.Visible = showName
+            local showName = S.esp_on and S.esp_names and not streamModeOn
+            obj.nameBillboard.Enabled = showName
             if showName then
                 local nameLbl = obj.nameBillboard:FindFirstChild("NameLbl")
                 if nameLbl then nameLbl.TextColor3 = getEspColor() end
@@ -1752,8 +1821,8 @@ RunService.RenderStepped:Connect(function()
 
         -- ▸ Avatar — solo si esp_on Y esp_avatar
         if obj.billboard then
-            local showAv = S.esp_on and S.esp_avatar
-            obj.billboard.Visible = showAv
+            local showAv = S.esp_on and S.esp_avatar and not streamModeOn
+            obj.billboard.Enabled = showAv
             if showAv then
                 local bg2 = obj.billboard:FindFirstChildOfClass("Frame")
                 if bg2 then
@@ -1809,6 +1878,7 @@ UserInputService.InputBegan:Connect(function(inp, proc)
 
     -- Toggle GUI
     if kn == S.gui_key then
+        if streamModeOn then return end  -- No mostrar GUI en stream mode
         if panel.Visible then
             TweenService:Create(panel, TweenInfo.new(0.15, Enum.EasingStyle.Quad), {BackgroundTransparency=1}):Play()
             TweenService:Create(glow,  TweenInfo.new(0.15), {BackgroundTransparency=1}):Play()
@@ -1825,6 +1895,13 @@ UserInputService.InputBegan:Connect(function(inp, proc)
         return
     end
 
+    -- Stream Mode (RightAlt)
+    if kn == "RightAlt" then
+        applyStreamMode(not streamModeOn)
+        showNotif("✝  Stream Mode", streamModeOn and L("n_on") or L("n_off"), streamModeOn)
+        return
+    end
+
     -- Toggle ESP
     if kn == S.esp_key then
         S.esp_on = not S.esp_on; save()
@@ -1832,9 +1909,9 @@ UserInputService.InputBegan:Connect(function(inp, proc)
         showNotif("✝  ESP", S.esp_on and L("n_on") or L("n_off"), S.esp_on)
         if not S.esp_on then
             for _, obj in pairs(espObjects) do
-                for _, hl in pairs(obj.highlights) do pcall(function() hl.Visible = false end) end
-                if obj.billboard     then obj.billboard.Visible     = false end
-                if obj.nameBillboard then obj.nameBillboard.Visible = false end
+                for _, hl in pairs(obj.highlights) do pcall(function() hl.Enabled = false end) end
+                if obj.billboard     then obj.billboard.Enabled     = false end
+                if obj.nameBillboard then obj.nameBillboard.Enabled = false end
                 obj.line.Visible = false
                 obj.hbx.Visible  = false
             end
