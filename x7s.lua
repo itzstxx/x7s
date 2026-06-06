@@ -78,6 +78,7 @@ local function mkDefault()
         esp_on=false, esp_names=false, esp_lines=false, esp_key="T",
         esp_char_r=100, esp_char_g=220, esp_char_b=100,  -- Color del Character ESP (verde por defecto)
         esp_avatar=true,   -- Mostrar thumbnail del avatar en el ESP
+        esp_rainbow=false, -- Modo arcoíris RGB (cicla el color automáticamente)
         hbx_on=false, hbx_size=5, hbx_show=false, hbx_key="G",
         hbx_vis_check=true,   -- Visible Check: no matar si está detrás de pared
         trg_on=false, trg_key="R",
@@ -102,6 +103,7 @@ local Locale = {
         esp_key="ESP Keybind",
         esp_color="ESP Color",      esp_color_d="Customize the character highlight color.",
         esp_avatar="Show Avatar",   esp_avatar_d="Show player avatar thumbnail above ESP.",
+        esp_rainbow="Rainbow Aura", esp_rainbow_d="Cycle through all colors automatically.",
 
         hbx_on="Enable Hitbox",     hbx_on_d="Show and expand enemy hitboxes.",
         hbx_size="Hitbox Size",
@@ -131,6 +133,7 @@ local Locale = {
         esp_key="Tecla ESP",
         esp_color="Color ESP",       esp_color_d="Personaliza el color del resaltado del personaje.",
         esp_avatar="Mostrar Avatar", esp_avatar_d="Muestra el avatar del jugador sobre el ESP.",
+        esp_rainbow="Aura Arcoíris", esp_rainbow_d="Cicla automáticamente por todos los colores.",
         hbx_on="Activar Hitbox",    hbx_on_d="Muestra y expande las hitboxes enemigas.",
         hbx_size="Tamaño Hitbox",
         hbx_show="Mostrar Hitbox",
@@ -1219,6 +1222,8 @@ local espColorRow, espColorPop = makeColorPicker(espCard, "ESP Color",
     function(r,g,b) S.esp_char_r=r; S.esp_char_g=g; S.esp_char_b=b end
 )
 makeDivider(espCard)
+makeToggle(espCard, "esp_rainbow", "esp_rainbow_d", "esp_rainbow")
+makeDivider(espCard)
 makeKeybind(espCard, "esp_key", "esp_key")
 
 -- ── HBX Column ─────────────────────────────────
@@ -1259,13 +1264,45 @@ makeKeybind(trgCard, "trg_key", "trg_key")
 local cfgCard = makeCard(pg_ajustes)
 makeSecHeader(cfgCard, "†", "Settings")
 
+-- Copy Discord Invite button
+do
+    local discordRow = Instance.new("Frame", cfgCard)
+    discordRow.Size = UDim2.new(1, 0, 0, 42); discordRow.BackgroundTransparency = 1
+    local discTl = Instance.new("TextLabel", discordRow)
+    discTl.Size = UDim2.new(1, -70, 0, 16); discTl.Position = UDim2.fromOffset(14, 13)
+    discTl.BackgroundTransparency = 1; discTl.Text = "Copy Discord Invite"
+    discTl.TextColor3 = Color3.fromRGB(215,215,215); discTl.Font = Enum.Font.GothamMedium
+    discTl.TextSize = 12; discTl.TextXAlignment = Enum.TextXAlignment.Left
+    local discBtn = Instance.new("TextButton", discordRow)
+    discBtn.Size = UDim2.fromOffset(28, 28); discBtn.Position = UDim2.new(1, -42, 0.5, -14)
+    discBtn.BackgroundColor3 = Color3.fromRGB(30,30,30); discBtn.BorderSizePixel = 0
+    discBtn.Text = "⧉"; discBtn.TextColor3 = accentColor
+    discBtn.Font = Enum.Font.GothamBold; discBtn.TextSize = 14; discBtn.AutoButtonColor = false
+    local dbs = Instance.new("UIStroke", discBtn); dbs.Color = Color3.fromRGB(58,58,58); dbs.Thickness = 1
+    local _dcCopied = false
+    discBtn.MouseButton1Click:Connect(function()
+        if _dcCopied then return end; _dcCopied = true
+        pcall(function() setclipboard("https://discord.gg/x7s") end)
+        discBtn.Text = "✓"; discBtn.TextColor3 = accentColor; dbs.Color = accentColor
+        task.delay(1.8, function() discBtn.Text = "⧉"; discBtn.TextColor3 = accentColor; dbs.Color = Color3.fromRGB(58,58,58); _dcCopied = false end)
+        showNotif("✝  Discord", "Invite copied!", true)
+    end)
+    discBtn.MouseEnter:Connect(function() dbs.Color = accentColor end)
+    discBtn.MouseLeave:Connect(function() if not _dcCopied then dbs.Color = Color3.fromRGB(58,58,58) end end)
+end
+makeDivider(cfgCard)
+
 secLabel(cfgCard, "· · · DISPLAY · · ·")
-makeToggle(cfgCard, "st_bg",    nil, "panel_bg")
+makeToggle(cfgCard, "st_bg", nil, "panel_bg", function(on)
+    panel.BackgroundTransparency = on and 0 or 0.15
+end)
 makeDivider(cfgCard)
 makeToggle(cfgCard, "st_notif", nil, "notifs")
 
 secLabel(cfgCard, "· · · LANGUAGE · · ·")
-makeDropdown(cfgCard, "st_lang", "lang", {"English","Español"}, nil)
+makeDropdown(cfgCard, "st_lang", "lang", {"English","Español"}, function(opt)
+    showNotif("Language", opt, true)
+end)
 
 secLabel(cfgCard, "· · · KEYBINDS · · ·")
 local keyCard2 = makeCard(pg_ajustes)
@@ -1329,10 +1366,10 @@ do
         if drag and inp.UserInputType == Enum.UserInputType.MouseMovement then
             local d = inp.Position - dragStart
             local sc = gui.AbsoluteSize
-            panel.Position = UDim2.new(
-                startPos.X.Scale, math.clamp(startPos.X.Offset + d.X, 0, sc.X - GW),
-                startPos.Y.Scale, math.clamp(startPos.Y.Offset + d.Y, 0, sc.Y - GH)
-            )
+            -- Permitir mover libremente, solo evitar que se pierda completamente fuera de pantalla
+            local newX = math.clamp(startPos.X.Offset + d.X, -(GW - 80), sc.X - 80)
+            local newY = math.clamp(startPos.Y.Offset + d.Y, 0, sc.Y - HDR_H)
+            panel.Position = UDim2.new(startPos.X.Scale, newX, startPos.Y.Scale, newY)
             glow.Position = UDim2.new(
                 panel.Position.X.Scale, panel.Position.X.Offset - 10,
                 panel.Position.Y.Scale, panel.Position.Y.Offset - 10
@@ -1940,33 +1977,37 @@ local function newDrawingFallback()
     }
 end
 
+local _rainbowHue = 0
 local function getEspColor()
+    if S.esp_rainbow then
+        return Color3.fromHSV(_rainbowHue, 1, 1)
+    end
     return Color3.fromRGB(S.esp_char_r, S.esp_char_g, S.esp_char_b)
 end
 
--- Crea/actualiza SelectionBox highlights en todos los parts del personaje
+-- Crea/actualiza Highlight aura RGB en el modelo del enemigo (un solo Highlight por personaje)
 local function applyHighlights(obj, char, isVis)
     if not char then return end
     local col = getEspColor()
-    for _, partName in ipairs(BODY_PARTS) do
-        local part = char:FindFirstChild(partName)
-        if part and part:IsA("BasePart") then
-            if not obj.highlights[partName] then
-                local sb = Instance.new("SelectionBox")
-                sb.Color3 = col
-                sb.LineThickness = 0.04
-                sb.SurfaceTransparency = isVis and 0.82 or 1
-                sb.SurfaceColor3 = col
-                sb.Adornee = part
-                sb.Parent = gui
-                obj.highlights[partName] = sb
-            else
-                local sb = obj.highlights[partName]
-                sb.Color3 = col; sb.SurfaceColor3 = col
-                sb.SurfaceTransparency = isVis and 0.82 or 1
-                sb.Visible = S.esp_on
-            end
-        end
+    -- Usamos un solo Highlight en el modelo completo para efecto aura
+    if not obj.highlights["_main"] then
+        local hl = Instance.new("Highlight")
+        hl.FillColor = col
+        hl.OutlineColor = col
+        hl.FillTransparency = isVis and 0.55 or 0.85
+        hl.OutlineTransparency = isVis and 0.0 or 0.3
+        hl.Adornee = char
+        hl.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+        hl.Parent = gui
+        obj.highlights["_main"] = hl
+    else
+        local hl = obj.highlights["_main"]
+        hl.FillColor = col
+        hl.OutlineColor = col
+        hl.FillTransparency = isVis and 0.55 or 0.85
+        hl.OutlineTransparency = isVis and 0.0 or 0.3
+        hl.Adornee = char
+        hl.Visible = S.esp_on
     end
 end
 
@@ -2106,8 +2147,21 @@ local function applyHitbox(p, on)
     local root = p.Character:FindFirstChild("HumanoidRootPart"); if not root then return end
     if on then
         if not _hbxOriginals[p] then _hbxOriginals[p] = root.Size end
-        local s = S.hbx_size
-        pcall(function() root.Size = Vector3.new(s * 2, s * 2, s * 2) end)
+        -- Si Visible Check está activo, solo expandir cuando el enemigo es visible
+        if S.hbx_vis_check then
+            local myChar2 = player.Character
+            local vis = isVisible(root, myChar2)
+            if vis then
+                local s = S.hbx_size
+                pcall(function() root.Size = Vector3.new(s * 2, s * 2, s * 2) end)
+            else
+                -- Restaurar tamaño original si está detrás de pared
+                pcall(function() root.Size = _hbxOriginals[p] end)
+            end
+        else
+            local s = S.hbx_size
+            pcall(function() root.Size = Vector3.new(s * 2, s * 2, s * 2) end)
+        end
     else
         if _hbxOriginals[p] then
             pcall(function() root.Size = _hbxOriginals[p] end)
@@ -2174,14 +2228,18 @@ local _tbRate = 0.12
 local _frame = 0
 RunService.RenderStepped:Connect(function()
     _frame = _frame + 1
+    -- Avanzar el hue del arcoíris cada frame
+    if S.esp_rainbow then
+        _rainbowHue = (_rainbowHue + 0.004) % 1
+    end
     local myChar = player.Character
     local myRoot = myChar and myChar:FindFirstChild("HumanoidRootPart")
     local vpSize = camera.ViewportSize
     local mousePos = UserInputService:GetMouseLocation()
     local now = tick()
 
-    -- Aplicar hitbox cada 60 frames
-    if _frame % 60 == 0 then
+    -- Aplicar hitbox cada 6 frames (más responsivo para visible check)
+    if _frame % 6 == 0 then
         for _, p in ipairs(_plrList) do
             if p ~= player then applyHitbox(p, S.hbx_on) end
         end
@@ -2247,16 +2305,8 @@ RunService.RenderStepped:Connect(function()
         local height = math.abs(sp2.Y - topY) * 2.2
         local width  = height * 0.5
 
-        -- Visible check para hitbox
-        if S.hbx_on and S.hbx_vis_check then
-            local visible = isVisible(root, myChar)
-            if not visible and _hbxOriginals[p] then
-                pcall(function() root.Size = _hbxOriginals[p] end)
-            elseif visible and _hbxOriginals[p] then
-                local s = S.hbx_size
-                pcall(function() root.Size = Vector3.new(s*2, s*2, s*2) end)
-            end
-        end
+        -- Visible check para hitbox (manejado en applyHitbox cada 60 frames)
+        -- Solo actualizar el indicador visual del hbx box aquí
 
         -- ▸ CHARACTER ESP — Highlights por partes del cuerpo
         if S.esp_on then
@@ -2375,5 +2425,5 @@ task.defer(function()
     panel.BackgroundTransparency = S.panel_bg and 0 or 0.15
 end)
 
-print("✝  x7s V1.0 Loaded — "..player.Name.."  ✝")
+print("✝  x7s  Loaded — "..player.Name.."  ✝")
 print("   "..S.gui_key.." = Toggle GUI  ·  "..S.esp_key.." = ESP  ·  "..S.hbx_key.." = Hitbox  ·  "..S.trg_key.." = Trigger")
