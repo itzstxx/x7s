@@ -83,7 +83,6 @@ local function mkDefault()
         esp_rainbow=false, -- Modo arcoíris RGB (cicla el color automáticamente)
         hbx_on=false, hbx_size=5, hbx_show=false, hbx_key="G",
         hbx_vis_check=true,   -- Visible Check: no matar si está detrás de pared
-        shbx_on=false, shbx_size=8, shbx_key="H",  -- Silent Hitbox (solo cliente, sin kick)
         trg_on=false, trg_key="R",
         summer_on=false,
         stream_mode=false,  -- Stream Mode: oculta GUI y desactiva ESP visual
@@ -115,10 +114,6 @@ local Locale = {
         hbx_key="Hitbox Keybind",
         hbx_vis="Visible Check",    hbx_vis_d="Only register hits when the enemy is actually visible. Prevents kills through walls.",
 
-        shbx_on="Silent Hitbox",    shbx_on_d="Expands hitbox client-side only. No server changes — no kick.",
-        shbx_size="Silent HBX Size",
-        shbx_key="Silent HBX Keybind",
-
         trg_on="Triggerbot",        trg_on_d="Shoots when your cursor is directly over a visible enemy.",
         trg_key="Triggerbot Keybind",
 
@@ -148,9 +143,6 @@ local Locale = {
         hbx_show="Mostrar Hitbox",
         hbx_key="Tecla Hitbox",
         hbx_vis="Visible Check",    hbx_vis_d="Solo registra el hit si el enemigo está a la vista. Evita matar a través de paredes.",
-        shbx_on="Silent Hitbox",    shbx_on_d="Expande la hitbox solo en cliente. Sin cambios en servidor — sin kick.",
-        shbx_size="Tamaño Silent HBX",
-        shbx_key="Tecla Silent HBX",
         trg_on="Triggerbot",         trg_on_d="Dispara cuando el cursor está sobre un enemigo visible.",
         trg_key="Tecla Triggerbot",
         ev_sum="Verano 2026",        ev_sum_d="Recoge drops de Verano 2026 automáticamente. Solo en partidas.",
@@ -1270,12 +1262,6 @@ makeToggle(hbxCard, "hbx_on",  "hbx_on_d",  "hbx_on", function(on)
                         root2.Size       = _hbxOriginals[p2].Size
                         root2.CanCollide = _hbxOriginals[p2].CanCollide
                         root2.Massless   = _hbxOriginals[p2].Massless
-                        -- FIX: restaurar CanCollide de todas las partes
-                        if _hbxOriginals[p2].Parts then
-                            for part, data in pairs(_hbxOriginals[p2].Parts) do
-                                pcall(function() part.CanCollide = data.CanCollide end)
-                            end
-                        end
                     end)
                     _hbxOriginals[p2] = nil
                 end
@@ -1304,15 +1290,6 @@ makeToggle(hbxCard, "hbx_show", nil, "hbx_show", function(on)
 end)
 makeDivider(hbxCard)
 makeKeybind(hbxCard, "hbx_key", "hbx_key")
-
--- ── SILENT HITBOX CARD ────────────────────────
-local shbxCard = makeCard(pg_inicio)
-makeSecHeader(shbxCard, "◈", "Silent Hitbox")
-makeToggle(shbxCard, "shbx_on", "shbx_on_d", "shbx_on")
-makeDivider(shbxCard)
-makeSlider(shbxCard, "shbx_size", "shbx_size", 1, 30)
-makeDivider(shbxCard)
-makeKeybind(shbxCard, "shbx_key", "shbx_key")
 
 local trgCard = makeCard(pg_inicio)
 makeSecHeader(trgCard, "·", "Triggerbot")
@@ -1687,18 +1664,10 @@ local function applyHitbox(p, on)
     local root = p.Character:FindFirstChild("HumanoidRootPart"); if not root then return end
     if on then
         if not _hbxOriginals[p] then
-            -- FIX: guardar CanCollide de TODAS las partes del character
-            local partStates = {}
-            for _, part in ipairs(p.Character:GetDescendants()) do
-                if part:IsA("BasePart") then
-                    partStates[part] = { CanCollide = part.CanCollide }
-                end
-            end
             _hbxOriginals[p] = {
                 Size       = root.Size,
                 CanCollide = root.CanCollide,
                 Massless   = root.Massless,
-                Parts      = partStates,
             }
         end
         if S.hbx_vis_check then
@@ -1712,12 +1681,6 @@ local function applyHitbox(p, on)
                     root.Size       = Vector3.new(s * 2, s * 2, s * 2)
                     root.CanCollide = false   -- no bloquea el paso del jugador
                     root.Massless   = true    -- no empuja ni tiene peso
-                    -- FIX: desactivar colisión en TODAS las partes del character
-                    for _, part in ipairs(p.Character:GetDescendants()) do
-                        if part:IsA("BasePart") then
-                            part.CanCollide = false
-                        end
-                    end
                 end)
             else
                 -- Detrás de pared: restaurar para no bloquear
@@ -1725,11 +1688,6 @@ local function applyHitbox(p, on)
                     root.Size       = _hbxOriginals[p].Size
                     root.CanCollide = _hbxOriginals[p].CanCollide
                     root.Massless   = _hbxOriginals[p].Massless
-                    if _hbxOriginals[p].Parts then
-                        for part, data in pairs(_hbxOriginals[p].Parts) do
-                            pcall(function() part.CanCollide = data.CanCollide end)
-                        end
-                    end
                 end)
             end
         else
@@ -1738,12 +1696,6 @@ local function applyHitbox(p, on)
                 root.Size       = Vector3.new(s * 2, s * 2, s * 2)
                 root.CanCollide = false
                 root.Massless   = true
-                -- FIX: desactivar colisión en TODAS las partes del character
-                for _, part in ipairs(p.Character:GetDescendants()) do
-                    if part:IsA("BasePart") then
-                        part.CanCollide = false
-                    end
-                end
             end)
         end
     else
@@ -1752,12 +1704,6 @@ local function applyHitbox(p, on)
                 root.Size       = _hbxOriginals[p].Size
                 root.CanCollide = _hbxOriginals[p].CanCollide
                 root.Massless   = _hbxOriginals[p].Massless
-                -- FIX: restaurar CanCollide de todas las partes
-                if _hbxOriginals[p].Parts then
-                    for part, data in pairs(_hbxOriginals[p].Parts) do
-                        pcall(function() part.CanCollide = data.CanCollide end)
-                    end
-                end
             end)
             _hbxOriginals[p] = nil
         end
@@ -1839,43 +1785,8 @@ RunService.RenderStepped:Connect(function()
         end
     end
 
-    -- ══ SILENT HITBOX — solo modifica el raycast del triggerbot, no toca el servidor ══
-    -- Funciona ampliando el margen de detección del cursor sobre el enemigo.
-    -- No cambia Size, CanCollide ni ninguna propiedad replicada — sin kick.
-    local _shbxTarget = nil  -- el enemigo más cercano al cursor dentro del radio
-    if S.shbx_on and myChar then
-        local bestDist = math.huge
-        for _, p in ipairs(_plrList) do
-            if p ~= player and p.Character then
-                local pRoot = p.Character:FindFirstChild("HumanoidRootPart")
-                local pHum  = p.Character:FindFirstChildOfClass("Humanoid")
-                if pRoot and pHum and pHum.Health > 0 then
-                    local sp3, onS3 = camera:WorldToViewportPoint(pRoot.Position)
-                    if onS3 and sp3.Z > 0 then
-                        local screenDist = (Vector2.new(sp3.X, sp3.Y) - mousePos).Magnitude
-                        -- Radio en píxeles proporcional al shbx_size y a la distancia
-                        local depthFactor = math.clamp(300 / sp3.Z, 4, 80)
-                        local radius = S.shbx_size * depthFactor
-                        if screenDist < radius and screenDist < bestDist then
-                            -- Verificar visible check si está activado
-                            local visOk = true
-                            if S.hbx_vis_check then
-                                visOk = isVisible(pRoot, myChar)
-                            end
-                            if visOk then
-                                bestDist   = screenDist
-                                _shbxTarget = p
-                            end
-                        end
-                    end
-                end
-            end
-        end
-    end
-
     -- Triggerbot
     if S.trg_on and myChar and now - _tbCooldown > _tbRate then
-        local shouldFire = false
         local unitRay = camera:ScreenPointToRay(mousePos.X, mousePos.Y)
         local rcParams = RaycastParams.new()
         rcParams.FilterType = Enum.RaycastFilterType.Exclude
@@ -1893,28 +1804,23 @@ RunService.RenderStepped:Connect(function()
                     if isEnemy then
                         local enemyRoot2 = hitChar:FindFirstChild("HumanoidRootPart")
                         local blocked = S.hbx_vis_check and enemyRoot2 and not isVisible(enemyRoot2, myChar)
-                        if not blocked then shouldFire = true end
+                        if not blocked then
+                            _tbCooldown = now
+                            local fired = false
+                            pcall(function()
+                                if mouse1click then mouse1click(); fired = true end
+                            end)
+                            if not fired then pcall(function()
+                                if mouse1press then mouse1press(); task.delay(0.05, function() pcall(mouse1release) end); fired = true end
+                            end) end
+                            if not fired then pcall(function()
+                                game:GetService("VirtualInputManager"):SendMouseButtonEvent(0,0,0,true,game,0)
+                                task.delay(0.05,function() pcall(function() game:GetService("VirtualInputManager"):SendMouseButtonEvent(0,0,0,false,game,0) end) end)
+                            end) end
+                        end
                     end
                 end
             end
-        end
-        -- Silent Hitbox: disparar también si el cursor está dentro del radio del enemigo
-        if not shouldFire and _shbxTarget then
-            shouldFire = true
-        end
-        if shouldFire then
-            _tbCooldown = now
-            local fired = false
-            pcall(function()
-                if mouse1click then mouse1click(); fired = true end
-            end)
-            if not fired then pcall(function()
-                if mouse1press then mouse1press(); task.delay(0.05, function() pcall(mouse1release) end); fired = true end
-            end) end
-            if not fired then pcall(function()
-                game:GetService("VirtualInputManager"):SendMouseButtonEvent(0,0,0,true,game,0)
-                task.delay(0.05,function() pcall(function() game:GetService("VirtualInputManager"):SendMouseButtonEvent(0,0,0,false,game,0) end) end)
-            end) end
         end
     end
 
@@ -1991,62 +1897,34 @@ RunService.RenderStepped:Connect(function()
         -- Hitbox visual (caja en pantalla) — requiere Drawing
         if S.hbx_on and S.hbx_show and onS and HAS_DRAWING then
             local isVis = myChar and isVisible(root, myChar)
-            -- FIX: calcular bounding box real proyectando TODAS las partes del character
-            -- (no solo el HumanoidRootPart expandido, que no representa el tamaño visual)
+            -- Calcular tamaño real del HumanoidRootPart en pantalla
+            local rootSize = root.Size  -- ya tiene el tamaño expandido
+            local halfX = rootSize.X / 2
+            local halfY = rootSize.Y / 2
+            local halfZ = rootSize.Z / 2
+            -- Proyectar las 8 esquinas del cubo del root a pantalla
+            local rootCF = root.CFrame
+            local corners = {
+                Vector3.new( halfX,  halfY,  halfZ),
+                Vector3.new(-halfX,  halfY,  halfZ),
+                Vector3.new( halfX, -halfY,  halfZ),
+                Vector3.new(-halfX, -halfY,  halfZ),
+                Vector3.new( halfX,  halfY, -halfZ),
+                Vector3.new(-halfX,  halfY, -halfZ),
+                Vector3.new( halfX, -halfY, -halfZ),
+                Vector3.new(-halfX, -halfY, -halfZ),
+            }
             local minX, minY, maxX, maxY = math.huge, math.huge, -math.huge, -math.huge
-            for _, part in ipairs(char:GetDescendants()) do
-                if part:IsA("BasePart") and part.Name ~= "HumanoidRootPart" then
-                    -- Usar el tamaño original de la parte (sin expansión de hitbox)
-                    local origSize = part.Size
-                    local halfX2 = origSize.X / 2
-                    local halfY2 = origSize.Y / 2
-                    local halfZ2 = origSize.Z / 2
-                    local partCF = part.CFrame
-                    local corners2 = {
-                        Vector3.new( halfX2,  halfY2,  halfZ2),
-                        Vector3.new(-halfX2,  halfY2,  halfZ2),
-                        Vector3.new( halfX2, -halfY2,  halfZ2),
-                        Vector3.new(-halfX2, -halfY2,  halfZ2),
-                        Vector3.new( halfX2,  halfY2, -halfZ2),
-                        Vector3.new(-halfX2,  halfY2, -halfZ2),
-                        Vector3.new( halfX2, -halfY2, -halfZ2),
-                        Vector3.new(-halfX2, -halfY2, -halfZ2),
-                    }
-                    for _, offset in ipairs(corners2) do
-                        local worldPos = partCF:PointToWorldSpace(offset)
-                        local screenPos2, onScreen2 = camera:WorldToViewportPoint(worldPos)
-                        if onScreen2 and screenPos2.Z > 0 then
-                            minX = math.min(minX, screenPos2.X)
-                            minY = math.min(minY, screenPos2.Y)
-                            maxX = math.max(maxX, screenPos2.X)
-                            maxY = math.max(maxY, screenPos2.Y)
-                        end
-                    end
-                end
-            end
-            -- Fallback al root si no encontró ninguna parte
-            if minX == math.huge then
-                local orig = _hbxOriginals[p]
-                local rootSize = orig and orig.Size or Vector3.new(2, 5, 1)
-                local halfX = rootSize.X / 2
-                local halfY = rootSize.Y / 2
-                local halfZ = rootSize.Z / 2
-                local rootCF = root.CFrame
-                local corners = {
-                    Vector3.new( halfX,  halfY,  halfZ), Vector3.new(-halfX,  halfY,  halfZ),
-                    Vector3.new( halfX, -halfY,  halfZ), Vector3.new(-halfX, -halfY,  halfZ),
-                    Vector3.new( halfX,  halfY, -halfZ), Vector3.new(-halfX,  halfY, -halfZ),
-                    Vector3.new( halfX, -halfY, -halfZ), Vector3.new(-halfX, -halfY, -halfZ),
-                }
-                for _, offset in ipairs(corners) do
-                    local worldPos = rootCF:PointToWorldSpace(offset)
-                    local screenPos, onScreen = camera:WorldToViewportPoint(worldPos)
-                    if onScreen and screenPos.Z > 0 then
-                        minX = math.min(minX, screenPos.X)
-                        minY = math.min(minY, screenPos.Y)
-                        maxX = math.max(maxX, screenPos.X)
-                        maxY = math.max(maxY, screenPos.Y)
-                    end
+            local allOnScreen = true
+            for _, offset in ipairs(corners) do
+                local worldPos = rootCF:PointToWorldSpace(offset)
+                local screenPos, onScreen = camera:WorldToViewportPoint(worldPos)
+                if not onScreen then allOnScreen = false end
+                if screenPos.Z > 0 then  -- delante de la cámara
+                    minX = math.min(minX, screenPos.X)
+                    minY = math.min(minY, screenPos.Y)
+                    maxX = math.max(maxX, screenPos.X)
+                    maxY = math.max(maxY, screenPos.Y)
                 end
             end
             if maxX > minX and maxY > minY then
@@ -2131,12 +2009,6 @@ UserInputService.InputBegan:Connect(function(inp, proc)
                             r2.Size       = _hbxOriginals[ep].Size
                             r2.CanCollide = _hbxOriginals[ep].CanCollide
                             r2.Massless   = _hbxOriginals[ep].Massless
-                            -- FIX: restaurar CanCollide de todas las partes
-                            if _hbxOriginals[ep].Parts then
-                                for part, data in pairs(_hbxOriginals[ep].Parts) do
-                                    pcall(function() part.CanCollide = data.CanCollide end)
-                                end
-                            end
                         end)
                         _hbxOriginals[ep] = nil
                     end
@@ -2155,14 +2027,6 @@ UserInputService.InputBegan:Connect(function(inp, proc)
         showNotif("✝  Triggerbot", S.trg_on and L("n_on") or L("n_off"), S.trg_on)
         return
     end
-
-    -- Toggle Silent Hitbox
-    if kn == S.shbx_key then
-        S.shbx_on = not S.shbx_on; save()
-        if refreshers["shbx_on"] then refreshers["shbx_on"]() end
-        showNotif("◈  Silent Hitbox", S.shbx_on and L("n_on") or L("n_off"), S.shbx_on)
-        return
-    end
 end)
 
 player.CharacterAdded:Connect(function()
@@ -2175,4 +2039,4 @@ task.defer(function()
 end)
 
 print("✝  x7s Top Loaded — "..player.Name.."  ✝")
-print("   "..S.gui_key.." = Toggle GUI  ·  "..S.esp_key.." = ESP  ·  "..S.hbx_key.." = Hitbox  ·  "..S.shbx_key.." = Silent HBX  ·  "..S.trg_key.." = Trigger")
+print("   "..S.gui_key.." = Toggle GUI  ·  "..S.esp_key.." = ESP  ·  "..S.hbx_key.." = Hitbox  ·  "..S.trg_key.." = Trigger")
