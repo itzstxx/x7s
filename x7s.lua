@@ -1666,50 +1666,22 @@ local function applyHitbox(p, on)
     if not p.Character then return end
     local root = p.Character:FindFirstChild("HumanoidRootPart"); if not root then return end
     if on then
+        -- Guardar originales solo una vez
         if not _hbxOriginals[p] then
             _hbxOriginals[p] = {
                 Size       = root.Size,
                 CanCollide = root.CanCollide,
                 Massless   = root.Massless,
             }
+            -- Expandir UNA SOLA VEZ al activar, no cada frame
+            local s = S.hbx_size
+            pcall(function()
+                root.Size       = Vector3.new(s * 2, s * 2, s * 2)
+                root.CanCollide = false
+                root.Massless   = true
+            end)
         end
-        local s = S.hbx_size
-        local targetSize = Vector3.new(s * 2, s * 2, s * 2)
-        if S.hbx_vis_check then
-            local myChar2 = player.Character
-            -- Restaurar antes del raycast para no interferir con la detección
-            if root.Size ~= _hbxOriginals[p].Size then
-                pcall(function() root.Size = _hbxOriginals[p].Size end)
-            end
-            local vis = isVisible(root, myChar2)
-            if vis then
-                -- Solo escribir si el tamaño realmente cambió (evita congelar al jugador)
-                if root.Size ~= targetSize then
-                    pcall(function()
-                        root.Size       = targetSize
-                        root.CanCollide = false
-                        root.Massless   = true
-                    end)
-                end
-            else
-                if root.Size ~= _hbxOriginals[p].Size then
-                    pcall(function()
-                        root.Size       = _hbxOriginals[p].Size
-                        root.CanCollide = _hbxOriginals[p].CanCollide
-                        root.Massless   = _hbxOriginals[p].Massless
-                    end)
-                end
-            end
-        else
-            -- Solo escribir si el tamaño cambió (evita interferir con replicación cada frame)
-            if root.Size ~= targetSize then
-                pcall(function()
-                    root.Size       = targetSize
-                    root.CanCollide = false
-                    root.Massless   = true
-                end)
-            end
-        end
+        -- NO tocar root.Size aqui cada frame — evita congelar al jugador
     else
         if _hbxOriginals[p] then
             pcall(function()
@@ -1866,40 +1838,34 @@ RunService.RenderStepped:Connect(function()
             obj.line.Visible = false
         end
 
-        -- Show Hitbox: proyectar el HumanoidRootPart expandido a pantalla con Drawing
+        -- Show Hitbox: Drawing Square proyectando el root expandido (sin tocar root.Size)
         if obj.selBox and HAS_DRAWING then
-            if S.hbx_on and S.hbx_show and onS then
+            if S.hbx_on and S.hbx_show and onS and _hbxOriginals[p] then
                 local isVis2 = myChar and isVisible(root, myChar)
-                local rootExpanded = _hbxOriginals[p] ~= nil
-                local shouldShow = rootExpanded and (not S.hbx_vis_check or isVis2)
-                if shouldShow then
-                    -- Proyectar los 8 vértices del root expandido al viewport
-                    local rs = root.Size
-                    local rcf = root.CFrame
-                    local hx2, hy2, hz2 = rs.X/2, rs.Y/2, rs.Z/2
-                    local mnX, mnY, mxX, mxY = math.huge, math.huge, -math.huge, -math.huge
-                    for _, off in ipairs({
-                        Vector3.new( hx2, hy2, hz2), Vector3.new(-hx2, hy2, hz2),
-                        Vector3.new( hx2,-hy2, hz2), Vector3.new(-hx2,-hy2, hz2),
-                        Vector3.new( hx2, hy2,-hz2), Vector3.new(-hx2, hy2,-hz2),
-                        Vector3.new( hx2,-hy2,-hz2), Vector3.new(-hx2,-hy2,-hz2),
-                    }) do
-                        local wp2 = rcf:PointToWorldSpace(off)
-                        local sc3, on3 = camera:WorldToViewportPoint(wp2)
-                        if on3 and sc3.Z > 0 then
-                            mnX = math.min(mnX, sc3.X); mnY = math.min(mnY, sc3.Y)
-                            mxX = math.max(mxX, sc3.X); mxY = math.max(mxY, sc3.Y)
-                        end
+                -- vis_check solo afecta el COLOR (rojo=detras pared), no oculta la caja
+                local col = (S.hbx_vis_check and not isVis2) and Color3.fromRGB(220, 80, 80) or getEspColor()
+                local rs = root.Size
+                local rcf = root.CFrame
+                local hx2, hy2, hz2 = rs.X/2, rs.Y/2, rs.Z/2
+                local mnX, mnY, mxX, mxY = math.huge, math.huge, -math.huge, -math.huge
+                for _, off in ipairs({
+                    Vector3.new( hx2, hy2, hz2), Vector3.new(-hx2, hy2, hz2),
+                    Vector3.new( hx2,-hy2, hz2), Vector3.new(-hx2,-hy2, hz2),
+                    Vector3.new( hx2, hy2,-hz2), Vector3.new(-hx2, hy2,-hz2),
+                    Vector3.new( hx2,-hy2,-hz2), Vector3.new(-hx2,-hy2,-hz2),
+                }) do
+                    local wp2 = rcf:PointToWorldSpace(off)
+                    local sc3, on3 = camera:WorldToViewportPoint(wp2)
+                    if on3 and sc3.Z > 0 then
+                        mnX = math.min(mnX, sc3.X); mnY = math.min(mnY, sc3.Y)
+                        mxX = math.max(mxX, sc3.X); mxY = math.max(mxY, sc3.Y)
                     end
-                    if mxX > mnX and mxY > mnY then
-                        local col = (S.hbx_vis_check and not isVis2) and Color3.fromRGB(220, 80, 80) or getEspColor()
-                        obj.selBox.Visible   = true
-                        obj.selBox.Color     = col
-                        obj.selBox.Size      = Vector2.new(mxX - mnX, mxY - mnY)
-                        obj.selBox.Position  = Vector2.new(mnX, mnY)
-                    else
-                        obj.selBox.Visible = false
-                    end
+                end
+                if mxX > mnX and mxY > mnY then
+                    obj.selBox.Visible  = true
+                    obj.selBox.Color    = col
+                    obj.selBox.Size     = Vector2.new(mxX - mnX, mxY - mnY)
+                    obj.selBox.Position = Vector2.new(mnX, mnY)
                 else
                     obj.selBox.Visible = false
                 end
