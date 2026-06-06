@@ -360,6 +360,23 @@ dateDeco.Text = "♥ ★ ✦  "..os.date("%d/%m/%Y")
 dateDeco.TextColor3 = Color3.fromRGB(42, 42, 42); dateDeco.Font = Enum.Font.GothamBold
 dateDeco.TextSize = 8; dateDeco.TextXAlignment = Enum.TextXAlignment.Right
 
+-- Label que muestra la tecla de toggle (se actualiza si el usuario cambia la tecla)
+local guiKeyLbl = Instance.new("TextLabel", header)
+guiKeyLbl.Size = UDim2.new(0, 80, 1, 0); guiKeyLbl.Position = UDim2.new(0, 220, 0, 0)
+guiKeyLbl.BackgroundTransparency = 1
+local function updateGuiKeyLabel()
+    local k = S.gui_key
+    if k == "RightShift" then k = "RShift" elseif k == "LeftShift" then k = "LShift" end
+    guiKeyLbl.Text = "[" .. k .. "] ocultar"
+end
+updateGuiKeyLabel()
+guiKeyLbl.TextColor3 = Color3.fromRGB(55, 50, 70); guiKeyLbl.Font = Enum.Font.GothamBold
+guiKeyLbl.TextSize = 8; guiKeyLbl.TextXAlignment = Enum.TextXAlignment.Left
+refreshers["gui_key"] = function()
+    updateGuiKeyLabel()
+    -- también refrescar el keybind display si hay uno registrado
+end
+
 -- Close button
 local closeBtn = Instance.new("TextButton", header)
 closeBtn.Size = UDim2.fromOffset(22, 22); closeBtn.Position = UDim2.new(1, -30, 0.5, -11)
@@ -2255,22 +2272,26 @@ RunService.RenderStepped:Connect(function()
         if result and result.Instance then
             local hitChar = result.Instance:FindFirstAncestorOfClass("Model")
             if hitChar then
-                local hum = hitChar:FindFirstChildOfClass("Humanoid")
-                if hum and hum.Health > 0 then
+                local hum2 = hitChar:FindFirstChildOfClass("Humanoid")
+                if hum2 and hum2.Health > 0 then
                     local isEnemy = false
-                    for _, p in ipairs(_plrList) do
-                        if p.Character == hitChar and p ~= player then isEnemy = true; break end
+                    for _, ep in ipairs(_plrList) do
+                        if ep.Character == hitChar and ep ~= player then isEnemy = true; break end
                     end
                     if isEnemy then
                         _tbCooldown = now
+                        -- Intentar múltiples métodos de click
+                        local fired = false
                         pcall(function()
-                            game:GetService("VirtualInputManager"):SendMouseButtonEvent(0, 0, 0, true, game, 0)
+                            if mouse1click then mouse1click(); fired = true end
                         end)
-                        task.delay(0.05, function()
-                            pcall(function()
-                                game:GetService("VirtualInputManager"):SendMouseButtonEvent(0, 0, 0, false, game, 0)
-                            end)
-                        end)
+                        if not fired then pcall(function()
+                            if mouse1press then mouse1press(); task.delay(0.05, function() pcall(mouse1release) end); fired = true end
+                        end) end
+                        if not fired then pcall(function()
+                            game:GetService("VirtualInputManager"):SendMouseButtonEvent(0,0,0,true,game,0)
+                            task.delay(0.05,function() pcall(function() game:GetService("VirtualInputManager"):SendMouseButtonEvent(0,0,0,false,game,0) end) end)
+                        end) end
                     end
                 end
             end
@@ -2279,56 +2300,38 @@ RunService.RenderStepped:Connect(function()
 
     if _frame % 2 ~= 0 then return end
 
-    -- ESP + Hitbox touch detection con Visible Check
+    -- ESP loop
     for p, obj in pairs(espObjects) do
         local char = p.Character
         local function allOff()
-            -- Ocultar todos los highlights
-            for _, hl in pairs(obj.highlights) do
-                pcall(function() hl.Visible = false end)
-            end
+            for _, hl in pairs(obj.highlights) do pcall(function() hl.Visible = false end) end
             if obj.billboard then obj.billboard.Visible = false end
             obj.name.Visible = false
-            obj.line.Visible = false; obj.hbx.Visible = false
+            obj.line.Visible = false
+            obj.hbx.Visible = false
         end
         if not char or not S.esp_on then allOff(); continue end
         local root = char:FindFirstChild("HumanoidRootPart")
         local hum  = char:FindFirstChildOfClass("Humanoid")
         if not root or not hum or hum.Health <= 0 then allOff(); continue end
 
-        local sp, onS = camera:WorldToViewportPoint(root.Position)
-        if not onS then allOff(); continue end
-        local sp2 = Vector2.new(sp.X, sp.Y)
-
-        local headPart = char:FindFirstChild("Head")
-        local topY = headPart and camera:WorldToViewportPoint(headPart.Position + Vector3.new(0, 0.7, 0)).Y or sp.Y - 40
-        local height = math.abs(sp2.Y - topY) * 2.2
-        local width  = height * 0.5
-
-        -- Visible check para hitbox (manejado en applyHitbox cada 60 frames)
-        -- Solo actualizar el indicador visual del hbx box aquí
-
-        -- ▸ CHARACTER ESP — Highlights por partes del cuerpo
+        -- ▸ CHARACTER ESP — Highlight aura (funciona a través de paredes por AlwaysOnTop)
         if S.esp_on then
-            local vis = isVisible(root, myChar)
-            applyHighlights(obj, char, vis)
-            -- Actualizar visibilidad de cada highlight
+            applyHighlights(obj, char, true)  -- siempre visible (el Highlight se ve a través de paredes)
             for _, hl in pairs(obj.highlights) do
                 pcall(function() hl.Visible = true end)
             end
-
             -- Avatar BillboardGui
             if obj.billboard then
                 obj.billboard.Visible = S.esp_avatar
-                -- Actualizar color del stroke del billboard
                 local bgFrame = obj.billboard:FindFirstChildOfClass("Frame")
                 if bgFrame then
                     local stroke = bgFrame:FindFirstChildOfClass("UIStroke")
                     if stroke then stroke.Color = getEspColor() end
                     local imgLabel = bgFrame:FindFirstChild("AvatarImg")
                     if imgLabel then
-                        local imgStroke = imgLabel:FindFirstChildOfClass("UIStroke")
-                        if imgStroke then imgStroke.Color = getEspColor() end
+                        local imgStroke2 = imgLabel:FindFirstChildOfClass("UIStroke")
+                        if imgStroke2 then imgStroke2.Color = getEspColor() end
                     end
                 end
             end
@@ -2339,34 +2342,36 @@ RunService.RenderStepped:Connect(function()
             if obj.billboard then obj.billboard.Visible = false end
         end
 
-        -- Nombre flotante (Drawing, por encima del billboard si avatar está off)
-        if S.esp_names and not S.esp_avatar then
+        -- Para Drawing (líneas, nombres, caja hitbox) necesitamos posición en pantalla
+        local sp, onS = camera:WorldToViewportPoint(root.Position)
+        local sp2 = Vector2.new(sp.X, sp.Y)
+        local headPart = char:FindFirstChild("Head")
+        local topY = headPart and camera:WorldToViewportPoint(headPart.Position + Vector3.new(0,0.7,0)).Y or sp.Y-40
+        local height = math.abs(sp2.Y - topY) * 2.2
+
+        if S.esp_names and onS then
             obj.name.Visible = true
             obj.name.Text = p.Name
             obj.name.Color = getEspColor()
             obj.name.Position = Vector2.new(sp2.X, sp2.Y - height/2 - 18)
         else obj.name.Visible = false end
 
-        if S.esp_lines then
+        if S.esp_lines and onS then
             obj.line.Visible = true
             obj.line.Color = getEspColor()
             obj.line.From = Vector2.new(vpSize.X/2, vpSize.Y)
             obj.line.To = sp2
         else obj.line.Visible = false end
 
-        if S.hbx_on and S.hbx_show then
-            local hbxSp = camera:WorldToViewportPoint(root.Position)
-            local hbxH = height * (S.hbx_size / 2)
-            local hbxW = hbxH * 0.8
+        -- ShowHit: caja visual alrededor del enemigo en pantalla
+        if S.hbx_on and S.hbx_show and onS then
+            local hbxH = math.max(height, 20)
+            local hbxW = hbxH * 0.55
             obj.hbx.Visible = true
-            if S.hbx_vis_check then
-                local vis2 = isVisible(root, myChar)
-                obj.hbx.Color = vis2 and Color3.fromRGB(100, 220, 100) or Color3.fromRGB(220, 80, 80)
-            else
-                obj.hbx.Color = Color3.fromRGB(255, 100, 100)
-            end
+            local isVis = myChar and isVisible(root, myChar)
+            obj.hbx.Color = (S.hbx_vis_check and not isVis) and Color3.fromRGB(220,80,80) or Color3.fromRGB(100,220,100)
             obj.hbx.Size = Vector2.new(hbxW, hbxH)
-            obj.hbx.Position = Vector2.new(hbxSp.X - hbxW/2, hbxSp.Y - hbxH/2)
+            obj.hbx.Position = Vector2.new(sp2.X - hbxW/2, sp2.Y - hbxH/2)
         else obj.hbx.Visible = false end
     end
 end)
@@ -2379,40 +2384,66 @@ UserInputService.InputBegan:Connect(function(inp, proc)
     if inp.UserInputType ~= Enum.UserInputType.Keyboard then return end
     local kn = inp.KeyCode.Name
 
+    -- Toggle GUI
     if kn == S.gui_key then
         if panel.Visible then
-            TweenService:Create(panel, TweenInfo.new(0.15, Enum.EasingStyle.Quad), {BackgroundTransparency = 1}):Play()
-            TweenService:Create(glow, TweenInfo.new(0.15), {BackgroundTransparency = 1}):Play()
-            task.delay(0.15, function()
+            TweenService:Create(panel, TweenInfo.new(0.15, Enum.EasingStyle.Quad), {BackgroundTransparency=1}):Play()
+            TweenService:Create(glow,  TweenInfo.new(0.15), {BackgroundTransparency=1}):Play()
+            task.delay(0.16, function()
                 panel.Visible = false; glow.Visible = false
                 panel.BackgroundTransparency = 0; glow.BackgroundTransparency = 0.93
             end)
         else
             panel.Visible = true; glow.Visible = true
-            panel.Size = UDim2.fromOffset(GW - 10, GH - 10); panel.BackgroundTransparency = 1
-            TweenService:Create(panel, TweenInfo.new(0.2, Enum.EasingStyle.Back), {
-                Size = UDim2.fromOffset(GW, GH), BackgroundTransparency = 0
-            }):Play()
-            TweenService:Create(glow, TweenInfo.new(0.2), {BackgroundTransparency = 0.93}):Play()
+            panel.BackgroundTransparency = 1
+            TweenService:Create(panel, TweenInfo.new(0.2, Enum.EasingStyle.Back), {BackgroundTransparency=0}):Play()
+            TweenService:Create(glow,  TweenInfo.new(0.2), {BackgroundTransparency=0.93}):Play()
         end
+        return
     end
 
+    -- Toggle ESP
     if kn == S.esp_key then
         S.esp_on = not S.esp_on; save()
         if refreshers["esp_on"] then refreshers["esp_on"]() end
         showNotif("✝  ESP", S.esp_on and L("n_on") or L("n_off"), S.esp_on)
+        -- Si apagamos ESP, limpiar highlights inmediatamente
+        if not S.esp_on then
+            for _, obj in pairs(espObjects) do
+                for _, hl in pairs(obj.highlights) do pcall(function() hl.Visible = false end) end
+                if obj.billboard then obj.billboard.Visible = false end
+                obj.name.Visible = false; obj.line.Visible = false
+            end
+        end
+        return
     end
 
+    -- Toggle Hitbox
     if kn == S.hbx_key then
         S.hbx_on = not S.hbx_on; save()
         if refreshers["hbx_on"] then refreshers["hbx_on"]() end
+        -- Si apagamos, restaurar tamaños
+        if not S.hbx_on then
+            for _, ep in ipairs(Players:GetPlayers()) do
+                if ep ~= player and ep.Character then
+                    local r2 = ep.Character:FindFirstChild("HumanoidRootPart")
+                    if r2 and _hbxOriginals[ep] then
+                        pcall(function() r2.Size = _hbxOriginals[ep] end)
+                        _hbxOriginals[ep] = nil
+                    end
+                end
+            end
+        end
         showNotif("✝  Hitbox", S.hbx_on and L("n_on") or L("n_off"), S.hbx_on)
+        return
     end
 
+    -- Toggle Triggerbot
     if kn == S.trg_key then
         S.trg_on = not S.trg_on; save()
         if refreshers["trg_on"] then refreshers["trg_on"]() end
         showNotif("✝  Triggerbot", S.trg_on and L("n_on") or L("n_off"), S.trg_on)
+        return
     end
 end)
 
