@@ -568,22 +568,7 @@ sbBottomDeco.BackgroundTransparency = 1; sbBottomDeco.Text = "♥ ✝ ♥"
 sbBottomDeco.TextColor3 = Color3.fromRGB(46,36,62); sbBottomDeco.Font = Enum.Font.GothamBold
 sbBottomDeco.TextSize = 10; sbBottomDeco.TextXAlignment = Enum.TextXAlignment.Center
 
--- IG button en sidebar bottom
-local igBtn = Instance.new("TextButton", sidebar)
-igBtn.Size = UDim2.new(1, -16, 0, 16); igBtn.Position = UDim2.new(0, 8, 1, -26)
-igBtn.BackgroundTransparency = 1; igBtn.BorderSizePixel = 0
-igBtn.Text = "📷 @itzstxx"; igBtn.TextColor3 = Color3.fromRGB(72, 58, 90)
-igBtn.Font = Enum.Font.GothamBold; igBtn.TextSize = 9
-igBtn.TextXAlignment = Enum.TextXAlignment.Center; igBtn.AutoButtonColor = false
-local _igc = false
-igBtn.MouseButton1Click:Connect(function()
-    if _igc then return end; _igc = true
-    pcall(function() setclipboard("@itzstxx") end)
-    igBtn.Text = "✓ Copiado"; igBtn.TextColor3 = accentColor
-    task.delay(1.8, function() igBtn.Text = "📷 @itzstxx"; igBtn.TextColor3 = Color3.fromRGB(72,58,90); _igc = false end)
-end)
-igBtn.MouseEnter:Connect(function() if not _igc then igBtn.TextColor3 = accentColor end end)
-igBtn.MouseLeave:Connect(function() if not _igc then igBtn.TextColor3 = Color3.fromRGB(72,58,90) end end)
+
 
 -- ── FOOTER ─────────────────────────────────────
 local footer = Instance.new("Frame", panel)
@@ -634,6 +619,17 @@ local function updateGuiKeyLabel()
 end
 updateGuiKeyLabel()
 refreshers["gui_key"] = updateGuiKeyLabel
+
+-- Sistema de traducción en vivo: guarda {label, key} para actualizar al cambiar idioma
+local langLabels = {}
+local function registerLang(lbl, key)
+    table.insert(langLabels, {lbl=lbl, key=key})
+end
+local function refreshLang()
+    for _, e in ipairs(langLabels) do
+        pcall(function() e.lbl.Text = L(e.key) or e.key end)
+    end
+end
 
 -- Función para actualizar el color de acento globalmente
 local accentDeps = {}   -- {frame/stroke/label, prop}
@@ -774,6 +770,15 @@ local function makeToggle(parent, titleKey, descKey, stateKey, cb)
     local title = L(titleKey) or titleKey
     local desc = descKey and (L(descKey) or descKey) or nil
     local row, rowH = makeRow(parent, title, desc)
+
+    -- Registrar labels para traducción en vivo
+    local tl2 = row:FindFirstChildOfClass("TextLabel")
+    if tl2 then registerLang(tl2, titleKey) end
+    if descKey then
+        for _, c in ipairs(row:GetChildren()) do
+            if c:IsA("TextLabel") and c ~= tl2 then registerLang(c, descKey) end
+        end
+    end
 
     local TW, TH = 44, 24
     local track = Instance.new("Frame", row)
@@ -1253,32 +1258,6 @@ makeKeybind(trgCard, "trg_key", "trg_key")
 local cfgCard = makeCard(pg_ajustes)
 makeSecHeader(cfgCard, "†", "Settings")
 
--- Copy Discord Invite button
-do
-    local discordRow = Instance.new("Frame", cfgCard)
-    discordRow.Size = UDim2.new(1, 0, 0, 42); discordRow.BackgroundTransparency = 1
-    local discTl = Instance.new("TextLabel", discordRow)
-    discTl.Size = UDim2.new(1, -70, 0, 16); discTl.Position = UDim2.fromOffset(14, 13)
-    discTl.BackgroundTransparency = 1; discTl.Text = "Copy Discord Invite"
-    discTl.TextColor3 = Color3.fromRGB(215,215,215); discTl.Font = Enum.Font.GothamMedium
-    discTl.TextSize = 12; discTl.TextXAlignment = Enum.TextXAlignment.Left
-    local discBtn = Instance.new("TextButton", discordRow)
-    discBtn.Size = UDim2.fromOffset(28, 28); discBtn.Position = UDim2.new(1, -42, 0.5, -14)
-    discBtn.BackgroundColor3 = Color3.fromRGB(30,30,30); discBtn.BorderSizePixel = 0
-    discBtn.Text = "⧉"; discBtn.TextColor3 = accentColor
-    discBtn.Font = Enum.Font.GothamBold; discBtn.TextSize = 14; discBtn.AutoButtonColor = false
-    local dbs = Instance.new("UIStroke", discBtn); dbs.Color = Color3.fromRGB(58,58,58); dbs.Thickness = 1
-    local _dcCopied = false
-    discBtn.MouseButton1Click:Connect(function()
-        if _dcCopied then return end; _dcCopied = true
-        pcall(function() setclipboard("https://discord.gg/x7s") end)
-        discBtn.Text = "✓"; discBtn.TextColor3 = accentColor; dbs.Color = accentColor
-        task.delay(1.8, function() discBtn.Text = "⧉"; discBtn.TextColor3 = accentColor; dbs.Color = Color3.fromRGB(58,58,58); _dcCopied = false end)
-        showNotif("✝  Discord", "Invite copied!", true)
-    end)
-    discBtn.MouseEnter:Connect(function() dbs.Color = accentColor end)
-    discBtn.MouseLeave:Connect(function() if not _dcCopied then dbs.Color = Color3.fromRGB(58,58,58) end end)
-end
 makeDivider(cfgCard)
 
 secLabel(cfgCard, "· · · DISPLAY · · ·")
@@ -1290,6 +1269,7 @@ makeToggle(cfgCard, "st_notif", nil, "notifs")
 
 secLabel(cfgCard, "· · · LANGUAGE · · ·")
 makeDropdown(cfgCard, "st_lang", "lang", {"English","Español"}, function(opt)
+    refreshLang()
     showNotif("Language", opt, true)
 end)
 
@@ -1428,52 +1408,58 @@ local function applyHighlights(obj, char, isVis)
     end
 end
 
--- Crea avatar BillboardGui sobre la cabeza del enemigo
+-- Crea BillboardGui de nombre sobre la cabeza del enemigo
+local function createNameBillboard(p, char)
+    if not char then return nil end
+    local head = char:FindFirstChild("Head"); if not head then return nil end
+    local bb = Instance.new("BillboardGui")
+    bb.Name = "x7sName_"..p.Name
+    bb.Size = UDim2.fromOffset(100, 20)
+    bb.StudsOffset = Vector3.new(0, 3.2, 0)
+    bb.AlwaysOnTop = true; bb.ResetOnSpawn = false
+    bb.Adornee = head; bb.Parent = gui
+
+    local nameLbl = Instance.new("TextLabel", bb)
+    nameLbl.Name = "NameLbl"
+    nameLbl.Size = UDim2.new(1, 0, 1, 0)
+    nameLbl.BackgroundTransparency = 1
+    nameLbl.Text = p.Name
+    nameLbl.TextColor3 = Color3.fromRGB(230, 220, 245)
+    nameLbl.Font = Enum.Font.GothamBold
+    nameLbl.TextSize = 12
+    nameLbl.TextXAlignment = Enum.TextXAlignment.Center
+    nameLbl.TextStrokeTransparency = 0.5
+    nameLbl.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
+    return bb
+end
+
+-- Crea BillboardGui de avatar sobre la cabeza del enemigo
 local function createAvatarBillboard(p, char)
     if not char then return nil end
     local head = char:FindFirstChild("Head"); if not head then return nil end
     local bb = Instance.new("BillboardGui")
     bb.Name = "x7sESP_"..p.Name
-    bb.Size = UDim2.fromOffset(90, 112)
-    bb.StudsOffset = Vector3.new(0, 3.2, 0)
+    bb.Size = UDim2.fromOffset(60, 70)
+    bb.StudsOffset = Vector3.new(0, 5.0, 0)
     bb.AlwaysOnTop = true; bb.ResetOnSpawn = false
     bb.Adornee = head; bb.Parent = gui
 
     local bg = Instance.new("Frame", bb)
     bg.Size = UDim2.new(1, 0, 1, 0)
     bg.BackgroundColor3 = Color3.fromRGB(6, 5, 10)
-    bg.BackgroundTransparency = 0.35; bg.BorderSizePixel = 0
-    Instance.new("UICorner", bg).CornerRadius = UDim.new(0, 10)
+    bg.BackgroundTransparency = 0.3; bg.BorderSizePixel = 0
+    Instance.new("UICorner", bg).CornerRadius = UDim.new(0, 8)
     local bgStroke = Instance.new("UIStroke", bg)
     bgStroke.Color = getEspColor(); bgStroke.Transparency = 0.3; bgStroke.Thickness = 1.5
 
     local avatarImg = Instance.new("ImageLabel", bg)
     avatarImg.Name = "AvatarImg"
-    avatarImg.Size = UDim2.fromOffset(60, 60)
-    avatarImg.Position = UDim2.new(0.5, -30, 0, 6)
+    avatarImg.Size = UDim2.new(1, -8, 1, -8)
+    avatarImg.Position = UDim2.fromOffset(4, 4)
     avatarImg.BackgroundTransparency = 1
     avatarImg.Image = "https://www.roblox.com/headshot-thumbnail/image?userId="..p.UserId.."&width=150&height=150&format=png"
     avatarImg.ScaleType = Enum.ScaleType.Fit
-    Instance.new("UICorner", avatarImg).CornerRadius = UDim.new(0, 8)
-    local imgStroke = Instance.new("UIStroke", avatarImg)
-    imgStroke.Color = getEspColor(); imgStroke.Transparency = 0.4; imgStroke.Thickness = 1
-
-    local nameLbl = Instance.new("TextLabel", bg)
-    nameLbl.Name = "NameLbl"
-    nameLbl.Size = UDim2.new(1, -6, 0, 16); nameLbl.Position = UDim2.fromOffset(3, 70)
-    nameLbl.BackgroundTransparency = 1; nameLbl.Text = p.Name
-    nameLbl.TextColor3 = Color3.fromRGB(230, 220, 245); nameLbl.Font = Enum.Font.GothamBold
-    nameLbl.TextSize = 11; nameLbl.TextXAlignment = Enum.TextXAlignment.Center
-    nameLbl.TextTruncate = Enum.TextTruncate.AtEnd
-
-    local dispLbl = Instance.new("TextLabel", bg)
-    dispLbl.Name = "DispLbl"
-    dispLbl.Size = UDim2.new(1, -6, 0, 14); dispLbl.Position = UDim2.fromOffset(3, 86)
-    dispLbl.BackgroundTransparency = 1
-    dispLbl.Text = p.DisplayName ~= p.Name and ("@"..p.DisplayName) or ""
-    dispLbl.TextColor3 = Color3.fromRGB(140, 130, 160); dispLbl.Font = Enum.Font.Gotham
-    dispLbl.TextSize = 9; dispLbl.TextXAlignment = Enum.TextXAlignment.Center
-    dispLbl.TextTruncate = Enum.TextTruncate.AtEnd
+    Instance.new("UICorner", avatarImg).CornerRadius = UDim.new(0, 6)
 
     return bb
 end
@@ -1498,24 +1484,28 @@ end
 local function createEspObj(p)
     if p == player then return end
     espObjects[p] = {
-        highlights = {},
-        billboard  = nil,
+        highlights   = {},
+        billboard    = nil,   -- avatar billboard
+        nameBillboard = nil,  -- nombre billboard
         box  = newBox(),
         name = newText(),
         line = newLine(),
         hbx  = newBox(),
     }
     if p.Character then
-        espObjects[p].billboard = createAvatarBillboard(p, p.Character)
+        espObjects[p].billboard     = createAvatarBillboard(p, p.Character)
+        espObjects[p].nameBillboard = createNameBillboard(p, p.Character)
     end
     p.CharacterAdded:Connect(function(char)
         local obj2 = espObjects[p]; if not obj2 then return end
         for _, hl in pairs(obj2.highlights) do pcall(function() hl:Destroy() end) end
         obj2.highlights = {}
         if obj2.billboard then obj2.billboard:Destroy(); obj2.billboard = nil end
+        if obj2.nameBillboard then obj2.nameBillboard:Destroy(); obj2.nameBillboard = nil end
         task.wait(0.5)
         if espObjects[p] then
-            espObjects[p].billboard = createAvatarBillboard(p, char)
+            espObjects[p].billboard     = createAvatarBillboard(p, char)
+            espObjects[p].nameBillboard = createNameBillboard(p, char)
         end
     end)
 end
@@ -1523,6 +1513,7 @@ local function removeEspObj(p)
     local obj = espObjects[p]; if not obj then return end
     for _, hl in pairs(obj.highlights) do pcall(function() hl:Destroy() end) end
     if obj.billboard then obj.billboard:Destroy() end
+    if obj.nameBillboard then obj.nameBillboard:Destroy() end
     obj.box:Remove(); obj.name:Remove(); obj.line:Remove(); obj.hbx:Remove()
     espObjects[p] = nil
 end
@@ -1705,74 +1696,80 @@ RunService.RenderStepped:Connect(function()
         local char = p.Character
         local function allOff()
             for _, hl in pairs(obj.highlights) do pcall(function() hl.Visible = false end) end
-            if obj.billboard then obj.billboard.Visible = false end
-            obj.name.Visible = false
+            if obj.billboard     then obj.billboard.Visible     = false end
+            if obj.nameBillboard then obj.nameBillboard.Visible = false end
             obj.line.Visible = false
-            obj.hbx.Visible = false
+            obj.hbx.Visible  = false
         end
         if not char then allOff(); continue end
         local root = char:FindFirstChild("HumanoidRootPart")
         local hum  = char:FindFirstChildOfClass("Humanoid")
         if not root or not hum or hum.Health <= 0 then allOff(); continue end
 
-        -- ▸ CHARACTER ESP — Highlight aura (funciona a través de paredes por AlwaysOnTop)
+        -- ▸ Highlight aura (a través de paredes)
         if S.esp_on then
-            applyHighlights(obj, char, true)  -- siempre visible (el Highlight se ve a través de paredes)
+            applyHighlights(obj, char, true)
             for _, hl in pairs(obj.highlights) do
                 pcall(function() hl.Visible = true end)
-            end
-            -- Avatar BillboardGui
-            if obj.billboard then
-                obj.billboard.Visible = S.esp_avatar
-                local bgFrame = obj.billboard:FindFirstChildOfClass("Frame")
-                if bgFrame then
-                    local stroke = bgFrame:FindFirstChildOfClass("UIStroke")
-                    if stroke then stroke.Color = getEspColor() end
-                    local imgLabel = bgFrame:FindFirstChild("AvatarImg")
-                    if imgLabel then
-                        local imgStroke2 = imgLabel:FindFirstChildOfClass("UIStroke")
-                        if imgStroke2 then imgStroke2.Color = getEspColor() end
-                    end
-                end
             end
         else
             for _, hl in pairs(obj.highlights) do
                 pcall(function() hl.Visible = false end)
             end
-            if obj.billboard then obj.billboard.Visible = false end
         end
 
-        -- Para Drawing (líneas, nombres, caja hitbox) necesitamos posición en pantalla
+        -- ▸ Nombre encima del personaje (BillboardGui con TextLabel)
+        if obj.nameBillboard then
+            obj.nameBillboard.Visible = S.esp_on and S.esp_names
+            if S.esp_on and S.esp_names then
+                local nameLbl = obj.nameBillboard:FindFirstChild("NameLbl")
+                if nameLbl then
+                    nameLbl.TextColor3 = getEspColor()
+                end
+            end
+        end
+
+        -- ▸ Avatar (billboard separado, más arriba)
+        if obj.billboard then
+            obj.billboard.Visible = S.esp_on and S.esp_avatar
+            if S.esp_on and S.esp_avatar then
+                local bgFrame = obj.billboard:FindFirstChildOfClass("Frame")
+                if bgFrame then
+                    local stroke = bgFrame:FindFirstChildOfClass("UIStroke")
+                    if stroke then stroke.Color = getEspColor() end
+                end
+            end
+        end
+
+        -- ▸ Drawing: líneas y caja hitbox — posición en pantalla
         local sp, onS = camera:WorldToViewportPoint(root.Position)
         local sp2 = Vector2.new(sp.X, sp.Y)
         local headPart = char:FindFirstChild("Head")
-        local topY = headPart and camera:WorldToViewportPoint(headPart.Position + Vector3.new(0,0.7,0)).Y or sp.Y-40
+        local topY = headPart and camera:WorldToViewportPoint(headPart.Position + Vector3.new(0, 0.7, 0)).Y or (sp.Y - 40)
         local height = math.abs(sp2.Y - topY) * 2.2
 
-        if S.esp_names and onS then
-            obj.name.Visible = true
-            obj.name.Text = p.Name
-            obj.name.Color = getEspColor()
-            obj.name.Position = Vector2.new(sp2.X, sp2.Y - height/2 - 18)
-        else obj.name.Visible = false end
-
-        if S.esp_lines and onS then
+        -- ESP Lines
+        if S.esp_on and S.esp_lines and onS then
             obj.line.Visible = true
-            obj.line.Color = getEspColor()
-            obj.line.From = Vector2.new(vpSize.X/2, vpSize.Y)
-            obj.line.To = sp2
-        else obj.line.Visible = false end
+            obj.line.Color   = getEspColor()
+            obj.line.From    = Vector2.new(vpSize.X / 2, vpSize.Y)
+            obj.line.To      = sp2
+        else
+            obj.line.Visible = false
+        end
 
-        -- ShowHit: caja visual alrededor del enemigo en pantalla
+        -- Hitbox visual (caja en pantalla)
         if S.hbx_on and S.hbx_show and onS then
             local hbxH = math.max(height, 20)
             local hbxW = hbxH * 0.55
-            obj.hbx.Visible = true
+            obj.hbx.Visible  = true
             local isVis = myChar and isVisible(root, myChar)
-            obj.hbx.Color = (S.hbx_vis_check and not isVis) and Color3.fromRGB(220,80,80) or Color3.fromRGB(100,220,100)
-            obj.hbx.Size = Vector2.new(hbxW, hbxH)
-            obj.hbx.Position = Vector2.new(sp2.X - hbxW/2, sp2.Y - hbxH/2)
-        else obj.hbx.Visible = false end
+            obj.hbx.Color    = (S.hbx_vis_check and not isVis) and Color3.fromRGB(220, 80, 80) or Color3.fromRGB(100, 220, 100)
+            obj.hbx.Size     = Vector2.new(hbxW, hbxH)
+            obj.hbx.Position = Vector2.new(sp2.X - hbxW / 2, sp2.Y - hbxH / 2)
+        else
+            obj.hbx.Visible = false
+        end
     end
 end)
 
