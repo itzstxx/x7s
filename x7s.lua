@@ -1527,14 +1527,15 @@ end
 
 local function createEspObj(p)
     if p == player then return end
-    -- Drawing Square para Show Hitbox (proyectado manualmente cada frame, sin adornments)
-    local selBox = HAS_DRAWING and Drawing.new("Square") or {Visible=false, Remove=function()end}
-    if HAS_DRAWING then
-        selBox.Visible   = false
-        selBox.Filled    = false
-        selBox.Thickness = 1.5
-        selBox.Color     = Color3.fromRGB(100, 220, 100)
-    end
+    -- BoxHandleAdornment para Show Hitbox (más fiable que SelectionBox en executors)
+    local selBox = Instance.new("BoxHandleAdornment")
+    selBox.Name = "x7sHBX_"..p.Name
+    selBox.AlwaysOnTop = true
+    selBox.ZIndex = 5
+    selBox.Color3 = Color3.fromRGB(100, 220, 100)
+    selBox.Transparency = 0.6
+    selBox.Visible = false
+    selBox.Parent = Workspace
     espObjects[p] = {
         highlights   = {},
         billboard    = nil,   -- avatar billboard
@@ -1567,7 +1568,7 @@ local function removeEspObj(p)
     for _, hl in pairs(obj.highlights) do pcall(function() hl:Destroy() end) end
     if obj.billboard then obj.billboard:Destroy() end
     if obj.nameBillboard then obj.nameBillboard:Destroy() end
-    if obj.selBox then pcall(function() obj.selBox:Remove() end) end
+    if obj.selBox then pcall(function() obj.selBox:Destroy() end) end
     obj.box:Remove(); obj.name:Remove(); obj.line:Remove(); obj.hbx:Remove()
     espObjects[p] = nil
 end
@@ -1666,14 +1667,32 @@ local function applyHitbox(p, on)
     if not p.Character then return end
     local root = p.Character:FindFirstChild("HumanoidRootPart"); if not root then return end
     if on then
-        -- Guardar originales solo una vez
         if not _hbxOriginals[p] then
             _hbxOriginals[p] = {
                 Size       = root.Size,
                 CanCollide = root.CanCollide,
                 Massless   = root.Massless,
             }
-            -- Expandir UNA SOLA VEZ al activar, no cada frame
+        end
+        if S.hbx_vis_check then
+            local myChar2 = player.Character
+            pcall(function() root.Size = _hbxOriginals[p].Size end)
+            local vis = isVisible(root, myChar2)
+            if vis then
+                local s = S.hbx_size
+                pcall(function()
+                    root.Size       = Vector3.new(s * 2, s * 2, s * 2)
+                    root.CanCollide = false
+                    root.Massless   = true
+                end)
+            else
+                pcall(function()
+                    root.Size       = _hbxOriginals[p].Size
+                    root.CanCollide = _hbxOriginals[p].CanCollide
+                    root.Massless   = _hbxOriginals[p].Massless
+                end)
+            end
+        else
             local s = S.hbx_size
             pcall(function()
                 root.Size       = Vector3.new(s * 2, s * 2, s * 2)
@@ -1681,7 +1700,6 @@ local function applyHitbox(p, on)
                 root.Massless   = true
             end)
         end
-        -- NO tocar root.Size aqui cada frame — evita congelar al jugador
     else
         if _hbxOriginals[p] then
             pcall(function()
@@ -1838,34 +1856,20 @@ RunService.RenderStepped:Connect(function()
             obj.line.Visible = false
         end
 
-        -- Show Hitbox: Drawing Square proyectando el root expandido (sin tocar root.Size)
-        if obj.selBox and HAS_DRAWING then
-            if S.hbx_on and S.hbx_show and onS and _hbxOriginals[p] then
+        -- Show Hitbox: BoxHandleAdornment 3D pegado al HumanoidRootPart expandido
+        if obj.selBox then
+            if S.hbx_on and S.hbx_show then
                 local isVis2 = myChar and isVisible(root, myChar)
-                -- vis_check solo afecta el COLOR (rojo=detras pared), no oculta la caja
-                local col = (S.hbx_vis_check and not isVis2) and Color3.fromRGB(220, 80, 80) or getEspColor()
-                local rs = root.Size
-                local rcf = root.CFrame
-                local hx2, hy2, hz2 = rs.X/2, rs.Y/2, rs.Z/2
-                local mnX, mnY, mxX, mxY = math.huge, math.huge, -math.huge, -math.huge
-                for _, off in ipairs({
-                    Vector3.new( hx2, hy2, hz2), Vector3.new(-hx2, hy2, hz2),
-                    Vector3.new( hx2,-hy2, hz2), Vector3.new(-hx2,-hy2, hz2),
-                    Vector3.new( hx2, hy2,-hz2), Vector3.new(-hx2, hy2,-hz2),
-                    Vector3.new( hx2,-hy2,-hz2), Vector3.new(-hx2,-hy2,-hz2),
-                }) do
-                    local wp2 = rcf:PointToWorldSpace(off)
-                    local sc3, on3 = camera:WorldToViewportPoint(wp2)
-                    if on3 and sc3.Z > 0 then
-                        mnX = math.min(mnX, sc3.X); mnY = math.min(mnY, sc3.Y)
-                        mxX = math.max(mxX, sc3.X); mxY = math.max(mxY, sc3.Y)
-                    end
-                end
-                if mxX > mnX and mxY > mnY then
-                    obj.selBox.Visible  = true
-                    obj.selBox.Color    = col
-                    obj.selBox.Size     = Vector2.new(mxX - mnX, mxY - mnY)
-                    obj.selBox.Position = Vector2.new(mnX, mnY)
+                local rootExpanded = _hbxOriginals[p] ~= nil
+                local shouldShow = rootExpanded and (not S.hbx_vis_check or isVis2)
+                if shouldShow then
+                    local col = (S.hbx_vis_check and not isVis2) and Color3.fromRGB(220, 80, 80) or getEspColor()
+                    -- Adornee = root: la caja sigue al HumanoidRootPart exactamente
+                    obj.selBox.Adornee = root
+                    -- Tamaño igual al root expandido
+                    obj.selBox.Size = root.Size
+                    obj.selBox.Color3 = col
+                    obj.selBox.Visible = true
                 else
                     obj.selBox.Visible = false
                 end
