@@ -1527,11 +1527,13 @@ end
 
 local function createEspObj(p)
     if p == player then return end
-    -- SelectionBox 3D para Show Hitbox (Adornee se asigna en el render loop)
-    local selBox = Instance.new("SelectionBox")
+    -- BoxHandleAdornment para Show Hitbox (más fiable que SelectionBox en executors)
+    local selBox = Instance.new("BoxHandleAdornment")
     selBox.Name = "x7sHBX_"..p.Name
-    selBox.LineThickness = 0.04
-    selBox.SurfaceTransparency = 0.75
+    selBox.AlwaysOnTop = true
+    selBox.ZIndex = 5
+    selBox.Color3 = Color3.fromRGB(100, 220, 100)
+    selBox.Transparency = 0.6
     selBox.Visible = false
     selBox.Parent = Workspace
     espObjects[p] = {
@@ -1854,18 +1856,19 @@ RunService.RenderStepped:Connect(function()
             obj.line.Visible = false
         end
 
-        -- Show Hitbox: SelectionBox 3D sigue al HumanoidRootPart expandido siempre
+        -- Show Hitbox: BoxHandleAdornment 3D pegado al HumanoidRootPart expandido
         if obj.selBox then
             if S.hbx_on and S.hbx_show then
                 local isVis2 = myChar and isVisible(root, myChar)
-                local rootExpanded = _hbxOriginals[p] ~= nil  -- true si la hitbox está expandida
-                -- Mostrar si: visible check OFF, o visible check ON y es visible
+                local rootExpanded = _hbxOriginals[p] ~= nil
                 local shouldShow = rootExpanded and (not S.hbx_vis_check or isVis2)
                 if shouldShow then
                     local col = (S.hbx_vis_check and not isVis2) and Color3.fromRGB(220, 80, 80) or getEspColor()
+                    -- Adornee = root: la caja sigue al HumanoidRootPart exactamente
                     obj.selBox.Adornee = root
+                    -- Tamaño igual al root expandido
+                    obj.selBox.Size = root.Size
                     obj.selBox.Color3 = col
-                    obj.selBox.SurfaceColor3 = col
                     obj.selBox.Visible = true
                 else
                     obj.selBox.Visible = false
