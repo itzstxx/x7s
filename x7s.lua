@@ -1451,25 +1451,25 @@ local function createNameBillboard(p, char)
     return bb
 end
 
--- Crea BillboardGui de avatar sobre la cabeza del enemigo (pequeño y redondo)
+-- Crea BillboardGui de avatar sobre la cabeza del enemigo (pequeño, redondo)
 local function createAvatarBillboard(p, char)
     if not char then return nil end
     local head = char:FindFirstChild("Head"); if not head then return nil end
     local bb = Instance.new("BillboardGui")
     bb.Name = "x7sESP_"..p.Name
-    bb.Size = UDim2.fromOffset(34, 34)   -- más pequeño
-    bb.StudsOffset = Vector3.new(0, 3.8, 0)
+    bb.Size = UDim2.fromOffset(34, 34)
+    bb.StudsOffset = Vector3.new(0, 3.6, 0)
     bb.AlwaysOnTop = true; bb.ResetOnSpawn = false
     bb.Adornee = head; bb.Parent = gui
 
-    -- Marco circular
     local bg = Instance.new("Frame", bb)
     bg.Size = UDim2.new(1, 0, 1, 0)
     bg.BackgroundColor3 = Color3.fromRGB(6, 5, 10)
-    bg.BackgroundTransparency = 0.15; bg.BorderSizePixel = 0
-    Instance.new("UICorner", bg).CornerRadius = UDim.new(1, 0)   -- totalmente redondo
+    bg.BackgroundTransparency = 0.1; bg.BorderSizePixel = 0
+    Instance.new("UICorner", bg).CornerRadius = UDim.new(1, 0)
     local bgStroke = Instance.new("UIStroke", bg)
-    bgStroke.Color = getEspColor(); bgStroke.Transparency = 0.2; bgStroke.Thickness = 1.5
+    bgStroke.Name = "AvatarStroke"
+    bgStroke.Color = getEspColor(); bgStroke.Transparency = 0.1; bgStroke.Thickness = 1.5
 
     local avatarImg = Instance.new("ImageLabel", bg)
     avatarImg.Name = "AvatarImg"
@@ -1478,7 +1478,7 @@ local function createAvatarBillboard(p, char)
     avatarImg.BackgroundTransparency = 1
     avatarImg.Image = "https://www.roblox.com/headshot-thumbnail/image?userId="..p.UserId.."&width=150&height=150&format=png"
     avatarImg.ScaleType = Enum.ScaleType.Fit
-    Instance.new("UICorner", avatarImg).CornerRadius = UDim.new(1, 0)  -- imagen también redonda
+    Instance.new("UICorner", avatarImg).CornerRadius = UDim.new(1, 0)
 
     return bb
 end
@@ -1665,7 +1665,7 @@ RunService.RenderStepped:Connect(function()
     local mousePos = UserInputService:GetMouseLocation()
     local now = tick()
 
-    -- Aplicar hitbox cada 2 frames (responsivo para visible check dinámico)
+    -- Aplicar hitbox cada 2 frames (responsive para visible check dinámico)
     if _frame % 2 == 0 then
         for _, p in ipairs(_plrList) do
             if p ~= player then applyHitbox(p, S.hbx_on) end
@@ -1689,24 +1689,21 @@ RunService.RenderStepped:Connect(function()
                         if ep.Character == hitChar and ep ~= player then isEnemy = true; break end
                     end
                     if isEnemy then
-                        -- Visible Check: si está activo, solo disparar si el enemigo es visible
-                        local enemyRoot = hitChar:FindFirstChild("HumanoidRootPart")
-                        if S.hbx_vis_check and enemyRoot and not isVisible(enemyRoot, myChar) then
-                            -- Enemigo detrás de pared, no disparar
-                        else
-                        _tbCooldown = now
-                        -- Intentar múltiples métodos de click
-                        local fired = false
-                        pcall(function()
-                            if mouse1click then mouse1click(); fired = true end
-                        end)
-                        if not fired then pcall(function()
-                            if mouse1press then mouse1press(); task.delay(0.05, function() pcall(mouse1release) end); fired = true end
-                        end) end
-                        if not fired then pcall(function()
-                            game:GetService("VirtualInputManager"):SendMouseButtonEvent(0,0,0,true,game,0)
-                            task.delay(0.05,function() pcall(function() game:GetService("VirtualInputManager"):SendMouseButtonEvent(0,0,0,false,game,0) end) end)
-                        end) end
+                        local enemyRoot2 = hitChar:FindFirstChild("HumanoidRootPart")
+                        local blocked = S.hbx_vis_check and enemyRoot2 and not isVisible(enemyRoot2, myChar)
+                        if not blocked then
+                            _tbCooldown = now
+                            local fired = false
+                            pcall(function()
+                                if mouse1click then mouse1click(); fired = true end
+                            end)
+                            if not fired then pcall(function()
+                                if mouse1press then mouse1press(); task.delay(0.05, function() pcall(mouse1release) end); fired = true end
+                            end) end
+                            if not fired then pcall(function()
+                                game:GetService("VirtualInputManager"):SendMouseButtonEvent(0,0,0,true,game,0)
+                                task.delay(0.05,function() pcall(function() game:GetService("VirtualInputManager"):SendMouseButtonEvent(0,0,0,false,game,0) end) end)
+                            end) end
                         end
                     end
                 end
@@ -1721,8 +1718,8 @@ RunService.RenderStepped:Connect(function()
         local char = p.Character
         local function allOff()
             for _, hl in pairs(obj.highlights) do pcall(function() hl.Visible = false end) end
-            if obj.billboard     then obj.billboard.Visible     = false end
-            if obj.nameBillboard then obj.nameBillboard.Visible = false end
+            if obj.billboard      then obj.billboard.Visible      = false end
+            if obj.nameBillboard  then obj.nameBillboard.Visible  = false end
             obj.line.Visible = false
             obj.hbx.Visible  = false
         end
@@ -1743,55 +1740,56 @@ RunService.RenderStepped:Connect(function()
             end
         end
 
-        -- ▸ Nombre encima del personaje (BillboardGui con TextLabel)
+        -- ▸ Nombre encima del personaje — solo si esp_on Y esp_names
         if obj.nameBillboard then
-            obj.nameBillboard.Visible = S.esp_on and S.esp_names
-            if S.esp_on and S.esp_names then
+            local showName = S.esp_on and S.esp_names
+            obj.nameBillboard.Visible = showName
+            if showName then
                 local nameLbl = obj.nameBillboard:FindFirstChild("NameLbl")
-                if nameLbl then
-                    nameLbl.TextColor3 = getEspColor()
-                end
+                if nameLbl then nameLbl.TextColor3 = getEspColor() end
             end
         end
 
-        -- ▸ Avatar (billboard separado, más arriba)
+        -- ▸ Avatar — solo si esp_on Y esp_avatar
         if obj.billboard then
-            obj.billboard.Visible = S.esp_on and S.esp_avatar
-            if S.esp_on and S.esp_avatar then
-                local bgFrame = obj.billboard:FindFirstChildOfClass("Frame")
-                if bgFrame then
-                    local stroke = bgFrame:FindFirstChildOfClass("UIStroke")
-                    if stroke then stroke.Color = getEspColor() end
+            local showAv = S.esp_on and S.esp_avatar
+            obj.billboard.Visible = showAv
+            if showAv then
+                local bg2 = obj.billboard:FindFirstChildOfClass("Frame")
+                if bg2 then
+                    local st = bg2:FindFirstChild("AvatarStroke")
+                    if st then st.Color = getEspColor() end
                 end
             end
         end
 
-        -- ▸ Drawing: líneas y caja hitbox — posición en pantalla
+        -- ▸ Drawing: posición en pantalla
         local sp, onS = camera:WorldToViewportPoint(root.Position)
         local sp2 = Vector2.new(sp.X, sp.Y)
         local headPart = char:FindFirstChild("Head")
         local topY = headPart and camera:WorldToViewportPoint(headPart.Position + Vector3.new(0, 0.7, 0)).Y or (sp.Y - 40)
         local height = math.abs(sp2.Y - topY) * 2.2
 
-        -- ESP Lines
+        -- ESP Lines — requiere Drawing
         if S.esp_on and S.esp_lines and onS and HAS_DRAWING then
-            obj.line.Visible = true
-            obj.line.Color   = getEspColor()
-            obj.line.From    = Vector2.new(vpSize.X / 2, vpSize.Y - 2)
-            obj.line.To      = sp2
+            obj.line.Visible   = true
+            obj.line.Color     = getEspColor()
             obj.line.Thickness = 1.5
+            obj.line.From      = Vector2.new(vpSize.X / 2, vpSize.Y - 2)
+            obj.line.To        = sp2
         else
             obj.line.Visible = false
         end
 
-        -- Hitbox visual (caja en pantalla)
+        -- Hitbox visual (caja en pantalla) — requiere Drawing
         if S.hbx_on and S.hbx_show and onS and HAS_DRAWING then
             local hbxH = math.max(height, 20)
             local hbxW = hbxH * 0.55
-            obj.hbx.Visible   = true
-            obj.hbx.Thickness = 1.5
             local isVis = myChar and isVisible(root, myChar)
-            -- Verde = hitbox activa (mata), Rojo = detrás de pared (no mata)
+            obj.hbx.Visible   = true
+            obj.hbx.Filled    = false
+            obj.hbx.Thickness = 1.5
+            -- Verde = hitbox activa, Rojo = detrás de pared (no mata)
             obj.hbx.Color    = (S.hbx_vis_check and not isVis) and Color3.fromRGB(220, 80, 80) or Color3.fromRGB(100, 220, 100)
             obj.hbx.Size     = Vector2.new(hbxW, hbxH)
             obj.hbx.Position = Vector2.new(sp2.X - hbxW / 2, sp2.Y - hbxH / 2)
@@ -1832,7 +1830,6 @@ UserInputService.InputBegan:Connect(function(inp, proc)
         S.esp_on = not S.esp_on; save()
         if refreshers["esp_on"] then refreshers["esp_on"]() end
         showNotif("✝  ESP", S.esp_on and L("n_on") or L("n_off"), S.esp_on)
-        -- Si apagamos ESP, limpiar highlights inmediatamente
         if not S.esp_on then
             for _, obj in pairs(espObjects) do
                 for _, hl in pairs(obj.highlights) do pcall(function() hl.Visible = false end) end
@@ -1849,7 +1846,7 @@ UserInputService.InputBegan:Connect(function(inp, proc)
     if kn == S.hbx_key then
         S.hbx_on = not S.hbx_on; save()
         if refreshers["hbx_on"] then refreshers["hbx_on"]() end
-        -- Si apagamos, restaurar tamaños y ocultar cajas Drawing
+        -- Si apagamos, restaurar tamaños y ocultar cajas
         if not S.hbx_on then
             for _, ep in ipairs(Players:GetPlayers()) do
                 if ep ~= player and ep.Character then
@@ -1860,9 +1857,7 @@ UserInputService.InputBegan:Connect(function(inp, proc)
                     end
                 end
             end
-            for _, obj in pairs(espObjects) do
-                if obj.hbx then obj.hbx.Visible = false end
-            end
+            for _, obj in pairs(espObjects) do obj.hbx.Visible = false end
         end
         showNotif("✝  Hitbox", S.hbx_on and L("n_on") or L("n_off"), S.hbx_on)
         return
@@ -1886,5 +1881,5 @@ task.defer(function()
     panel.BackgroundTransparency = S.panel_bg and 0 or 0.15
 end)
 
-print("✝  x7s  Loaded — "..player.Name.."  ✝")
+print("✝  x7s Top Loaded — "..player.Name.."  ✝")
 print("   "..S.gui_key.." = Toggle GUI  ·  "..S.esp_key.." = ESP  ·  "..S.hbx_key.." = Hitbox  ·  "..S.trg_key.." = Trigger")
