@@ -1527,15 +1527,14 @@ end
 
 local function createEspObj(p)
     if p == player then return end
-    -- BoxHandleAdornment para Show Hitbox (más fiable que SelectionBox en executors)
-    local selBox = Instance.new("BoxHandleAdornment")
-    selBox.Name = "x7sHBX_"..p.Name
-    selBox.AlwaysOnTop = true
-    selBox.ZIndex = 5
-    selBox.Color3 = Color3.fromRGB(100, 220, 100)
-    selBox.Transparency = 0.6
-    selBox.Visible = false
-    selBox.Parent = Workspace
+    -- Drawing Square para Show Hitbox (proyectado manualmente cada frame, sin adornments)
+    local selBox = HAS_DRAWING and Drawing.new("Square") or {Visible=false, Remove=function()end}
+    if HAS_DRAWING then
+        selBox.Visible   = false
+        selBox.Filled    = false
+        selBox.Thickness = 1.5
+        selBox.Color     = Color3.fromRGB(100, 220, 100)
+    end
     espObjects[p] = {
         highlights   = {},
         billboard    = nil,   -- avatar billboard
@@ -1568,7 +1567,7 @@ local function removeEspObj(p)
     for _, hl in pairs(obj.highlights) do pcall(function() hl:Destroy() end) end
     if obj.billboard then obj.billboard:Destroy() end
     if obj.nameBillboard then obj.nameBillboard:Destroy() end
-    if obj.selBox then pcall(function() obj.selBox:Destroy() end) end
+    if obj.selBox then pcall(function() obj.selBox:Remove() end) end
     obj.box:Remove(); obj.name:Remove(); obj.line:Remove(); obj.hbx:Remove()
     espObjects[p] = nil
 end
@@ -1856,20 +1855,40 @@ RunService.RenderStepped:Connect(function()
             obj.line.Visible = false
         end
 
-        -- Show Hitbox: BoxHandleAdornment 3D pegado al HumanoidRootPart expandido
-        if obj.selBox then
-            if S.hbx_on and S.hbx_show then
+        -- Show Hitbox: proyectar el HumanoidRootPart expandido a pantalla con Drawing
+        if obj.selBox and HAS_DRAWING then
+            if S.hbx_on and S.hbx_show and onS then
                 local isVis2 = myChar and isVisible(root, myChar)
                 local rootExpanded = _hbxOriginals[p] ~= nil
                 local shouldShow = rootExpanded and (not S.hbx_vis_check or isVis2)
                 if shouldShow then
-                    local col = (S.hbx_vis_check and not isVis2) and Color3.fromRGB(220, 80, 80) or getEspColor()
-                    -- Adornee = root: la caja sigue al HumanoidRootPart exactamente
-                    obj.selBox.Adornee = root
-                    -- Tamaño igual al root expandido
-                    obj.selBox.Size = root.Size
-                    obj.selBox.Color3 = col
-                    obj.selBox.Visible = true
+                    -- Proyectar los 8 vértices del root expandido al viewport
+                    local rs = root.Size
+                    local rcf = root.CFrame
+                    local hx2, hy2, hz2 = rs.X/2, rs.Y/2, rs.Z/2
+                    local mnX, mnY, mxX, mxY = math.huge, math.huge, -math.huge, -math.huge
+                    for _, off in ipairs({
+                        Vector3.new( hx2, hy2, hz2), Vector3.new(-hx2, hy2, hz2),
+                        Vector3.new( hx2,-hy2, hz2), Vector3.new(-hx2,-hy2, hz2),
+                        Vector3.new( hx2, hy2,-hz2), Vector3.new(-hx2, hy2,-hz2),
+                        Vector3.new( hx2,-hy2,-hz2), Vector3.new(-hx2,-hy2,-hz2),
+                    }) do
+                        local wp2 = rcf:PointToWorldSpace(off)
+                        local sc3, on3 = camera:WorldToViewportPoint(wp2)
+                        if on3 and sc3.Z > 0 then
+                            mnX = math.min(mnX, sc3.X); mnY = math.min(mnY, sc3.Y)
+                            mxX = math.max(mxX, sc3.X); mxY = math.max(mxY, sc3.Y)
+                        end
+                    end
+                    if mxX > mnX and mxY > mnY then
+                        local col = (S.hbx_vis_check and not isVis2) and Color3.fromRGB(220, 80, 80) or getEspColor()
+                        obj.selBox.Visible   = true
+                        obj.selBox.Color     = col
+                        obj.selBox.Size      = Vector2.new(mxX - mnX, mxY - mnY)
+                        obj.selBox.Position  = Vector2.new(mnX, mnY)
+                    else
+                        obj.selBox.Visible = false
+                    end
                 else
                     obj.selBox.Visible = false
                 end
