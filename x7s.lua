@@ -1253,14 +1253,18 @@ makeToggle(hbxCard, "hbx_on",  "hbx_on_d",  "hbx_on", function(on)
         for _, p2 in ipairs(Players:GetPlayers()) do
             if p2 ~= player and p2.Character then
                 local root2 = p2.Character:FindFirstChild("HumanoidRootPart")
-                if root2 and _hbxOriginals and _hbxOriginals[p2] then
+                -- Restaurar solo si estaba expandido
+                if root2 and _hbxOriginals and _hbxOriginals[p2] and _hbxExpanded[p2] then
                     pcall(function()
                         root2.Size       = _hbxOriginals[p2].Size
                         root2.CanCollide = _hbxOriginals[p2].CanCollide
                         root2.Massless   = _hbxOriginals[p2].Massless
                     end)
-                    _hbxOriginals[p2] = nil
                 end
+                _hbxOriginals[p2] = nil
+                _hbxExpanded[p2]  = nil
+                -- Destruir BoxHandleAdornment
+                if root2 then pcall(function() _destroyHbxAdornment(root2) end) end
             end
         end
     end
@@ -1269,19 +1273,38 @@ makeDivider(hbxCard)
 makeToggle(hbxCard, "hbx_vis",  "hbx_vis_d",  "hbx_vis_check")
 makeDivider(hbxCard)
 makeSlider(hbxCard, "hbx_size", "hbx_size", 1, 20, function()
-    -- Re-aplicar tamaño inmediatamente a todos los jugadores
-    if S.hbx_on and espObjects then
+    if S.hbx_on then
         for _, p2 in ipairs(Players:GetPlayers()) do
-            if p2 ~= player then
-                pcall(function() applyHitbox(p2, true) end)
+            if p2 ~= player and p2.Character then
+                local root2 = p2.Character:FindFirstChild("HumanoidRootPart")
+                -- Actualizar tamaño físico si estaba expandido
+                if root2 and _hbxExpanded[p2] then
+                    local s = S.hbx_size
+                    pcall(function()
+                        root2.Size = Vector3.new(s * 2, s * 2, s * 2)
+                    end)
+                end
+                -- Actualizar tamaño del BoxHandleAdornment en tiempo real
+                if root2 then
+                    pcall(function() _updateHbxAdornSize(root2) end)
+                end
             end
         end
     end
 end)
 makeDivider(hbxCard)
 makeToggle(hbxCard, "hbx_show", nil, "hbx_show", function(on)
-    if not on and espObjects then
-        for _, obj in pairs(espObjects) do obj.hbx.Visible = false end
+    -- Cuando se desactiva Show Hitbox, destruir todos los BoxHandleAdornments
+    if not on then
+        for _, p2 in ipairs(Players:GetPlayers()) do
+            if p2 ~= player and p2.Character then
+                local root2 = p2.Character:FindFirstChild("HumanoidRootPart")
+                if root2 then pcall(function() _destroyHbxAdornment(root2) end) end
+            end
+        end
+        if espObjects then
+            for _, obj in pairs(espObjects) do obj.hbx.Visible = false end
+        end
     end
 end)
 makeDivider(hbxCard)
@@ -1546,6 +1569,9 @@ local function createEspObj(p)
         obj2.highlights = {}
         if obj2.billboard then obj2.billboard:Destroy(); obj2.billboard = nil end
         if obj2.nameBillboard then obj2.nameBillboard:Destroy(); obj2.nameBillboard = nil end
+        -- Limpiar estado de hitbox del personaje anterior
+        _hbxOriginals[p] = nil
+        _hbxExpanded[p]  = nil
         task.wait(0.5)
         if espObjects[p] then
             espObjects[p].billboard     = createAvatarBillboard(p, char)
@@ -1651,10 +1677,48 @@ local function isVisible(targetRoot, myChar)
     return result.Distance >= dist - 0.5
 end
 
+-- Tabla que registra el estado expandido actual de cada jugador
+-- para evitar escrituras innecesarias en root.Size cada frame.
+local _hbxExpanded = {}  -- [player] = true/false
+
+local function _destroyHbxAdornment(root)
+    if not root then return end
+    local adorn = root:FindFirstChild("HBX_BOX_ADORN")
+    if adorn then adorn:Destroy() end
+end
+
+local function _createHbxAdornment(root)
+    -- No duplicar
+    if root:FindFirstChild("HBX_BOX_ADORN") then return end
+    local adorn = Instance.new("BoxHandleAdornment")
+    adorn.Name          = "HBX_BOX_ADORN"
+    adorn.Adornee       = root
+    adorn.AlwaysOnTop   = true
+    adorn.ZIndex        = 5
+    -- El tamaño visual se basa en hbx_size, completamente independiente de root.Size
+    local s = S.hbx_size * 2
+    adorn.Size          = Vector3.new(s, s, s)
+    adorn.Color3        = Color3.fromRGB(255, 40, 40)
+    adorn.Transparency  = 0.45
+    adorn.CFrame        = CFrame.new(0, 0, 0)  -- centrado en el Adornee
+    adorn.Parent        = root
+end
+
+local function _updateHbxAdornSize(root)
+    if not root then return end
+    local adorn = root:FindFirstChild("HBX_BOX_ADORN")
+    if not adorn then return end
+    local s = S.hbx_size * 2
+    adorn.Size = Vector3.new(s, s, s)
+end
+
 local function applyHitbox(p, on)
     if not p.Character then return end
-    local root = p.Character:FindFirstChild("HumanoidRootPart"); if not root then return end
+    local root = p.Character:FindFirstChild("HumanoidRootPart")
+    if not root then return end
+
     if on then
+        -- Guardar originales solo una vez
         if not _hbxOriginals[p] then
             _hbxOriginals[p] = {
                 Size       = root.Size,
@@ -1662,68 +1726,59 @@ local function applyHitbox(p, on)
                 Massless   = root.Massless,
             }
         end
-        local expanded = false
+
+        -- Determinar si debe expandirse
+        local shouldExpand = false
         if S.hbx_vis_check then
             local myChar2 = player.Character
-            pcall(function() root.Size = _hbxOriginals[p].Size end)
-            local vis = isVisible(root, myChar2)
-            if vis then
-                local s = S.hbx_size
-                pcall(function()
-                    root.Size       = Vector3.new(s * 2, s * 2, s * 2)
-                    root.CanCollide = false
-                    root.Massless   = true
-                end)
-                expanded = true
-            else
-                pcall(function()
-                    root.Size       = _hbxOriginals[p].Size
-                    root.CanCollide = _hbxOriginals[p].CanCollide
-                    root.Massless   = _hbxOriginals[p].Massless
-                end)
-            end
+            shouldExpand = isVisible(root, myChar2)
         else
+            shouldExpand = true
+        end
+
+        -- Solo escribir en root.Size cuando el estado cambia, no cada frame.
+        -- Esto elimina la desincronización visual por mutación constante.
+        if shouldExpand and not _hbxExpanded[p] then
+            _hbxExpanded[p] = true
             local s = S.hbx_size
             pcall(function()
                 root.Size       = Vector3.new(s * 2, s * 2, s * 2)
                 root.CanCollide = false
                 root.Massless   = true
             end)
-            expanded = true
-        end
-        -- SelectionBox 3D (Show Hitbox visual igual a RysHub)
-        pcall(function()
-            local box = root:FindFirstChild("HBX_BOX")
-            if S.hbx_show and expanded then
-                if not box then
-                    box = Instance.new("SelectionBox")
-                    box.Name = "HBX_BOX"
-                    box.Adornee = root
-                    box.LineThickness = 0.04
-                    box.SurfaceTransparency = 0.75
-                    box.Parent = root
-                end
-                local col = getEspColor()
-                box.Color3 = col
-                box.SurfaceColor3 = col
-                box.Visible = true
-            else
-                if box then box.Visible = false end
-            end
-        end)
-    else
-        if _hbxOriginals[p] then
+        elseif not shouldExpand and _hbxExpanded[p] then
+            _hbxExpanded[p] = false
             pcall(function()
                 root.Size       = _hbxOriginals[p].Size
                 root.CanCollide = _hbxOriginals[p].CanCollide
                 root.Massless   = _hbxOriginals[p].Massless
             end)
-            _hbxOriginals[p] = nil
         end
-        pcall(function()
-            local box = root:FindFirstChild("HBX_BOX")
-            if box then box:Destroy() end
-        end)
+
+        -- BoxHandleAdornment: visual independiente de la física.
+        -- Se crea/destruye según hbx_show. No afecta movimiento ni física.
+        if S.hbx_show then
+            pcall(function()
+                _createHbxAdornment(root)
+                _updateHbxAdornSize(root)
+            end)
+        else
+            pcall(function() _destroyHbxAdornment(root) end)
+        end
+    else
+        -- Restaurar solo si estaba expandido
+        if _hbxExpanded[p] then
+            _hbxExpanded[p] = false
+            if _hbxOriginals[p] then
+                pcall(function()
+                    root.Size       = _hbxOriginals[p].Size
+                    root.CanCollide = _hbxOriginals[p].CanCollide
+                    root.Massless   = _hbxOriginals[p].Massless
+                end)
+            end
+        end
+        _hbxOriginals[p] = nil
+        pcall(function() _destroyHbxAdornment(root) end)
     end
 end
 
@@ -1870,7 +1925,7 @@ RunService.RenderStepped:Connect(function()
             obj.line.Visible = false
         end
 
-        -- Show Hitbox: manejado por SelectionBox 3D en applyHitbox (igual a RysHub)
+        -- Show Hitbox: manejado por BoxHandleAdornment en applyHitbox
         -- El Drawing hbx ya no se usa para este propósito
         obj.hbx.Visible = false
     end
@@ -1936,27 +1991,21 @@ UserInputService.InputBegan:Connect(function(inp, proc)
             for _, ep in ipairs(Players:GetPlayers()) do
                 if ep ~= player and ep.Character then
                     local r2 = ep.Character:FindFirstChild("HumanoidRootPart")
-                    if r2 and _hbxOriginals[ep] then
+                    -- Restaurar size solo si estaba expandido
+                    if r2 and _hbxOriginals[ep] and _hbxExpanded[ep] then
                         pcall(function()
                             r2.Size       = _hbxOriginals[ep].Size
                             r2.CanCollide = _hbxOriginals[ep].CanCollide
                             r2.Massless   = _hbxOriginals[ep].Massless
                         end)
-                        _hbxOriginals[ep] = nil
                     end
+                    _hbxOriginals[ep]  = nil
+                    _hbxExpanded[ep]   = nil
+                    -- Destruir BoxHandleAdornment
+                    if r2 then pcall(function() _destroyHbxAdornment(r2) end) end
                 end
             end
             for _, obj in pairs(espObjects) do obj.hbx.Visible = false end
-            -- Destruir SelectionBox 3D de todos los jugadores
-            for _, ep in ipairs(Players:GetPlayers()) do
-                if ep ~= player and ep.Character then
-                    local r3 = ep.Character:FindFirstChild("HumanoidRootPart")
-                    if r3 then
-                        local box = r3:FindFirstChild("HBX_BOX")
-                        if box then box:Destroy() end
-                    end
-                end
-            end
         end
         showNotif("✝  Hitbox", S.hbx_on and L("n_on") or L("n_off"), S.hbx_on)
         return
@@ -1974,6 +2023,7 @@ end)
 player.CharacterAdded:Connect(function()
     task.wait(0.5)
     _hbxOriginals = {}
+    _hbxExpanded  = {}
 end)
 
 task.defer(function()
