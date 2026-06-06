@@ -483,7 +483,6 @@ local function setPage(idx)
     if old then
         old.BackgroundTransparency = 1
         old.BorderSizePixel = 0
-        old:FindFirstChild("__lbl") and true
         for _, ch in ipairs(old:GetChildren()) do
             if ch:IsA("TextLabel") then ch.TextColor3 = Color3.fromRGB(119,119,119) end
             if ch:IsA("Frame") then ch.BackgroundColor3 = Color3.fromRGB(0,0,0); ch.BackgroundTransparency = 1 end
