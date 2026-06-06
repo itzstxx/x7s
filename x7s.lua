@@ -1527,24 +1527,14 @@ end
 
 local function createEspObj(p)
     if p == player then return end
-    -- BoxHandleAdornment para Show Hitbox (más fiable que SelectionBox en executors)
-    local selBox = Instance.new("BoxHandleAdornment")
-    selBox.Name = "x7sHBX_"..p.Name
-    selBox.AlwaysOnTop = true
-    selBox.ZIndex = 5
-    selBox.Color3 = Color3.fromRGB(100, 220, 100)
-    selBox.Transparency = 0.6
-    selBox.Visible = false
-    selBox.Parent = Workspace
     espObjects[p] = {
         highlights   = {},
         billboard    = nil,   -- avatar billboard
         nameBillboard = nil,  -- nombre billboard
-        box    = newBox(),
-        name   = newText(),
-        line   = newLine(),
-        hbx    = newBox(),
-        selBox = selBox,
+        box  = newBox(),
+        name = newText(),
+        line = newLine(),
+        hbx  = newBox(),
     }
     if p.Character then
         espObjects[p].billboard     = createAvatarBillboard(p, p.Character)
@@ -1568,7 +1558,6 @@ local function removeEspObj(p)
     for _, hl in pairs(obj.highlights) do pcall(function() hl:Destroy() end) end
     if obj.billboard then obj.billboard:Destroy() end
     if obj.nameBillboard then obj.nameBillboard:Destroy() end
-    if obj.selBox then pcall(function() obj.selBox:Destroy() end) end
     obj.box:Remove(); obj.name:Remove(); obj.line:Remove(); obj.hbx:Remove()
     espObjects[p] = nil
 end
@@ -1602,7 +1591,6 @@ applyStreamMode = function(on)
                 if obj.billboard     then obj.billboard.Enabled     = false end
                 if obj.nameBillboard then obj.nameBillboard.Enabled = false end
                 obj.line.Visible = false; obj.hbx.Visible = false
-                if obj.selBox then obj.selBox.Visible = false end
             end
         end
     else
@@ -1674,6 +1662,7 @@ local function applyHitbox(p, on)
                 Massless   = root.Massless,
             }
         end
+        local expanded = false
         if S.hbx_vis_check then
             local myChar2 = player.Character
             pcall(function() root.Size = _hbxOriginals[p].Size end)
@@ -1685,6 +1674,7 @@ local function applyHitbox(p, on)
                     root.CanCollide = false
                     root.Massless   = true
                 end)
+                expanded = true
             else
                 pcall(function()
                     root.Size       = _hbxOriginals[p].Size
@@ -1699,7 +1689,28 @@ local function applyHitbox(p, on)
                 root.CanCollide = false
                 root.Massless   = true
             end)
+            expanded = true
         end
+        -- SelectionBox 3D (Show Hitbox visual igual a RysHub)
+        pcall(function()
+            local box = root:FindFirstChild("HBX_BOX")
+            if S.hbx_show and expanded then
+                if not box then
+                    box = Instance.new("SelectionBox")
+                    box.Name = "HBX_BOX"
+                    box.Adornee = root
+                    box.LineThickness = 0.04
+                    box.SurfaceTransparency = 0.75
+                    box.Parent = root
+                end
+                local col = getEspColor()
+                box.Color3 = col
+                box.SurfaceColor3 = col
+                box.Visible = true
+            else
+                if box then box.Visible = false end
+            end
+        end)
     else
         if _hbxOriginals[p] then
             pcall(function()
@@ -1709,6 +1720,10 @@ local function applyHitbox(p, on)
             end)
             _hbxOriginals[p] = nil
         end
+        pcall(function()
+            local box = root:FindFirstChild("HBX_BOX")
+            if box then box:Destroy() end
+        end)
     end
 end
 
@@ -1795,7 +1810,6 @@ RunService.RenderStepped:Connect(function()
             if obj.nameBillboard  then obj.nameBillboard.Enabled  = false end
             obj.line.Visible = false
             obj.hbx.Visible  = false
-            if obj.selBox then obj.selBox.Visible = false end
         end
         if not char then allOff(); continue end
         local root = char:FindFirstChild("HumanoidRootPart")
@@ -1856,27 +1870,8 @@ RunService.RenderStepped:Connect(function()
             obj.line.Visible = false
         end
 
-        -- Show Hitbox: BoxHandleAdornment 3D pegado al HumanoidRootPart expandido
-        if obj.selBox then
-            if S.hbx_on and S.hbx_show then
-                local isVis2 = myChar and isVisible(root, myChar)
-                local rootExpanded = _hbxOriginals[p] ~= nil
-                local shouldShow = rootExpanded and (not S.hbx_vis_check or isVis2)
-                if shouldShow then
-                    local col = (S.hbx_vis_check and not isVis2) and Color3.fromRGB(220, 80, 80) or getEspColor()
-                    -- Adornee = root: la caja sigue al HumanoidRootPart exactamente
-                    obj.selBox.Adornee = root
-                    -- Tamaño igual al root expandido
-                    obj.selBox.Size = root.Size
-                    obj.selBox.Color3 = col
-                    obj.selBox.Visible = true
-                else
-                    obj.selBox.Visible = false
-                end
-            else
-                obj.selBox.Visible = false
-            end
-        end
+        -- Show Hitbox: manejado por SelectionBox 3D en applyHitbox (igual a RysHub)
+        -- El Drawing hbx ya no se usa para este propósito
         obj.hbx.Visible = false
     end
 end)
@@ -1927,7 +1922,6 @@ UserInputService.InputBegan:Connect(function(inp, proc)
                 if obj.nameBillboard then obj.nameBillboard.Enabled = false end
                 obj.line.Visible = false
                 obj.hbx.Visible  = false
-                if obj.selBox then obj.selBox.Visible = false end
             end
         end
         return
@@ -1952,9 +1946,16 @@ UserInputService.InputBegan:Connect(function(inp, proc)
                     end
                 end
             end
-            for _, obj in pairs(espObjects) do
-                obj.hbx.Visible = false
-                if obj.selBox then obj.selBox.Visible = false end
+            for _, obj in pairs(espObjects) do obj.hbx.Visible = false end
+            -- Destruir SelectionBox 3D de todos los jugadores
+            for _, ep in ipairs(Players:GetPlayers()) do
+                if ep ~= player and ep.Character then
+                    local r3 = ep.Character:FindFirstChild("HumanoidRootPart")
+                    if r3 then
+                        local box = r3:FindFirstChild("HBX_BOX")
+                        if box then box:Destroy() end
+                    end
+                end
             end
         end
         showNotif("✝  Hitbox", S.hbx_on and L("n_on") or L("n_off"), S.hbx_on)
