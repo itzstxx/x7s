@@ -243,51 +243,12 @@ end
 -- ══════════════════════════════════════════════
 --  STREAM MODE (igual que SyyPC)
 --  Guarda estado de ESP/avatar/nombres/líneas y oculta todo
+--  NOTA: panel, glow, espObjects se leen en tiempo de ejecución (definidos más abajo)
 -- ══════════════════════════════════════════════
 local streamModeOn = false
 local streamSaved = {esp_on=nil, esp_avatar=nil, esp_names=nil, esp_lines=nil}
-
-local function applyStreamMode(on)
-    on = on and true or false
-    if streamModeOn == on then return end
-    streamModeOn = on
-    S.stream_mode = on
-    if on then
-        -- Guardar y desactivar
-        streamSaved.esp_on    = S.esp_on
-        streamSaved.esp_avatar = S.esp_avatar
-        streamSaved.esp_names  = S.esp_names
-        streamSaved.esp_lines  = S.esp_lines
-        S.esp_on = false; S.esp_avatar = false; S.esp_names = false; S.esp_lines = false
-        -- Ocultar GUI completa
-        panel.Visible = false; glow.Visible = false
-        -- Ocultar todos los ESP inmediatamente
-        for _, obj in pairs(espObjects) do
-            for _, hl in pairs(obj.highlights) do pcall(function() hl.Enabled = false end) end
-            if obj.billboard     then obj.billboard.Enabled     = false end
-            if obj.nameBillboard then obj.nameBillboard.Enabled = false end
-            obj.line.Visible = false; obj.hbx.Visible = false
-        end
-    else
-        -- Restaurar
-        if streamSaved.esp_on    ~= nil then S.esp_on    = streamSaved.esp_on    end
-        if streamSaved.esp_avatar ~= nil then S.esp_avatar = streamSaved.esp_avatar end
-        if streamSaved.esp_names  ~= nil then S.esp_names  = streamSaved.esp_names  end
-        if streamSaved.esp_lines  ~= nil then S.esp_lines  = streamSaved.esp_lines  end
-        -- Mostrar GUI
-        panel.Visible = true; glow.Visible = true
-        panel.BackgroundTransparency = 1
-        TweenService:Create(panel, TweenInfo.new(0.2, Enum.EasingStyle.Quad), {BackgroundTransparency=0}):Play()
-        TweenService:Create(glow,  TweenInfo.new(0.2), {BackgroundTransparency=0.93}):Play()
-    end
-    -- Actualizar toggles visuales
-    if refreshers["esp_on"]    then refreshers["esp_on"]()    end
-    if refreshers["esp_avatar"] then refreshers["esp_avatar"]() end
-    if refreshers["esp_names"]  then refreshers["esp_names"]()  end
-    if refreshers["esp_lines"]  then refreshers["esp_lines"]()  end
-    if refreshers["stream_mode"] then refreshers["stream_mode"]() end
-    save()
-end
+-- La función se asigna más abajo tras definir panel/glow/espObjects
+local applyStreamMode  -- forward declaration
 
 
 local GW, GH = 660, 520          -- ancho total, alto total
@@ -872,7 +833,7 @@ local function makeToggle(parent, titleKey, descKey, stateKey, cb)
 end
 
 -- Slider
-local function makeSlider(parent, titleKey, stateKey, mn, mx)
+local function makeSlider(parent, titleKey, stateKey, mn, mx, cb)
     local title = L(titleKey) or titleKey
     local row = Instance.new("Frame", parent)
     row.Size = UDim2.new(1, 0, 0, 52); row.BackgroundTransparency = 1
@@ -911,6 +872,7 @@ local function makeSlider(parent, titleKey, stateKey, mn, mx)
         local pct = (v-mn)/(mx-mn)
         TweenService:Create(fill, TweenInfo.new(0.1), {Size=UDim2.new(pct,0,1,0)}):Play()
         TweenService:Create(sThumb, TweenInfo.new(0.1), {Position=UDim2.new(pct,-6,0.5,-6)}):Play()
+        if cb then cb(v) end
     end
     setVal(S[stateKey])
 
@@ -1310,7 +1272,16 @@ end)
 makeDivider(hbxCard)
 makeToggle(hbxCard, "hbx_vis",  "hbx_vis_d",  "hbx_vis_check")
 makeDivider(hbxCard)
-makeSlider(hbxCard, "hbx_size", "hbx_size", 1, 20)
+makeSlider(hbxCard, "hbx_size", "hbx_size", 1, 20, function()
+    -- Re-aplicar tamaño inmediatamente a todos los jugadores
+    if S.hbx_on and espObjects then
+        for _, p2 in ipairs(Players:GetPlayers()) do
+            if p2 ~= player then
+                pcall(function() applyHitbox(p2, true) end)
+            end
+        end
+    end
+end)
 makeDivider(hbxCard)
 makeToggle(hbxCard, "hbx_show", nil, "hbx_show", function(on)
     if not on and espObjects then
@@ -1605,7 +1576,53 @@ Players.PlayerRemoving:Connect(removeEspObj)
 -- (_hbxOriginals declarado al inicio del script)
 
 -- ══════════════════════════════════════════════
---  VISIBLE CHECK — raycast desde cámara al root
+--  STREAM MODE — implementación real (aquí panel, glow y espObjects ya existen)
+-- ══════════════════════════════════════════════
+applyStreamMode = function(on)
+    on = on and true or false
+    if streamModeOn == on then return end
+    streamModeOn = on
+    S.stream_mode = on
+    if on then
+        -- Guardar y desactivar
+        streamSaved.esp_on     = S.esp_on
+        streamSaved.esp_avatar = S.esp_avatar
+        streamSaved.esp_names  = S.esp_names
+        streamSaved.esp_lines  = S.esp_lines
+        S.esp_on = false; S.esp_avatar = false; S.esp_names = false; S.esp_lines = false
+        -- Ocultar GUI completa
+        panel.Visible = false; glow.Visible = false
+        -- Ocultar todos los ESP inmediatamente
+        if espObjects then
+            for _, obj in pairs(espObjects) do
+                for _, hl in pairs(obj.highlights) do pcall(function() hl.Enabled = false end) end
+                if obj.billboard     then obj.billboard.Enabled     = false end
+                if obj.nameBillboard then obj.nameBillboard.Enabled = false end
+                obj.line.Visible = false; obj.hbx.Visible = false
+            end
+        end
+    else
+        -- Restaurar
+        if streamSaved.esp_on    ~= nil then S.esp_on     = streamSaved.esp_on    end
+        if streamSaved.esp_avatar ~= nil then S.esp_avatar = streamSaved.esp_avatar end
+        if streamSaved.esp_names  ~= nil then S.esp_names  = streamSaved.esp_names  end
+        if streamSaved.esp_lines  ~= nil then S.esp_lines  = streamSaved.esp_lines  end
+        -- Mostrar GUI con animación
+        panel.Visible = true; glow.Visible = true
+        panel.BackgroundTransparency = 1
+        TweenService:Create(panel, TweenInfo.new(0.2, Enum.EasingStyle.Quad), {BackgroundTransparency=0}):Play()
+        TweenService:Create(glow,  TweenInfo.new(0.2), {BackgroundTransparency=0.93}):Play()
+    end
+    -- Actualizar toggles visuales en la GUI
+    if refreshers["esp_on"]      then refreshers["esp_on"]()      end
+    if refreshers["esp_avatar"]  then refreshers["esp_avatar"]()  end
+    if refreshers["esp_names"]   then refreshers["esp_names"]()   end
+    if refreshers["esp_lines"]   then refreshers["esp_lines"]()   end
+    if refreshers["stream_mode"] then refreshers["stream_mode"]() end
+    save()
+end
+
+
 --  Devuelve true si el enemigo NO está tapado por
 --  geometría del mundo (paredes, suelo, etc.)
 -- ══════════════════════════════════════════════
