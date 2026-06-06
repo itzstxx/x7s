@@ -1262,6 +1262,12 @@ makeToggle(hbxCard, "hbx_on",  "hbx_on_d",  "hbx_on", function(on)
                         root2.Size       = _hbxOriginals[p2].Size
                         root2.CanCollide = _hbxOriginals[p2].CanCollide
                         root2.Massless   = _hbxOriginals[p2].Massless
+                        -- FIX: restaurar CanCollide de todas las partes
+                        if _hbxOriginals[p2].Parts then
+                            for part, data in pairs(_hbxOriginals[p2].Parts) do
+                                pcall(function() part.CanCollide = data.CanCollide end)
+                            end
+                        end
                     end)
                     _hbxOriginals[p2] = nil
                 end
@@ -1664,10 +1670,18 @@ local function applyHitbox(p, on)
     local root = p.Character:FindFirstChild("HumanoidRootPart"); if not root then return end
     if on then
         if not _hbxOriginals[p] then
+            -- FIX: guardar CanCollide de TODAS las partes del character
+            local partStates = {}
+            for _, part in ipairs(p.Character:GetDescendants()) do
+                if part:IsA("BasePart") then
+                    partStates[part] = { CanCollide = part.CanCollide }
+                end
+            end
             _hbxOriginals[p] = {
                 Size       = root.Size,
                 CanCollide = root.CanCollide,
                 Massless   = root.Massless,
+                Parts      = partStates,
             }
         end
         if S.hbx_vis_check then
@@ -1681,6 +1695,12 @@ local function applyHitbox(p, on)
                     root.Size       = Vector3.new(s * 2, s * 2, s * 2)
                     root.CanCollide = false   -- no bloquea el paso del jugador
                     root.Massless   = true    -- no empuja ni tiene peso
+                    -- FIX: desactivar colisión en TODAS las partes del character
+                    for _, part in ipairs(p.Character:GetDescendants()) do
+                        if part:IsA("BasePart") then
+                            part.CanCollide = false
+                        end
+                    end
                 end)
             else
                 -- Detrás de pared: restaurar para no bloquear
@@ -1688,6 +1708,11 @@ local function applyHitbox(p, on)
                     root.Size       = _hbxOriginals[p].Size
                     root.CanCollide = _hbxOriginals[p].CanCollide
                     root.Massless   = _hbxOriginals[p].Massless
+                    if _hbxOriginals[p].Parts then
+                        for part, data in pairs(_hbxOriginals[p].Parts) do
+                            pcall(function() part.CanCollide = data.CanCollide end)
+                        end
+                    end
                 end)
             end
         else
@@ -1696,6 +1721,12 @@ local function applyHitbox(p, on)
                 root.Size       = Vector3.new(s * 2, s * 2, s * 2)
                 root.CanCollide = false
                 root.Massless   = true
+                -- FIX: desactivar colisión en TODAS las partes del character
+                for _, part in ipairs(p.Character:GetDescendants()) do
+                    if part:IsA("BasePart") then
+                        part.CanCollide = false
+                    end
+                end
             end)
         end
     else
@@ -1704,6 +1735,12 @@ local function applyHitbox(p, on)
                 root.Size       = _hbxOriginals[p].Size
                 root.CanCollide = _hbxOriginals[p].CanCollide
                 root.Massless   = _hbxOriginals[p].Massless
+                -- FIX: restaurar CanCollide de todas las partes
+                if _hbxOriginals[p].Parts then
+                    for part, data in pairs(_hbxOriginals[p].Parts) do
+                        pcall(function() part.CanCollide = data.CanCollide end)
+                    end
+                end
             end)
             _hbxOriginals[p] = nil
         end
@@ -1897,34 +1934,62 @@ RunService.RenderStepped:Connect(function()
         -- Hitbox visual (caja en pantalla) — requiere Drawing
         if S.hbx_on and S.hbx_show and onS and HAS_DRAWING then
             local isVis = myChar and isVisible(root, myChar)
-            -- Calcular tamaño real del HumanoidRootPart en pantalla
-            local rootSize = root.Size  -- ya tiene el tamaño expandido
-            local halfX = rootSize.X / 2
-            local halfY = rootSize.Y / 2
-            local halfZ = rootSize.Z / 2
-            -- Proyectar las 8 esquinas del cubo del root a pantalla
-            local rootCF = root.CFrame
-            local corners = {
-                Vector3.new( halfX,  halfY,  halfZ),
-                Vector3.new(-halfX,  halfY,  halfZ),
-                Vector3.new( halfX, -halfY,  halfZ),
-                Vector3.new(-halfX, -halfY,  halfZ),
-                Vector3.new( halfX,  halfY, -halfZ),
-                Vector3.new(-halfX,  halfY, -halfZ),
-                Vector3.new( halfX, -halfY, -halfZ),
-                Vector3.new(-halfX, -halfY, -halfZ),
-            }
+            -- FIX: calcular bounding box real proyectando TODAS las partes del character
+            -- (no solo el HumanoidRootPart expandido, que no representa el tamaño visual)
             local minX, minY, maxX, maxY = math.huge, math.huge, -math.huge, -math.huge
-            local allOnScreen = true
-            for _, offset in ipairs(corners) do
-                local worldPos = rootCF:PointToWorldSpace(offset)
-                local screenPos, onScreen = camera:WorldToViewportPoint(worldPos)
-                if not onScreen then allOnScreen = false end
-                if screenPos.Z > 0 then  -- delante de la cámara
-                    minX = math.min(minX, screenPos.X)
-                    minY = math.min(minY, screenPos.Y)
-                    maxX = math.max(maxX, screenPos.X)
-                    maxY = math.max(maxY, screenPos.Y)
+            for _, part in ipairs(char:GetDescendants()) do
+                if part:IsA("BasePart") and part.Name ~= "HumanoidRootPart" then
+                    -- Usar el tamaño original de la parte (sin expansión de hitbox)
+                    local origSize = part.Size
+                    local halfX2 = origSize.X / 2
+                    local halfY2 = origSize.Y / 2
+                    local halfZ2 = origSize.Z / 2
+                    local partCF = part.CFrame
+                    local corners2 = {
+                        Vector3.new( halfX2,  halfY2,  halfZ2),
+                        Vector3.new(-halfX2,  halfY2,  halfZ2),
+                        Vector3.new( halfX2, -halfY2,  halfZ2),
+                        Vector3.new(-halfX2, -halfY2,  halfZ2),
+                        Vector3.new( halfX2,  halfY2, -halfZ2),
+                        Vector3.new(-halfX2,  halfY2, -halfZ2),
+                        Vector3.new( halfX2, -halfY2, -halfZ2),
+                        Vector3.new(-halfX2, -halfY2, -halfZ2),
+                    }
+                    for _, offset in ipairs(corners2) do
+                        local worldPos = partCF:PointToWorldSpace(offset)
+                        local screenPos2, onScreen2 = camera:WorldToViewportPoint(worldPos)
+                        if onScreen2 and screenPos2.Z > 0 then
+                            minX = math.min(minX, screenPos2.X)
+                            minY = math.min(minY, screenPos2.Y)
+                            maxX = math.max(maxX, screenPos2.X)
+                            maxY = math.max(maxY, screenPos2.Y)
+                        end
+                    end
+                end
+            end
+            -- Fallback al root si no encontró ninguna parte
+            if minX == math.huge then
+                local orig = _hbxOriginals[p]
+                local rootSize = orig and orig.Size or Vector3.new(2, 5, 1)
+                local halfX = rootSize.X / 2
+                local halfY = rootSize.Y / 2
+                local halfZ = rootSize.Z / 2
+                local rootCF = root.CFrame
+                local corners = {
+                    Vector3.new( halfX,  halfY,  halfZ), Vector3.new(-halfX,  halfY,  halfZ),
+                    Vector3.new( halfX, -halfY,  halfZ), Vector3.new(-halfX, -halfY,  halfZ),
+                    Vector3.new( halfX,  halfY, -halfZ), Vector3.new(-halfX,  halfY, -halfZ),
+                    Vector3.new( halfX, -halfY, -halfZ), Vector3.new(-halfX, -halfY, -halfZ),
+                }
+                for _, offset in ipairs(corners) do
+                    local worldPos = rootCF:PointToWorldSpace(offset)
+                    local screenPos, onScreen = camera:WorldToViewportPoint(worldPos)
+                    if onScreen and screenPos.Z > 0 then
+                        minX = math.min(minX, screenPos.X)
+                        minY = math.min(minY, screenPos.Y)
+                        maxX = math.max(maxX, screenPos.X)
+                        maxY = math.max(maxY, screenPos.Y)
+                    end
                 end
             end
             if maxX > minX and maxY > minY then
@@ -2009,6 +2074,12 @@ UserInputService.InputBegan:Connect(function(inp, proc)
                             r2.Size       = _hbxOriginals[ep].Size
                             r2.CanCollide = _hbxOriginals[ep].CanCollide
                             r2.Massless   = _hbxOriginals[ep].Massless
+                            -- FIX: restaurar CanCollide de todas las partes
+                            if _hbxOriginals[ep].Parts then
+                                for part, data in pairs(_hbxOriginals[ep].Parts) do
+                                    pcall(function() part.CanCollide = data.CanCollide end)
+                                end
+                            end
                         end)
                         _hbxOriginals[ep] = nil
                     end
