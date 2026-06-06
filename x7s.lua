@@ -83,7 +83,7 @@ local function mkDefault()
         hbx_vis_check=true,   -- Visible Check: no matar si está detrás de pared
         trg_on=false, trg_key="R",
         summer_on=false,
-        panel_bg=true, notifs=true, lang="English", gui_key="RightShift",
+        panel_bg=true, notifs=true, lang="English", gui_key="L",
     }
 end
 local S = mkDefault()
@@ -360,22 +360,12 @@ dateDeco.Text = "♥ ★ ✦  "..os.date("%d/%m/%Y")
 dateDeco.TextColor3 = Color3.fromRGB(42, 42, 42); dateDeco.Font = Enum.Font.GothamBold
 dateDeco.TextSize = 8; dateDeco.TextXAlignment = Enum.TextXAlignment.Right
 
--- Label que muestra la tecla de toggle (se actualiza si el usuario cambia la tecla)
+-- Label tecla toggle GUI (se actualiza tras definir refreshers, abajo)
 local guiKeyLbl = Instance.new("TextLabel", header)
-guiKeyLbl.Size = UDim2.new(0, 80, 1, 0); guiKeyLbl.Position = UDim2.new(0, 220, 0, 0)
+guiKeyLbl.Size = UDim2.new(0, 90, 1, 0); guiKeyLbl.Position = UDim2.new(0, 200, 0, 0)
 guiKeyLbl.BackgroundTransparency = 1
-local function updateGuiKeyLabel()
-    local k = S.gui_key
-    if k == "RightShift" then k = "RShift" elseif k == "LeftShift" then k = "LShift" end
-    guiKeyLbl.Text = "[" .. k .. "] ocultar"
-end
-updateGuiKeyLabel()
 guiKeyLbl.TextColor3 = Color3.fromRGB(55, 50, 70); guiKeyLbl.Font = Enum.Font.GothamBold
 guiKeyLbl.TextSize = 8; guiKeyLbl.TextXAlignment = Enum.TextXAlignment.Left
-refreshers["gui_key"] = function()
-    updateGuiKeyLabel()
-    -- también refrescar el keybind display si hay uno registrado
-end
 
 -- Close button
 local closeBtn = Instance.new("TextButton", header)
@@ -633,6 +623,15 @@ fc2.TextSize=18; fc2.Size=UDim2.fromOffset(20,FOOTER_H); fc2.LayoutOrder=5
 
 -- ── GUI BUILDER HELPERS ─────────────────────────
 local refreshers = {}
+
+-- Actualizar el label de tecla del header (guiKeyLbl ya existe arriba)
+local function updateGuiKeyLabel()
+    local k = S.gui_key
+    if k == "RightShift" then k = "RShift" elseif k == "LeftShift" then k = "LShift" end
+    guiKeyLbl.Text = "[" .. k .. "] ocultar"
+end
+updateGuiKeyLabel()
+refreshers["gui_key"] = updateGuiKeyLabel
 
 -- Función para actualizar el color de acento globalmente
 local accentDeps = {}   -- {frame/stroke/label, prop}
@@ -1326,11 +1325,11 @@ local keyCard2 = makeCard(pg_ajustes)
 makeKeybind(keyCard2, "st_key", "gui_key")
 makeDivider(keyCard2)
 makeResetBtn(keyCard2, "st_r1", "st_r1_d", function()
-    S.gui_key = "RightShift"; if refreshers["gui_key"] then refreshers["gui_key"]() end; save()
+    S.gui_key = "L"; if refreshers["gui_key"] then refreshers["gui_key"]() end; save()
 end)
 makeDivider(keyCard2)
 makeResetBtn(keyCard2, "st_r2", "st_r2_d", function()
-    S.esp_key="T"; S.hbx_key="G"; S.trg_key="R"; S.gui_key="RightShift"
+    S.esp_key="T"; S.hbx_key="G"; S.trg_key="R"; S.gui_key="L"
     for k, fn in pairs(refreshers) do if k:find("_key") then fn() end end; save()
 end)
 
@@ -1923,13 +1922,13 @@ local keyCard = makeCard(pg_cfg)
 makeKeybind(keyCard, "st_key", "gui_key")
 makeDivider(keyCard)
 makeResetBtn(keyCard, "st_r1", "st_r1_d", function()
-    S.gui_key = "RightShift"
+    S.gui_key = "L"
     if refreshers["gui_key"] then refreshers["gui_key"]() end
     save()
 end)
 makeDivider(keyCard)
 makeResetBtn(keyCard, "st_r2", "st_r2_d", function()
-    S.esp_key = "T"; S.hbx_key = "G"; S.trg_key = "R"; S.gui_key = "RightShift"
+    S.esp_key = "T"; S.hbx_key = "G"; S.trg_key = "R"; S.gui_key = "L"
     for k, fn in pairs(refreshers) do
         if k:find("_key") then fn() end
     end
