@@ -82,10 +82,9 @@ local function mkDefault()
         esp_avatar=true,   -- Mostrar thumbnail del avatar en el ESP
         esp_rainbow=false, -- Modo arcoíris RGB (cicla el color automáticamente)
         hbx_on=false, hbx_size=5, hbx_show=false, hbx_key="G",
-        hbx_vis_check=true,   -- Visible Check: no matar si está detrás de pared
+        hbx_vis_check=true,
         trg_on=false, trg_key="R",
-        summer_on=false,
-        stream_mode=false,  -- Stream Mode: oculta GUI y desactiva ESP visual
+        stream_mode=false,
         panel_bg=true, notifs=true, lang="English", gui_key="L",
     }
 end
@@ -117,8 +116,6 @@ local Locale = {
         trg_on="Triggerbot",        trg_on_d="Shoots when your cursor is directly over a visible enemy.",
         trg_key="Triggerbot Keybind",
 
-        ev_sum="Summer 2026",       ev_sum_d="Collects Summer 2026 drops automatically. Only in matches.",
-
         st_bg="Toggle Panel Background",
         st_notif="Enable Notifications",
         st_lang="Language",
@@ -145,7 +142,6 @@ local Locale = {
         hbx_vis="Visible Check",    hbx_vis_d="Solo registra el hit si el enemigo está a la vista. Evita matar a través de paredes.",
         trg_on="Triggerbot",         trg_on_d="Dispara cuando el cursor está sobre un enemigo visible.",
         trg_key="Tecla Triggerbot",
-        ev_sum="Verano 2026",        ev_sum_d="Recoge drops de Verano 2026 automáticamente. Solo en partidas.",
         st_bg="Fondo del Panel",
         st_notif="Activar Notificaciones",
         st_lang="Idioma",
@@ -1342,12 +1338,6 @@ local guiColorRow, guiColorPop = makeColorPicker(cfgCard, "GUI Accent Color",
     function(r,g,b) applyAccent(Color3.fromRGB(r,g,b)) end
 )
 
-secLabel(pg_ajustes, "· · · EVENT · · ·")
-local evtCard2 = makeCard(pg_ajustes)
-makeToggle(evtCard2, "ev_sum", "ev_sum_d", "summer_on", function(on)
-    showNotif("Summer 2026", on and "Auto-collect ON" or "Auto-collect OFF", on)
-end)
-
 -- Activar página 1 por defecto
 setPage = setPage  -- referencia correcta (definida arriba con forward)
 pages[1].Visible = true
@@ -1433,23 +1423,25 @@ end
 local function applyHighlights(obj, char, isVis)
     if not char then return end
     local col = getEspColor()
-    -- Usamos un solo Highlight en el modelo completo para efecto aura
+    -- Color invertido/complementario para cuando está detrás de pared
+    local hidCol = Color3.fromRGB(255 - col.R*255, 255 - col.G*255, 255 - col.B*255)
+    local finalCol = isVis and col or hidCol
     if not obj.highlights["_main"] then
         local hl = Instance.new("Highlight")
-        hl.FillColor = col
-        hl.OutlineColor = col
-        hl.FillTransparency = isVis and 0.55 or 0.85
-        hl.OutlineTransparency = isVis and 0.0 or 0.3
+        hl.FillColor = finalCol
+        hl.OutlineColor = finalCol
+        hl.FillTransparency = isVis and 0.55 or 0.75
+        hl.OutlineTransparency = isVis and 0.0 or 0.2
         hl.Adornee = char
         hl.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
         hl.Parent = gui
         obj.highlights["_main"] = hl
     else
         local hl = obj.highlights["_main"]
-        hl.FillColor = col
-        hl.OutlineColor = col
-        hl.FillTransparency = isVis and 0.55 or 0.85
-        hl.OutlineTransparency = isVis and 0.0 or 0.3
+        hl.FillColor = finalCol
+        hl.OutlineColor = finalCol
+        hl.FillTransparency = isVis and 0.55 or 0.75
+        hl.OutlineTransparency = isVis and 0.0 or 0.2
         hl.Adornee = char
         hl.Enabled = S.esp_on
     end
@@ -1462,10 +1454,9 @@ local function createNameBillboard(p, char)
     local bb = Instance.new("BillboardGui")
     bb.Name = "x7sName_"..p.Name
     bb.Size = UDim2.fromOffset(100, 20)
-    bb.StudsOffset = Vector3.new(0, 3.2, 0)
+    bb.StudsOffset = Vector3.new(0, 3.2, 0)   -- nombre justo encima de la cabeza
     bb.AlwaysOnTop = true; bb.ResetOnSpawn = false
     bb.Adornee = head; bb.Parent = gui
-    -- Oculto por defecto hasta que ESP esté activo
     bb.Enabled = false
 
     local nameLbl = Instance.new("TextLabel", bb)
@@ -1489,10 +1480,9 @@ local function createAvatarBillboard(p, char)
     local bb = Instance.new("BillboardGui")
     bb.Name = "x7sESP_"..p.Name
     bb.Size = UDim2.fromOffset(34, 34)
-    bb.StudsOffset = Vector3.new(0, 3.6, 0)
+    bb.StudsOffset = Vector3.new(0, 5.2, 0)   -- avatar más arriba que el nombre
     bb.AlwaysOnTop = true; bb.ResetOnSpawn = false
     bb.Adornee = head; bb.Parent = gui
-    -- Oculto por defecto hasta que ESP esté activo
     bb.Enabled = false
 
     local bg = Instance.new("Frame", bb)
@@ -1711,48 +1701,6 @@ local function applyHitbox(p, on)
 end
 
 -- ══════════════════════════════════════════════
---  SUMMER EVENT AUTO-COLLECT
--- ══════════════════════════════════════════════
-task.spawn(function()
-    local summerKeys = {"summer","drop","collect","item2026","event","prize","gift"}
-    local function isSummerObj(obj)
-        if not obj or typeof(obj) ~= "Instance" then return false end
-        local n = obj.Name:lower()
-        for _, k in ipairs(summerKeys) do
-            if n:find(k, 1, true) then return true end
-        end
-        return false
-    end
-    local _lastCollect = 0
-    while true do
-        task.wait(0.5)
-        if not S.summer_on then continue end
-        local now = tick()
-        if now - _lastCollect < 0.3 then continue end
-        local myChar = player.Character
-        if not myChar then continue end
-        local myRoot = myChar:FindFirstChild("HumanoidRootPart")
-        if not myRoot then continue end
-        for _, obj in ipairs(Workspace:GetDescendants()) do
-            if isSummerObj(obj) then
-                local prox = obj:FindFirstChildOfClass("ProximityPrompt") or obj.Parent and obj.Parent:FindFirstChildOfClass("ProximityPrompt")
-                if prox then
-                    pcall(function() fireproximityprompt(prox) end)
-                    _lastCollect = tick(); break
-                end
-                if obj:IsA("BasePart") then
-                    local dist = (obj.Position - myRoot.Position).Magnitude
-                    if dist < 20 then
-                        pcall(function() obj.Touched:Fire(myRoot) end)
-                        _lastCollect = tick(); break
-                    end
-                end
-            end
-        end
-    end
-end)
-
--- ══════════════════════════════════════════════
 --  PLAYER LIST actualizada
 -- ══════════════════════════════════════════════
 local _plrList = Players:GetPlayers()
@@ -1841,9 +1789,10 @@ RunService.RenderStepped:Connect(function()
         local hum  = char:FindFirstChildOfClass("Humanoid")
         if not root or not hum or hum.Health <= 0 then allOff(); continue end
 
-        -- ▸ Highlight aura (a través de paredes)
+        -- ▸ Highlight aura (a través de paredes) — color cambia si está detrás de pared
         if S.esp_on and not streamModeOn then
-            applyHighlights(obj, char, true)
+            local isVis = myChar and isVisible(root, myChar)
+            applyHighlights(obj, char, isVis)
             for _, hl in pairs(obj.highlights) do
                 pcall(function() hl.Enabled = true end)
             end
@@ -1897,41 +1846,51 @@ RunService.RenderStepped:Connect(function()
         -- Hitbox visual (caja en pantalla) — requiere Drawing
         if S.hbx_on and S.hbx_show and onS and HAS_DRAWING then
             local isVis = myChar and isVisible(root, myChar)
-            -- Calcular tamaño real del HumanoidRootPart en pantalla
-            local rootSize = root.Size  -- ya tiene el tamaño expandido
-            local halfX = rootSize.X / 2
-            local halfY = rootSize.Y / 2
-            local halfZ = rootSize.Z / 2
-            -- Proyectar las 8 esquinas del cubo del root a pantalla
-            local rootCF = root.CFrame
-            local corners = {
-                Vector3.new( halfX,  halfY,  halfZ),
-                Vector3.new(-halfX,  halfY,  halfZ),
-                Vector3.new( halfX, -halfY,  halfZ),
-                Vector3.new(-halfX, -halfY,  halfZ),
-                Vector3.new( halfX,  halfY, -halfZ),
-                Vector3.new(-halfX,  halfY, -halfZ),
-                Vector3.new( halfX, -halfY, -halfZ),
-                Vector3.new(-halfX, -halfY, -halfZ),
-            }
+            -- Calcular bbox proyectando TODAS las partes del cuerpo (tamaño visual real)
             local minX, minY, maxX, maxY = math.huge, math.huge, -math.huge, -math.huge
-            local allOnScreen = true
-            for _, offset in ipairs(corners) do
-                local worldPos = rootCF:PointToWorldSpace(offset)
-                local screenPos, onScreen = camera:WorldToViewportPoint(worldPos)
-                if not onScreen then allOnScreen = false end
-                if screenPos.Z > 0 then  -- delante de la cámara
-                    minX = math.min(minX, screenPos.X)
-                    minY = math.min(minY, screenPos.Y)
-                    maxX = math.max(maxX, screenPos.X)
-                    maxY = math.max(maxY, screenPos.Y)
+            for _, part in ipairs(char:GetDescendants()) do
+                if part:IsA("BasePart") and part.Name ~= "HumanoidRootPart" then
+                    local ps = part.Size
+                    local pcf = part.CFrame
+                    local hx, hy, hz = ps.X/2, ps.Y/2, ps.Z/2
+                    for _, off in ipairs({
+                        Vector3.new( hx, hy, hz), Vector3.new(-hx, hy, hz),
+                        Vector3.new( hx,-hy, hz), Vector3.new(-hx,-hy, hz),
+                        Vector3.new( hx, hy,-hz), Vector3.new(-hx, hy,-hz),
+                        Vector3.new( hx,-hy,-hz), Vector3.new(-hx,-hy,-hz),
+                    }) do
+                        local wp = pcf:PointToWorldSpace(off)
+                        local sc2, on2 = camera:WorldToViewportPoint(wp)
+                        if on2 and sc2.Z > 0 then
+                            minX = math.min(minX, sc2.X); minY = math.min(minY, sc2.Y)
+                            maxX = math.max(maxX, sc2.X); maxY = math.max(maxY, sc2.Y)
+                        end
+                    end
+                end
+            end
+            -- Fallback al root original si no se encontraron partes
+            if minX == math.huge then
+                local rs = _hbxOriginals[p] and _hbxOriginals[p].Size or Vector3.new(2,5,1)
+                local rcf = root.CFrame
+                local hx,hy,hz = rs.X/2, rs.Y/2, rs.Z/2
+                for _, off in ipairs({
+                    Vector3.new( hx, hy, hz), Vector3.new(-hx, hy, hz),
+                    Vector3.new( hx,-hy, hz), Vector3.new(-hx,-hy, hz),
+                    Vector3.new( hx, hy,-hz), Vector3.new(-hx, hy,-hz),
+                    Vector3.new( hx,-hy,-hz), Vector3.new(-hx,-hy,-hz),
+                }) do
+                    local wp = rcf:PointToWorldSpace(off)
+                    local sc2, on2 = camera:WorldToViewportPoint(wp)
+                    if on2 and sc2.Z > 0 then
+                        minX = math.min(minX, sc2.X); minY = math.min(minY, sc2.Y)
+                        maxX = math.max(maxX, sc2.X); maxY = math.max(maxY, sc2.Y)
+                    end
                 end
             end
             if maxX > minX and maxY > minY then
                 obj.hbx.Visible   = true
                 obj.hbx.Filled    = false
                 obj.hbx.Thickness = 1.5
-                -- Verde = hitbox activa, Rojo = detrás de pared (no mata)
                 obj.hbx.Color    = (S.hbx_vis_check and not isVis) and Color3.fromRGB(220, 80, 80) or Color3.fromRGB(100, 220, 100)
                 obj.hbx.Size     = Vector2.new(maxX - minX, maxY - minY)
                 obj.hbx.Position = Vector2.new(minX, minY)
