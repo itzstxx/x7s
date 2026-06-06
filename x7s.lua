@@ -918,6 +918,10 @@ local function makeKeybind(parent, titleKey, stateKey)
                 else
                     S[stateKey] = kn; save()
                     kbLbl.Text = getKeyLabel(kn)
+                    -- Si se cambió la tecla de GUI, actualizar el label del header
+                    if stateKey == "gui_key" and refreshers["gui_key"] then
+                        refreshers["gui_key"]()
+                    end
                 end
                 kbLbl.TextColor3 = accentColor; kbs.Color = Color3.fromRGB(58,58,58)
                 listening = false; conn:Disconnect()
@@ -929,6 +933,8 @@ local function makeKeybind(parent, titleKey, stateKey)
 
     local function refreshKb()
         kbLbl.Text = getKeyLabel(S[stateKey])
+        -- Si es la tecla de GUI, actualizar también el label del header
+        if stateKey == "gui_key" then updateGuiKeyLabel() end
     end
     refreshers[stateKey] = refreshKb
     return row
@@ -1288,7 +1294,7 @@ makeDropdown(cfgCard, "st_lang", "lang", {"English","Español"}, function(opt)
 end)
 
 secLabel(cfgCard, "· · · KEYBINDS · · ·")
-local keyCard2 = makeCard(pg_ajustes)
+local keyCard2 = makeCard(cfgCard)
 makeKeybind(keyCard2, "st_key", "gui_key")
 makeDivider(keyCard2)
 makeResetBtn(keyCard2, "st_r1", "st_r1_d", function()
@@ -1333,614 +1339,42 @@ local tabPages = {pages[1], pages[1], pages[1], pages[2]}  -- dummy, no se usa c
 --  DRAG — mover panel (por el header)
 -- ══════════════════════════════════════════════
 do
-    local drag, dragStart, startPos = false, nil, nil
+    local drag, dragStart = false, nil
+    local panelAbsStart = nil
+
     local dh = Instance.new("TextButton", header)
     dh.Size = UDim2.new(1, -30, 1, 0); dh.BackgroundTransparency = 1; dh.Text = ""
     dh.ZIndex = 5
+
     dh.InputBegan:Connect(function(inp)
         if inp.UserInputType == Enum.UserInputType.MouseButton1 then
-            drag = true; dragStart = inp.Position; startPos = panel.Position
+            drag = true
+            dragStart = inp.Position
+            -- Capturar posición absoluta actual del panel (independiente de Scale)
+            panelAbsStart = panel.AbsolutePosition
+            -- Convertir a posición pura por offset (Scale=0) para que el drag sea estable
+            panel.Position = UDim2.fromOffset(panelAbsStart.X, panelAbsStart.Y)
+            glow.Position  = UDim2.fromOffset(panelAbsStart.X - 10, panelAbsStart.Y - 10)
         end
     end)
+
     UserInputService.InputEnded:Connect(function(inp)
         if inp.UserInputType == Enum.UserInputType.MouseButton1 then drag = false end
     end)
+
     UserInputService.InputChanged:Connect(function(inp)
         if drag and inp.UserInputType == Enum.UserInputType.MouseMovement then
-            local d = inp.Position - dragStart
-            local sc = gui.AbsoluteSize
-            -- Permitir mover libremente, solo evitar que se pierda completamente fuera de pantalla
-            local newX = math.clamp(startPos.X.Offset + d.X, -(GW - 80), sc.X - 80)
-            local newY = math.clamp(startPos.Y.Offset + d.Y, 0, sc.Y - HDR_H)
-            panel.Position = UDim2.new(startPos.X.Scale, newX, startPos.Y.Scale, newY)
-            glow.Position = UDim2.new(
-                panel.Position.X.Scale, panel.Position.X.Offset - 10,
-                panel.Position.Y.Scale, panel.Position.Y.Offset - 10
-            )
+            local d   = inp.Position - dragStart
+            local sc  = gui.AbsoluteSize
+            local newX = math.clamp(panelAbsStart.X + d.X, 0, sc.X - GW)
+            local newY = math.clamp(panelAbsStart.Y + d.Y, 0, sc.Y - GH)
+            panel.Position = UDim2.fromOffset(newX, newY)
+            glow.Position  = UDim2.fromOffset(newX - 10, newY - 10)
         end
     end)
 end
 
--- Legacy tabbed UI from the previous build. The Figma sidebar GUI above is the
--- active interface; keep this block inert so it cannot duplicate controls or
--- shadow the live refresh callbacks.
-if false then
-local refreshers = {}
 
-local function secLabel(parent, text)
-    local f = Instance.new("Frame", parent)
-    f.Size = UDim2.new(1, 0, 0, 22); f.BackgroundTransparency = 1
-    local l = Instance.new("TextLabel", f)
-    l.Size = UDim2.new(1, 0, 1, 0); l.BackgroundTransparency = 1
-    l.Text = text:upper(); l.TextColor3 = C.DIM
-    l.Font = Enum.Font.GothamBold; l.TextSize = 10
-    l.TextXAlignment = Enum.TextXAlignment.Left
-    return f
-end
-
-local function makeCard(parent)
-    local card = Instance.new("Frame", parent)
-    card.Size = UDim2.new(1, 0, 0, 0)
-    card.AutomaticSize = Enum.AutomaticSize.Y
-    card.BackgroundColor3 = C.CARD; card.BorderSizePixel = 0
-    Instance.new("UICorner", card).CornerRadius = UDim.new(0, 12)
-    local cs = Instance.new("UIStroke", card)
-    cs.Color = C.BORDER; cs.Transparency = 0.6; cs.Thickness = 1
-    local lay = Instance.new("UIListLayout", card)
-    lay.SortOrder = Enum.SortOrder.LayoutOrder; lay.Padding = UDim.new(0, 0)
-    card.ClipsDescendants = true
-    return card
-end
-
-local function makeDivider(parent)
-    local d = Instance.new("Frame", parent)
-    d.Size = UDim2.new(1, 0, 0, 1)
-    d.BackgroundColor3 = C.DIV; d.BorderSizePixel = 0
-    return d
-end
-
-local function makeToggle(parent, titleKey, descKey, stateKey, cb)
-    local title = L(titleKey) or titleKey
-    local desc = descKey and (L(descKey) or descKey) or nil
-    local hasDesc = desc and desc ~= ""
-    local rowH = hasDesc and 64 or 50
-
-    local row = Instance.new("Frame", parent)
-    row.Size = UDim2.new(1, 0, 0, rowH)
-    row.BackgroundTransparency = 1
-
-    local tl = Instance.new("TextLabel", row)
-    tl.BackgroundTransparency = 1
-    tl.Size = UDim2.new(1, -78, 0, 18)
-    tl.Position = UDim2.fromOffset(16, hasDesc and 13 or 16)
-    tl.Text = title; tl.TextColor3 = C.TEXT
-    tl.Font = Enum.Font.GothamMedium; tl.TextSize = 13
-    tl.TextXAlignment = Enum.TextXAlignment.Left; tl.TextTruncate = Enum.TextTruncate.AtEnd
-
-    if hasDesc then
-        local dl = Instance.new("TextLabel", row)
-        dl.BackgroundTransparency = 1
-        dl.Size = UDim2.new(1, -78, 0, 28)
-        dl.Position = UDim2.fromOffset(16, 30)
-        dl.Text = desc; dl.TextColor3 = C.DIM
-        dl.Font = Enum.Font.Gotham; dl.TextSize = 11
-        dl.TextXAlignment = Enum.TextXAlignment.Left; dl.TextWrapped = true
-    end
-
-    local TW, TH = 46, 26
-    local TS = 20
-    local track = Instance.new("Frame", row)
-    track.Size = UDim2.fromOffset(TW, TH)
-    track.Position = UDim2.new(1, -(TW + 14), 0.5, -(TH/2))
-    track.BorderSizePixel = 0
-    Instance.new("UICorner", track).CornerRadius = UDim.new(1, 0)
-
-    local thumb = Instance.new("Frame", track)
-    thumb.Size = UDim2.fromOffset(TS, TS)
-    thumb.BorderSizePixel = 0; thumb.BackgroundColor3 = C.THUMB
-    Instance.new("UICorner", thumb).CornerRadius = UDim.new(1, 0)
-
-    local function refresh()
-        local on = S[stateKey]
-        TweenService:Create(track, TI, {BackgroundColor3 = on and C.TOG_ON or C.TOG_OFF}):Play()
-        TweenService:Create(thumb, TI, {
-            Position = on and UDim2.fromOffset(TW - TS - 3, 3) or UDim2.fromOffset(3, 3),
-            BackgroundColor3 = on and C.THUMB or Color3.fromRGB(180, 170, 200),
-        }):Play()
-    end
-    refresh()
-    refreshers[stateKey] = refresh
-
-    local hit = Instance.new("TextButton", row)
-    hit.Size = UDim2.new(1, 0, 1, 0); hit.BackgroundTransparency = 1; hit.Text = ""
-    hit.MouseButton1Click:Connect(function()
-        S[stateKey] = not S[stateKey]; refresh(); save()
-        local state = S[stateKey]
-        showNotif("✝  "..title, state and L("n_on") or L("n_off"), state)
-        if cb then cb(state) end
-    end)
-    hit.MouseEnter:Connect(function()
-        TweenService:Create(row, TI, {BackgroundColor3 = Color3.fromRGB(20,16,30)}):Play()
-        row.BackgroundTransparency = 0
-        Instance.new("UICorner", row).CornerRadius = UDim.new(0, 12)
-    end)
-    hit.MouseLeave:Connect(function()
-        TweenService:Create(row, TI, {BackgroundTransparency = 1}):Play()
-    end)
-    return row
-end
-
-local function makeSlider(parent, titleKey, stateKey, mn, mx)
-    local title = L(titleKey) or titleKey
-    local row = Instance.new("Frame", parent)
-    row.Size = UDim2.new(1, 0, 0, 60)
-    row.BackgroundTransparency = 1
-
-    local valLabel = Instance.new("TextLabel", row)
-    valLabel.BackgroundTransparency = 1
-    valLabel.Size = UDim2.new(0, 30, 0, 18); valLabel.Position = UDim2.new(1, -44, 0, 14)
-    valLabel.Text = tostring(S[stateKey]); valLabel.TextColor3 = C.ACCENT
-    valLabel.Font = Enum.Font.GothamBold; valLabel.TextSize = 13
-    valLabel.TextXAlignment = Enum.TextXAlignment.Right
-
-    local tl = Instance.new("TextLabel", row)
-    tl.BackgroundTransparency = 1; tl.Size = UDim2.new(1, -80, 0, 18)
-    tl.Position = UDim2.fromOffset(16, 14)
-    tl.Text = title; tl.TextColor3 = C.TEXT
-    tl.Font = Enum.Font.GothamMedium; tl.TextSize = 13
-    tl.TextXAlignment = Enum.TextXAlignment.Left
-
-    local track = Instance.new("Frame", row)
-    track.Size = UDim2.new(1, -32, 0, 4); track.Position = UDim2.fromOffset(16, 38)
-    track.BackgroundColor3 = Color3.fromRGB(30, 24, 44); track.BorderSizePixel = 0
-    Instance.new("UICorner", track).CornerRadius = UDim.new(1, 0)
-
-    local fill = Instance.new("Frame", track)
-    fill.BackgroundColor3 = C.ACCENT; fill.BorderSizePixel = 0
-    Instance.new("UICorner", fill).CornerRadius = UDim.new(1, 0)
-
-    local thumb = Instance.new("Frame", track)
-    thumb.Size = UDim2.fromOffset(14, 14); thumb.BackgroundColor3 = C.ACCENT
-    thumb.BorderSizePixel = 0; Instance.new("UICorner", thumb).CornerRadius = UDim.new(1, 0)
-
-    local function setVal(v)
-        v = math.clamp(math.floor(v + 0.5), mn, mx)
-        S[stateKey] = v; valLabel.Text = tostring(v)
-        local pct = (v - mn) / (mx - mn)
-        TweenService:Create(fill, TweenInfo.new(0.12), {Size = UDim2.new(pct, 0, 1, 0)}):Play()
-        TweenService:Create(thumb, TweenInfo.new(0.12), {Position = UDim2.new(pct, -7, 0.5, -7)}):Play()
-    end
-    setVal(S[stateKey])
-
-    local sliding = false
-    local function slide(inp)
-        local abs = track.AbsolutePosition; local sz = track.AbsoluteSize
-        if sz.X <= 0 then return end
-        setVal(mn + math.clamp((inp.Position.X - abs.X) / sz.X, 0, 1) * (mx - mn))
-    end
-    track.InputBegan:Connect(function(inp)
-        if inp.UserInputType == Enum.UserInputType.MouseButton1 then sliding = true; slide(inp) end
-    end)
-    UserInputService.InputChanged:Connect(function(inp)
-        if sliding and inp.UserInputType == Enum.UserInputType.MouseMovement then slide(inp) end
-    end)
-    UserInputService.InputEnded:Connect(function(inp)
-        if inp.UserInputType == Enum.UserInputType.MouseButton1 and sliding then sliding = false; save() end
-    end)
-    return row
-end
-
-local function makeKeybind(parent, titleKey, stateKey)
-    local title = L(titleKey) or titleKey
-    local row = Instance.new("Frame", parent)
-    row.Size = UDim2.new(1, 0, 0, 50)
-    row.BackgroundTransparency = 1
-
-    local tl = Instance.new("TextLabel", row)
-    tl.BackgroundTransparency = 1; tl.Size = UDim2.new(1, -80, 0, 18)
-    tl.Position = UDim2.fromOffset(16, 16); tl.Text = title
-    tl.TextColor3 = C.TEXT; tl.Font = Enum.Font.GothamMedium; tl.TextSize = 13
-    tl.TextXAlignment = Enum.TextXAlignment.Left
-
-    local keyBtn = Instance.new("TextButton", row)
-    keyBtn.Size = UDim2.fromOffset(40, 28); keyBtn.Position = UDim2.new(1, -54, 0.5, -14)
-    keyBtn.BackgroundColor3 = C.KEY_BG; keyBtn.BorderSizePixel = 0
-    keyBtn.Text = S[stateKey]; keyBtn.TextColor3 = C.KEY_TXT
-    keyBtn.Font = Enum.Font.GothamBold; keyBtn.TextSize = 11
-    keyBtn.AutoButtonColor = false
-    Instance.new("UICorner", keyBtn).CornerRadius = UDim.new(0, 6)
-    local ks = Instance.new("UIStroke", keyBtn); ks.Color = C.BORDER; ks.Transparency = 0.4; ks.Thickness = 1
-
-    local listening = false
-    keyBtn.MouseButton1Click:Connect(function()
-        if listening then return end
-        listening = true
-        keyBtn.Text = "..."; keyBtn.TextColor3 = C.ACCENT2
-        local conn; conn = UserInputService.InputBegan:Connect(function(inp, proc)
-            if proc then return end
-            if inp.UserInputType == Enum.UserInputType.Keyboard then
-                local kn = inp.KeyCode.Name
-                S[stateKey] = kn; keyBtn.Text = kn; keyBtn.TextColor3 = C.KEY_TXT
-                listening = false; conn:Disconnect()
-                save(); showNotif("✝  "..title, kn, true)
-            end
-        end)
-    end)
-    refreshers[stateKey] = function()
-        keyBtn.Text = S[stateKey]
-    end
-    return row
-end
-
-local function makeDropdown(parent, titleKey, stateKey, options, cb)
-    local title = L(titleKey) or titleKey
-    local container = Instance.new("Frame", parent)
-    container.Size = UDim2.new(1, 0, 0, 50)
-    container.BackgroundTransparency = 1
-    container.ClipsDescendants = false
-
-    local row = Instance.new("Frame", container)
-    row.Size = UDim2.new(1, 0, 0, 50); row.BackgroundTransparency = 1
-
-    local tl = Instance.new("TextLabel", row)
-    tl.BackgroundTransparency = 1; tl.Size = UDim2.new(1, -120, 0, 18)
-    tl.Position = UDim2.fromOffset(16, 16); tl.Text = title
-    tl.TextColor3 = C.TEXT; tl.Font = Enum.Font.GothamMedium; tl.TextSize = 13
-    tl.TextXAlignment = Enum.TextXAlignment.Left
-
-    local valLbl = Instance.new("TextLabel", row)
-    valLbl.BackgroundTransparency = 1; valLbl.Size = UDim2.fromOffset(90, 18)
-    valLbl.Position = UDim2.new(1, -106, 0, 16)
-    valLbl.Text = S[stateKey]; valLbl.TextColor3 = C.DIM
-    valLbl.Font = Enum.Font.Gotham; valLbl.TextSize = 12
-    valLbl.TextXAlignment = Enum.TextXAlignment.Right
-
-    local arrow = Instance.new("TextLabel", row)
-    arrow.BackgroundTransparency = 1; arrow.Size = UDim2.fromOffset(14, 18)
-    arrow.Position = UDim2.new(1, -18, 0, 16)
-    arrow.Text = "▾"; arrow.TextColor3 = C.DIM
-    arrow.Font = Enum.Font.GothamBold; arrow.TextSize = 11
-
-    local optH = 36
-    local dropFrame = Instance.new("Frame", container)
-    dropFrame.Size = UDim2.new(1, 0, 0, 0)
-    dropFrame.Position = UDim2.fromOffset(0, 50)
-    dropFrame.BackgroundColor3 = Color3.fromRGB(18, 14, 26)
-    dropFrame.BorderSizePixel = 0; dropFrame.ClipsDescendants = true
-    dropFrame.ZIndex = 50; dropFrame.Visible = false
-    Instance.new("UICorner", dropFrame).CornerRadius = UDim.new(0, 10)
-    local ds = Instance.new("UIStroke", dropFrame); ds.Color = C.BORDER; ds.Transparency = 0.3; ds.Thickness = 1
-
-    for idx, opt in ipairs(options) do
-        local ob = Instance.new("TextButton", dropFrame)
-        ob.Size = UDim2.new(1, 0, 0, optH)
-        ob.Position = UDim2.fromOffset(0, (idx-1)*optH)
-        ob.BackgroundTransparency = 1; ob.BorderSizePixel = 0
-        ob.Text = opt; ob.Font = Enum.Font.GothamMedium; ob.TextSize = 12
-        ob.TextColor3 = S[stateKey] == opt and C.ACCENT or C.TEXT
-        ob.ZIndex = 51; ob.AutoButtonColor = false
-        ob.MouseButton1Click:Connect(function()
-            S[stateKey] = opt; valLbl.Text = opt
-            for _, b in ipairs(dropFrame:GetChildren()) do
-                if b:IsA("TextButton") then b.TextColor3 = (b.Text == opt) and C.ACCENT or C.TEXT end
-            end
-            TweenService:Create(dropFrame, TIF, {Size = UDim2.new(1, 0, 0, 0)}):Play()
-            task.delay(0.25, function() dropFrame.Visible = false end)
-            container.Size = UDim2.new(1, 0, 0, 50); arrow.Text = "▾"
-            save(); if cb then cb(opt) end
-        end)
-    end
-
-    local open = false
-    local hitArea = Instance.new("TextButton", row)
-    hitArea.Size = UDim2.new(1, 0, 1, 0); hitArea.BackgroundTransparency = 1; hitArea.Text = ""; hitArea.ZIndex = 5
-    hitArea.MouseButton1Click:Connect(function()
-        open = not open
-        if open then
-            dropFrame.Visible = true; dropFrame.Size = UDim2.new(1, 0, 0, 0)
-            TweenService:Create(dropFrame, TIF, {Size = UDim2.new(1, 0, 0, #options * optH)}):Play()
-            container.Size = UDim2.new(1, 0, 0, 50 + #options * optH)
-            arrow.Text = "▴"
-        else
-            TweenService:Create(dropFrame, TIF, {Size = UDim2.new(1, 0, 0, 0)}):Play()
-            task.delay(0.25, function() dropFrame.Visible = false end)
-            container.Size = UDim2.new(1, 0, 0, 50); arrow.Text = "▾"
-        end
-    end)
-    return container
-end
-
-local function makeResetBtn(parent, titleKey, descKey, cb)
-    local title = L(titleKey) or titleKey
-    local desc = descKey and (L(descKey) or descKey) or nil
-    local hasDesc = desc and desc ~= ""
-    local rowH = hasDesc and 62 or 48
-
-    local row = Instance.new("Frame", parent)
-    row.Size = UDim2.new(1, 0, 0, rowH); row.BackgroundTransparency = 1
-
-    local tl = Instance.new("TextLabel", row)
-    tl.BackgroundTransparency = 1; tl.Size = UDim2.new(1, -56, 0, 18)
-    tl.Position = UDim2.fromOffset(16, hasDesc and 10 or 15)
-    tl.Text = title; tl.TextColor3 = C.TEXT
-    tl.Font = Enum.Font.GothamMedium; tl.TextSize = 13
-    tl.TextXAlignment = Enum.TextXAlignment.Left
-
-    if hasDesc then
-        local dl = Instance.new("TextLabel", row)
-        dl.BackgroundTransparency = 1; dl.Size = UDim2.new(1, -56, 0, 26)
-        dl.Position = UDim2.fromOffset(16, 28)
-        dl.Text = desc; dl.TextColor3 = C.DIM
-        dl.Font = Enum.Font.Gotham; dl.TextSize = 11
-        dl.TextXAlignment = Enum.TextXAlignment.Left; dl.TextWrapped = true
-    end
-
-    local btn = Instance.new("TextButton", row)
-    btn.Size = UDim2.fromOffset(30, 30); btn.Position = UDim2.new(1, -44, 0.5, -15)
-    btn.BackgroundColor3 = C.KEY_BG; btn.BorderSizePixel = 0
-    btn.Text = "↺"; btn.TextColor3 = C.ACCENT
-    btn.Font = Enum.Font.GothamBold; btn.TextSize = 16; btn.AutoButtonColor = false
-    Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 8)
-    local rs = Instance.new("UIStroke", btn); rs.Color = C.BORDER; rs.Transparency = 0.4; rs.Thickness = 1
-
-    btn.MouseButton1Click:Connect(function()
-        TweenService:Create(btn, TI, {Rotation = 360}):Play()
-        task.delay(0.2, function() btn.Rotation = 0 end)
-        if cb then cb() end
-        showNotif("✝  "..title, L("n_reset"), true)
-    end)
-    return row
-end
-
--- ══════════════════════════════════════════════
---  COLOR PICKER (RGB Sliders) para ESP
--- ══════════════════════════════════════════════
-local function makeColorPicker(parent, titleKey, descKey, rKey, gKey, bKey, onChange)
-    local title = L(titleKey) or titleKey
-    local desc  = descKey and (L(descKey) or descKey) or nil
-
-    local wrap = Instance.new("Frame", parent)
-    wrap.Size = UDim2.new(1, 0, 0, 0)
-    wrap.AutomaticSize = Enum.AutomaticSize.Y
-    wrap.BackgroundTransparency = 1
-
-    -- Header row with preview swatch
-    local hRow = Instance.new("Frame", wrap)
-    hRow.Size = UDim2.new(1, 0, 0, 50); hRow.BackgroundTransparency = 1
-
-    local tl = Instance.new("TextLabel", hRow)
-    tl.BackgroundTransparency = 1; tl.Size = UDim2.new(1, -70, 0, 18)
-    tl.Position = UDim2.fromOffset(16, 10)
-    tl.Text = title; tl.TextColor3 = C.TEXT
-    tl.Font = Enum.Font.GothamMedium; tl.TextSize = 13
-    tl.TextXAlignment = Enum.TextXAlignment.Left
-
-    if desc and desc ~= "" then
-        local dl = Instance.new("TextLabel", hRow)
-        dl.BackgroundTransparency = 1; dl.Size = UDim2.new(1, -70, 0, 20)
-        dl.Position = UDim2.fromOffset(16, 28)
-        dl.Text = desc; dl.TextColor3 = C.DIM
-        dl.Font = Enum.Font.Gotham; dl.TextSize = 11
-        dl.TextXAlignment = Enum.TextXAlignment.Left; dl.TextWrapped = true
-    end
-
-    -- Color swatch
-    local swatch = Instance.new("Frame", hRow)
-    swatch.Size = UDim2.fromOffset(28, 28)
-    swatch.Position = UDim2.new(1, -44, 0.5, -14)
-    swatch.BackgroundColor3 = Color3.fromRGB(S[rKey], S[gKey], S[bKey])
-    swatch.BorderSizePixel = 0
-    Instance.new("UICorner", swatch).CornerRadius = UDim.new(0, 8)
-    local ss = Instance.new("UIStroke", swatch); ss.Color = C.BORDER; ss.Transparency = 0.2; ss.Thickness = 1
-
-    local function updateSwatch()
-        swatch.BackgroundColor3 = Color3.fromRGB(S[rKey], S[gKey], S[bKey])
-        if onChange then onChange() end
-    end
-
-    -- Slider builder (inline, no stateKey in S, manual)
-    local function makeRGBSlider(parent2, label, valKey, colorFn)
-        local sRow = Instance.new("Frame", parent2)
-        sRow.Size = UDim2.new(1, 0, 0, 44); sRow.BackgroundTransparency = 1
-
-        local vLbl = Instance.new("TextLabel", sRow)
-        vLbl.BackgroundTransparency = 1; vLbl.Size = UDim2.fromOffset(30, 16)
-        vLbl.Position = UDim2.new(1, -44, 0, 6)
-        vLbl.Text = tostring(S[valKey]); vLbl.TextColor3 = colorFn()
-        vLbl.Font = Enum.Font.GothamBold; vLbl.TextSize = 12
-        vLbl.TextXAlignment = Enum.TextXAlignment.Right
-
-        local lbl = Instance.new("TextLabel", sRow)
-        lbl.BackgroundTransparency = 1; lbl.Size = UDim2.new(0, 60, 0, 16)
-        lbl.Position = UDim2.fromOffset(16, 6)
-        lbl.Text = label; lbl.TextColor3 = colorFn()
-        lbl.Font = Enum.Font.GothamBold; lbl.TextSize = 11
-        lbl.TextXAlignment = Enum.TextXAlignment.Left
-
-        local trk = Instance.new("Frame", sRow)
-        trk.Size = UDim2.new(1, -32, 0, 4); trk.Position = UDim2.fromOffset(16, 28)
-        trk.BackgroundColor3 = Color3.fromRGB(30, 24, 44); trk.BorderSizePixel = 0
-        Instance.new("UICorner", trk).CornerRadius = UDim.new(1, 0)
-
-        local fill = Instance.new("Frame", trk)
-        fill.BackgroundColor3 = colorFn(); fill.BorderSizePixel = 0
-        Instance.new("UICorner", fill).CornerRadius = UDim.new(1, 0)
-
-        local thumb2 = Instance.new("Frame", trk)
-        thumb2.Size = UDim2.fromOffset(14, 14); thumb2.BackgroundColor3 = colorFn()
-        thumb2.BorderSizePixel = 0; Instance.new("UICorner", thumb2).CornerRadius = UDim.new(1, 0)
-
-        local function setV(v)
-            v = math.clamp(math.floor(v + 0.5), 0, 255)
-            S[valKey] = v; vLbl.Text = tostring(v)
-            local pct = v / 255
-            TweenService:Create(fill,   TweenInfo.new(0.1), {Size = UDim2.new(pct, 0, 1, 0)}):Play()
-            TweenService:Create(thumb2, TweenInfo.new(0.1), {Position = UDim2.new(pct, -7, 0.5, -7)}):Play()
-            updateSwatch(); save()
-        end
-        setV(S[valKey])
-
-        local sliding2 = false
-        local function slide2(inp)
-            local abs = trk.AbsolutePosition; local sz = trk.AbsoluteSize
-            if sz.X <= 0 then return end
-            setV((inp.Position.X - abs.X) / sz.X * 255)
-        end
-        trk.InputBegan:Connect(function(inp)
-            if inp.UserInputType == Enum.UserInputType.MouseButton1 then sliding2 = true; slide2(inp) end
-        end)
-        UserInputService.InputChanged:Connect(function(inp)
-            if sliding2 and inp.UserInputType == Enum.UserInputType.MouseMovement then slide2(inp) end
-        end)
-        UserInputService.InputEnded:Connect(function(inp)
-            if inp.UserInputType == Enum.UserInputType.MouseButton1 and sliding2 then sliding2 = false end
-        end)
-    end
-
-    local sliderWrap = Instance.new("Frame", wrap)
-    sliderWrap.Size = UDim2.new(1, 0, 0, 0)
-    sliderWrap.AutomaticSize = Enum.AutomaticSize.Y
-    sliderWrap.BackgroundTransparency = 1
-    local slay = Instance.new("UIListLayout", sliderWrap); slay.SortOrder = Enum.SortOrder.LayoutOrder
-    local sp2 = Instance.new("UIPadding", sliderWrap); sp2.PaddingLeft = UDim.new(0, 8)
-
-    makeRGBSlider(sliderWrap, "R", rKey, function() return Color3.fromRGB(220, 80, 80) end)
-    makeRGBSlider(sliderWrap, "G", gKey, function() return Color3.fromRGB(80, 200, 80) end)
-    makeRGBSlider(sliderWrap, "B", bKey, function() return Color3.fromRGB(80, 120, 220) end)
-
-    return wrap
-end
-
--- ══════════════════════════════════════════════
---  TAB 1 — ESP
--- ══════════════════════════════════════════════
-local pg_esp = tabPages[1]
-secLabel(pg_esp, "· · · ESP · · ·")
-local espCard = makeCard(pg_esp)
-makeToggle(espCard, "esp_on",    "esp_on_d",    "esp_on")
-makeDivider(espCard)
-makeToggle(espCard, "esp_names", nil,           "esp_names")
-makeDivider(espCard)
-makeToggle(espCard, "esp_avatar","esp_avatar_d","esp_avatar")
-makeDivider(espCard)
-makeToggle(espCard, "esp_lines", "esp_lines_d", "esp_lines")
-makeDivider(espCard)
-makeColorPicker(espCard, "esp_color", "esp_color_d", "esp_char_r", "esp_char_g", "esp_char_b", nil)
-makeDivider(espCard)
-makeKeybind(espCard, "esp_key", "esp_key")
-
--- ══════════════════════════════════════════════
---  TAB 2 — HITBOX  (con Visible Check)
--- ══════════════════════════════════════════════
-local pg_hbx = tabPages[2]
-secLabel(pg_hbx, "· · · HITBOX · · ·")
-local hbxCard = makeCard(pg_hbx)
-makeToggle(hbxCard, "hbx_on", "hbx_on_d", "hbx_on", function(on)
-    if not on then
-        for _, p in ipairs(Players:GetPlayers()) do
-            if p ~= player and p.Character then
-                local root = p.Character:FindFirstChild("HumanoidRootPart")
-                if root then root.Size = Vector3.new(2, 2, 1) end
-            end
-        end
-    end
-end)
-makeDivider(hbxCard)
-makeSlider(hbxCard, "hbx_size", "hbx_size", 1, 20)
-makeDivider(hbxCard)
-makeToggle(hbxCard, "hbx_show", nil, "hbx_show")
-makeDivider(hbxCard)
--- ► Visible Check — opción nueva
-makeToggle(hbxCard, "hbx_vis", "hbx_vis_d", "hbx_vis_check")
-makeDivider(hbxCard)
-makeKeybind(hbxCard, "hbx_key", "hbx_key")
-
--- ══════════════════════════════════════════════
---  TAB 3 — TRIGGERBOT
--- ══════════════════════════════════════════════
-local pg_trg = tabPages[3]
-secLabel(pg_trg, "· · · TRIGGERBOT · · ·")
-local trgCard = makeCard(pg_trg)
-makeToggle(trgCard, "trg_on", "trg_on_d", "trg_on")
-makeDivider(trgCard)
-makeKeybind(trgCard, "trg_key", "trg_key")
-
--- ══════════════════════════════════════════════
---  TAB 4 — CFG  (Settings + Event, sin Kill)
--- ══════════════════════════════════════════════
-local pg_cfg = tabPages[4]
-
-secLabel(pg_cfg, "· · · DISPLAY · · ·")
-local dispCard = makeCard(pg_cfg)
-makeToggle(dispCard, "st_bg", nil, "panel_bg", function(on)
-    panel.BackgroundTransparency = on and 0 or 0.15
-end)
-makeDivider(dispCard)
-makeToggle(dispCard, "st_notif", nil, "notifs")
-
-secLabel(pg_cfg, "· · · LANGUAGE · · ·")
-local langCard = makeCard(pg_cfg)
-makeDropdown(langCard, "st_lang", "lang", {"English", "Español"}, function(opt)
-    showNotif("Language", opt, true)
-end)
-
-secLabel(pg_cfg, "· · · KEYBINDS · · ·")
-local keyCard = makeCard(pg_cfg)
-makeKeybind(keyCard, "st_key", "gui_key")
-makeDivider(keyCard)
-makeResetBtn(keyCard, "st_r1", "st_r1_d", function()
-    S.gui_key = "L"
-    if refreshers["gui_key"] then refreshers["gui_key"]() end
-    save()
-end)
-makeDivider(keyCard)
-makeResetBtn(keyCard, "st_r2", "st_r2_d", function()
-    S.esp_key = "T"; S.hbx_key = "G"; S.trg_key = "R"; S.gui_key = "L"
-    for k, fn in pairs(refreshers) do
-        if k:find("_key") then fn() end
-    end
-    save()
-end)
-
-secLabel(pg_cfg, "· · · EVENT · · ·")
-local evtCard = makeCard(pg_cfg)
-makeToggle(evtCard, "ev_sum", "ev_sum_d", "summer_on", function(on)
-    showNotif("Summer 2026", on and "Auto-collect ON" or "Auto-collect OFF", on)
-end)
-
--- ══════════════════════════════════════════════
---  DRAG — mover panel
--- ══════════════════════════════════════════════
-do
-    local drag, dragStart, startPos = false, nil, nil
-    local dh = Instance.new("TextButton", header)
-    dh.Size = UDim2.new(1, 0, 1, 0); dh.BackgroundTransparency = 1; dh.Text = ""
-    dh.ZIndex = 2
-    dh.InputBegan:Connect(function(inp)
-        if inp.UserInputType == Enum.UserInputType.MouseButton1 then
-            drag = true; dragStart = inp.Position; startPos = panel.Position
-        end
-    end)
-    UserInputService.InputEnded:Connect(function(inp)
-        if inp.UserInputType == Enum.UserInputType.MouseButton1 then drag = false end
-    end)
-    UserInputService.InputChanged:Connect(function(inp)
-        if drag and inp.UserInputType == Enum.UserInputType.MouseMovement then
-            local d = inp.Position - dragStart
-            local sc = gui.AbsoluteSize
-            panel.Position = UDim2.new(
-                startPos.X.Scale, math.clamp(startPos.X.Offset + d.X, 0, sc.X - GW),
-                startPos.Y.Scale, math.clamp(startPos.Y.Offset + d.Y, 0, sc.Y - GH)
-            )
-            glow.Position = UDim2.new(
-                panel.Position.X.Scale, panel.Position.X.Offset - 12,
-                panel.Position.Y.Scale, panel.Position.Y.Offset - 12
-            )
-        end
-    end)
-end
-
-end
 
 -- ══════════════════════════════════════════════
 --  CHARACTER ESP — Highlight por partes + Avatar
@@ -2276,7 +1710,7 @@ RunService.RenderStepped:Connect(function()
             obj.line.Visible = false
             obj.hbx.Visible = false
         end
-        if not char or not S.esp_on then allOff(); continue end
+        if not char then allOff(); continue end
         local root = char:FindFirstChild("HumanoidRootPart")
         local hum  = char:FindFirstChildOfClass("Humanoid")
         if not root or not hum or hum.Health <= 0 then allOff(); continue end
