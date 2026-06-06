@@ -1997,5 +1997,5 @@ task.defer(function()
     panel.BackgroundTransparency = S.panel_bg and 0 or 0.15
 end)
 
-print("✝  x7s Top Loaded — "..player.Name.."  ✝")
+print("✝  x7s  Loaded — "..player.Name.."  ✝")
 print("   "..S.gui_key.." = Toggle GUI  ·  "..S.esp_key.." = ESP  ·  "..S.hbx_key.." = Hitbox  ·  "..S.trg_key.." = Trigger")
