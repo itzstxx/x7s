@@ -1662,20 +1662,20 @@ local function applyHitbox(p, on)
                 Massless   = root.Massless,
             }
         end
+        local expanded = false
         if S.hbx_vis_check then
             local myChar2 = player.Character
-            -- Restaurar tamaño original ANTES de hacer el raycast
             pcall(function() root.Size = _hbxOriginals[p].Size end)
             local vis = isVisible(root, myChar2)
             if vis then
                 local s = S.hbx_size
                 pcall(function()
                     root.Size       = Vector3.new(s * 2, s * 2, s * 2)
-                    root.CanCollide = false   -- no bloquea el paso del jugador
-                    root.Massless   = true    -- no empuja ni tiene peso
+                    root.CanCollide = false
+                    root.Massless   = true
                 end)
+                expanded = true
             else
-                -- Detrás de pared: restaurar para no bloquear
                 pcall(function()
                     root.Size       = _hbxOriginals[p].Size
                     root.CanCollide = _hbxOriginals[p].CanCollide
@@ -1689,7 +1689,28 @@ local function applyHitbox(p, on)
                 root.CanCollide = false
                 root.Massless   = true
             end)
+            expanded = true
         end
+        -- SelectionBox 3D (Show Hitbox visual igual a RysHub)
+        pcall(function()
+            local box = root:FindFirstChild("HBX_BOX")
+            if S.hbx_show and expanded then
+                if not box then
+                    box = Instance.new("SelectionBox")
+                    box.Name = "HBX_BOX"
+                    box.Adornee = root
+                    box.LineThickness = 0.04
+                    box.SurfaceTransparency = 0.75
+                    box.Parent = root
+                end
+                local col = getEspColor()
+                box.Color3 = col
+                box.SurfaceColor3 = col
+                box.Visible = true
+            else
+                if box then box.Visible = false end
+            end
+        end)
     else
         if _hbxOriginals[p] then
             pcall(function()
@@ -1699,6 +1720,10 @@ local function applyHitbox(p, on)
             end)
             _hbxOriginals[p] = nil
         end
+        pcall(function()
+            local box = root:FindFirstChild("HBX_BOX")
+            if box then box:Destroy() end
+        end)
     end
 end
 
@@ -1845,64 +1870,9 @@ RunService.RenderStepped:Connect(function()
             obj.line.Visible = false
         end
 
-        -- Hitbox visual: caja ajustada al cuerpo visible del personaje (igual que RysHub)
-        if S.hbx_on and S.hbx_show and onS and HAS_DRAWING then
-            local isVis = myChar and isVisible(root, myChar)
-            local minX2, minY2, maxX2, maxY2 = math.huge, math.huge, -math.huge, -math.huge
-            -- Proyectar cada BasePart del personaje (excluyendo HumanoidRootPart expandido)
-            for _, part in ipairs(char:GetDescendants()) do
-                if part:IsA("BasePart") and part.Name ~= "HumanoidRootPart" then
-                    local ps = part.Size
-                    local pcf = part.CFrame
-                    local hx2, hy2, hz2 = ps.X/2, ps.Y/2, ps.Z/2
-                    for _, off in ipairs({
-                        Vector3.new( hx2, hy2, hz2), Vector3.new(-hx2, hy2, hz2),
-                        Vector3.new( hx2,-hy2, hz2), Vector3.new(-hx2,-hy2, hz2),
-                        Vector3.new( hx2, hy2,-hz2), Vector3.new(-hx2, hy2,-hz2),
-                        Vector3.new( hx2,-hy2,-hz2), Vector3.new(-hx2,-hy2,-hz2),
-                    }) do
-                        local wp2 = pcf:PointToWorldSpace(off)
-                        local sc3, on3 = camera:WorldToViewportPoint(wp2)
-                        if on3 and sc3.Z > 0 then
-                            minX2 = math.min(minX2, sc3.X); minY2 = math.min(minY2, sc3.Y)
-                            maxX2 = math.max(maxX2, sc3.X); maxY2 = math.max(maxY2, sc3.Y)
-                        end
-                    end
-                end
-            end
-            -- Fallback: si no se encontraron partes, usar el tamaño original del root (sin expandir)
-            if minX2 == math.huge then
-                local rs = _hbxOriginals[p] and _hbxOriginals[p].Size or Vector3.new(2, 5, 1)
-                local rcf = root.CFrame
-                local hx2, hy2, hz2 = rs.X/2, rs.Y/2, rs.Z/2
-                for _, off in ipairs({
-                    Vector3.new( hx2, hy2, hz2), Vector3.new(-hx2, hy2, hz2),
-                    Vector3.new( hx2,-hy2, hz2), Vector3.new(-hx2,-hy2, hz2),
-                    Vector3.new( hx2, hy2,-hz2), Vector3.new(-hx2, hy2,-hz2),
-                    Vector3.new( hx2,-hy2,-hz2), Vector3.new(-hx2,-hy2,-hz2),
-                }) do
-                    local wp2 = rcf:PointToWorldSpace(off)
-                    local sc3, on3 = camera:WorldToViewportPoint(wp2)
-                    if on3 and sc3.Z > 0 then
-                        minX2 = math.min(minX2, sc3.X); minY2 = math.min(minY2, sc3.Y)
-                        maxX2 = math.max(maxX2, sc3.X); maxY2 = math.max(maxY2, sc3.Y)
-                    end
-                end
-            end
-            if maxX2 > minX2 and maxY2 > minY2 then
-                local hbxCol = (S.hbx_vis_check and not isVis) and Color3.fromRGB(220, 80, 80) or getEspColor()
-                obj.hbx.Visible   = true
-                obj.hbx.Filled    = false
-                obj.hbx.Thickness = 1.5
-                obj.hbx.Color     = hbxCol
-                obj.hbx.Size      = Vector2.new(maxX2 - minX2, maxY2 - minY2)
-                obj.hbx.Position  = Vector2.new(minX2, minY2)
-            else
-                obj.hbx.Visible = false
-            end
-        else
-            obj.hbx.Visible = false
-        end
+        -- Show Hitbox: manejado por SelectionBox 3D en applyHitbox (igual a RysHub)
+        -- El Drawing hbx ya no se usa para este propósito
+        obj.hbx.Visible = false
     end
 end)
 
@@ -1977,6 +1947,16 @@ UserInputService.InputBegan:Connect(function(inp, proc)
                 end
             end
             for _, obj in pairs(espObjects) do obj.hbx.Visible = false end
+            -- Destruir SelectionBox 3D de todos los jugadores
+            for _, ep in ipairs(Players:GetPlayers()) do
+                if ep ~= player and ep.Character then
+                    local r3 = ep.Character:FindFirstChild("HumanoidRootPart")
+                    if r3 then
+                        local box = r3:FindFirstChild("HBX_BOX")
+                        if box then box:Destroy() end
+                    end
+                end
+            end
         end
         showNotif("✝  Hitbox", S.hbx_on and L("n_on") or L("n_off"), S.hbx_on)
         return
