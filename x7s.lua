@@ -1843,60 +1843,28 @@ RunService.RenderStepped:Connect(function()
             obj.line.Visible = false
         end
 
-        -- Hitbox visual (caja en pantalla) — requiere Drawing
+        -- Hitbox visual (caja en pantalla, tamaño fijo en píxeles como RysHub) — requiere Drawing
         if S.hbx_on and S.hbx_show and onS and HAS_DRAWING then
             local isVis = myChar and isVisible(root, myChar)
-            -- Calcular bbox proyectando TODAS las partes del cuerpo (tamaño visual real)
-            local minX, minY, maxX, maxY = math.huge, math.huge, -math.huge, -math.huge
-            for _, part in ipairs(char:GetDescendants()) do
-                if part:IsA("BasePart") and part.Name ~= "HumanoidRootPart" then
-                    local ps = part.Size
-                    local pcf = part.CFrame
-                    local hx, hy, hz = ps.X/2, ps.Y/2, ps.Z/2
-                    for _, off in ipairs({
-                        Vector3.new( hx, hy, hz), Vector3.new(-hx, hy, hz),
-                        Vector3.new( hx,-hy, hz), Vector3.new(-hx,-hy, hz),
-                        Vector3.new( hx, hy,-hz), Vector3.new(-hx, hy,-hz),
-                        Vector3.new( hx,-hy,-hz), Vector3.new(-hx,-hy,-hz),
-                    }) do
-                        local wp = pcf:PointToWorldSpace(off)
-                        local sc2, on2 = camera:WorldToViewportPoint(wp)
-                        if on2 and sc2.Z > 0 then
-                            minX = math.min(minX, sc2.X); minY = math.min(minY, sc2.Y)
-                            maxX = math.max(maxX, sc2.X); maxY = math.max(maxY, sc2.Y)
-                        end
-                    end
-                end
+            -- Tamaño fijo en píxeles: no cambia con la distancia
+            local HBX_W = 44
+            local HBX_H = 72
+            local cx = sp.X
+            local cy = sp.Y
+            -- Centrar la caja sobre el centro del personaje (ligeramente arriba del root)
+            local headPart2 = char:FindFirstChild("Head")
+            if headPart2 then
+                local hsp = camera:WorldToViewportPoint(headPart2.Position)
+                cy = (sp.Y + hsp.Y) / 2
             end
-            -- Fallback al root original si no se encontraron partes
-            if minX == math.huge then
-                local rs = _hbxOriginals[p] and _hbxOriginals[p].Size or Vector3.new(2,5,1)
-                local rcf = root.CFrame
-                local hx,hy,hz = rs.X/2, rs.Y/2, rs.Z/2
-                for _, off in ipairs({
-                    Vector3.new( hx, hy, hz), Vector3.new(-hx, hy, hz),
-                    Vector3.new( hx,-hy, hz), Vector3.new(-hx,-hy, hz),
-                    Vector3.new( hx, hy,-hz), Vector3.new(-hx, hy,-hz),
-                    Vector3.new( hx,-hy,-hz), Vector3.new(-hx,-hy,-hz),
-                }) do
-                    local wp = rcf:PointToWorldSpace(off)
-                    local sc2, on2 = camera:WorldToViewportPoint(wp)
-                    if on2 and sc2.Z > 0 then
-                        minX = math.min(minX, sc2.X); minY = math.min(minY, sc2.Y)
-                        maxX = math.max(maxX, sc2.X); maxY = math.max(maxY, sc2.Y)
-                    end
-                end
-            end
-            if maxX > minX and maxY > minY then
-                obj.hbx.Visible   = true
-                obj.hbx.Filled    = false
-                obj.hbx.Thickness = 1.5
-                obj.hbx.Color    = (S.hbx_vis_check and not isVis) and Color3.fromRGB(220, 80, 80) or Color3.fromRGB(100, 220, 100)
-                obj.hbx.Size     = Vector2.new(maxX - minX, maxY - minY)
-                obj.hbx.Position = Vector2.new(minX, minY)
-            else
-                obj.hbx.Visible = false
-            end
+            -- Color igual al ESP color (mismo que el highlight/líneas)
+            local hbxCol = (S.hbx_vis_check and not isVis) and Color3.fromRGB(220, 80, 80) or getEspColor()
+            obj.hbx.Visible   = true
+            obj.hbx.Filled    = false
+            obj.hbx.Thickness = 1.5
+            obj.hbx.Color     = hbxCol
+            obj.hbx.Size      = Vector2.new(HBX_W, HBX_H)
+            obj.hbx.Position  = Vector2.new(cx - HBX_W / 2, cy - HBX_H / 2)
         else
             obj.hbx.Visible = false
         end
