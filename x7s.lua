@@ -1256,7 +1256,7 @@ statusLbl.TextSize=7; statusLbl.TextXAlignment=Enum.TextXAlignment.Right
 local espCard = makeCard(pg_inicio)
 makeSecHeader(espCard, "†", "ESP")
 makeToggle(espCard, "esp_on", "esp_on_d", "esp_on", function(on)
-    if not on then
+    if not on and espObjects then
         for _, obj in pairs(espObjects) do
             for _, hl in pairs(obj.highlights) do pcall(function() hl.Enabled = false end) end
             if obj.billboard     then obj.billboard.Enabled     = false end
@@ -1296,7 +1296,11 @@ makeToggle(hbxCard, "hbx_on",  "hbx_on_d",  "hbx_on", function(on)
             if p2 ~= player and p2.Character then
                 local root2 = p2.Character:FindFirstChild("HumanoidRootPart")
                 if root2 and _hbxOriginals and _hbxOriginals[p2] then
-                    pcall(function() root2.Size = _hbxOriginals[p2] end)
+                    pcall(function()
+                        root2.Size       = _hbxOriginals[p2].Size
+                        root2.CanCollide = _hbxOriginals[p2].CanCollide
+                        root2.Massless   = _hbxOriginals[p2].Massless
+                    end)
                     _hbxOriginals[p2] = nil
                 end
             end
@@ -1309,7 +1313,7 @@ makeDivider(hbxCard)
 makeSlider(hbxCard, "hbx_size", "hbx_size", 1, 20)
 makeDivider(hbxCard)
 makeToggle(hbxCard, "hbx_show", nil, "hbx_show", function(on)
-    if not on then
+    if not on and espObjects then
         for _, obj in pairs(espObjects) do obj.hbx.Visible = false end
     end
 end)
@@ -1642,25 +1646,48 @@ local function applyHitbox(p, on)
     if not p.Character then return end
     local root = p.Character:FindFirstChild("HumanoidRootPart"); if not root then return end
     if on then
-        if not _hbxOriginals[p] then _hbxOriginals[p] = root.Size end
+        if not _hbxOriginals[p] then
+            _hbxOriginals[p] = {
+                Size       = root.Size,
+                CanCollide = root.CanCollide,
+                Massless   = root.Massless,
+            }
+        end
         if S.hbx_vis_check then
             local myChar2 = player.Character
             -- Restaurar tamaño original ANTES de hacer el raycast
-            -- para que la hitbox expandida no interfiera con la detección
-            pcall(function() root.Size = _hbxOriginals[p] end)
+            pcall(function() root.Size = _hbxOriginals[p].Size end)
             local vis = isVisible(root, myChar2)
             if vis then
                 local s = S.hbx_size
-                pcall(function() root.Size = Vector3.new(s * 2, s * 2, s * 2) end)
+                pcall(function()
+                    root.Size       = Vector3.new(s * 2, s * 2, s * 2)
+                    root.CanCollide = false   -- no bloquea el paso del jugador
+                    root.Massless   = true    -- no empuja ni tiene peso
+                end)
+            else
+                -- Detrás de pared: restaurar para no bloquear
+                pcall(function()
+                    root.Size       = _hbxOriginals[p].Size
+                    root.CanCollide = _hbxOriginals[p].CanCollide
+                    root.Massless   = _hbxOriginals[p].Massless
+                end)
             end
-            -- Si no es visible, el tamaño ya fue restaurado arriba → no mata por pared
         else
             local s = S.hbx_size
-            pcall(function() root.Size = Vector3.new(s * 2, s * 2, s * 2) end)
+            pcall(function()
+                root.Size       = Vector3.new(s * 2, s * 2, s * 2)
+                root.CanCollide = false
+                root.Massless   = true
+            end)
         end
     else
         if _hbxOriginals[p] then
-            pcall(function() root.Size = _hbxOriginals[p] end)
+            pcall(function()
+                root.Size       = _hbxOriginals[p].Size
+                root.CanCollide = _hbxOriginals[p].CanCollide
+                root.Massless   = _hbxOriginals[p].Massless
+            end)
             _hbxOriginals[p] = nil
         end
     end
@@ -1852,16 +1879,48 @@ RunService.RenderStepped:Connect(function()
 
         -- Hitbox visual (caja en pantalla) — requiere Drawing
         if S.hbx_on and S.hbx_show and onS and HAS_DRAWING then
-            local hbxH = math.max(height, 20)
-            local hbxW = hbxH * 0.55
             local isVis = myChar and isVisible(root, myChar)
-            obj.hbx.Visible   = true
-            obj.hbx.Filled    = false
-            obj.hbx.Thickness = 1.5
-            -- Verde = hitbox activa, Rojo = detrás de pared (no mata)
-            obj.hbx.Color    = (S.hbx_vis_check and not isVis) and Color3.fromRGB(220, 80, 80) or Color3.fromRGB(100, 220, 100)
-            obj.hbx.Size     = Vector2.new(hbxW, hbxH)
-            obj.hbx.Position = Vector2.new(sp2.X - hbxW / 2, sp2.Y - hbxH / 2)
+            -- Calcular tamaño real del HumanoidRootPart en pantalla
+            local rootSize = root.Size  -- ya tiene el tamaño expandido
+            local halfX = rootSize.X / 2
+            local halfY = rootSize.Y / 2
+            local halfZ = rootSize.Z / 2
+            -- Proyectar las 8 esquinas del cubo del root a pantalla
+            local rootCF = root.CFrame
+            local corners = {
+                Vector3.new( halfX,  halfY,  halfZ),
+                Vector3.new(-halfX,  halfY,  halfZ),
+                Vector3.new( halfX, -halfY,  halfZ),
+                Vector3.new(-halfX, -halfY,  halfZ),
+                Vector3.new( halfX,  halfY, -halfZ),
+                Vector3.new(-halfX,  halfY, -halfZ),
+                Vector3.new( halfX, -halfY, -halfZ),
+                Vector3.new(-halfX, -halfY, -halfZ),
+            }
+            local minX, minY, maxX, maxY = math.huge, math.huge, -math.huge, -math.huge
+            local allOnScreen = true
+            for _, offset in ipairs(corners) do
+                local worldPos = rootCF:PointToWorldSpace(offset)
+                local screenPos, onScreen = camera:WorldToViewportPoint(worldPos)
+                if not onScreen then allOnScreen = false end
+                if screenPos.Z > 0 then  -- delante de la cámara
+                    minX = math.min(minX, screenPos.X)
+                    minY = math.min(minY, screenPos.Y)
+                    maxX = math.max(maxX, screenPos.X)
+                    maxY = math.max(maxY, screenPos.Y)
+                end
+            end
+            if maxX > minX and maxY > minY then
+                obj.hbx.Visible   = true
+                obj.hbx.Filled    = false
+                obj.hbx.Thickness = 1.5
+                -- Verde = hitbox activa, Rojo = detrás de pared (no mata)
+                obj.hbx.Color    = (S.hbx_vis_check and not isVis) and Color3.fromRGB(220, 80, 80) or Color3.fromRGB(100, 220, 100)
+                obj.hbx.Size     = Vector2.new(maxX - minX, maxY - minY)
+                obj.hbx.Position = Vector2.new(minX, minY)
+            else
+                obj.hbx.Visible = false
+            end
         else
             obj.hbx.Visible = false
         end
@@ -1929,7 +1988,11 @@ UserInputService.InputBegan:Connect(function(inp, proc)
                 if ep ~= player and ep.Character then
                     local r2 = ep.Character:FindFirstChild("HumanoidRootPart")
                     if r2 and _hbxOriginals[ep] then
-                        pcall(function() r2.Size = _hbxOriginals[ep] end)
+                        pcall(function()
+                            r2.Size       = _hbxOriginals[ep].Size
+                            r2.CanCollide = _hbxOriginals[ep].CanCollide
+                            r2.Massless   = _hbxOriginals[ep].Massless
+                        end)
                         _hbxOriginals[ep] = nil
                     end
                 end
