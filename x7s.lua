@@ -1673,31 +1673,42 @@ local function applyHitbox(p, on)
                 Massless   = root.Massless,
             }
         end
+        local s = S.hbx_size
+        local targetSize = Vector3.new(s * 2, s * 2, s * 2)
         if S.hbx_vis_check then
             local myChar2 = player.Character
-            pcall(function() root.Size = _hbxOriginals[p].Size end)
+            -- Restaurar antes del raycast para no interferir con la detección
+            if root.Size ~= _hbxOriginals[p].Size then
+                pcall(function() root.Size = _hbxOriginals[p].Size end)
+            end
             local vis = isVisible(root, myChar2)
             if vis then
-                local s = S.hbx_size
+                -- Solo escribir si el tamaño realmente cambió (evita congelar al jugador)
+                if root.Size ~= targetSize then
+                    pcall(function()
+                        root.Size       = targetSize
+                        root.CanCollide = false
+                        root.Massless   = true
+                    end)
+                end
+            else
+                if root.Size ~= _hbxOriginals[p].Size then
+                    pcall(function()
+                        root.Size       = _hbxOriginals[p].Size
+                        root.CanCollide = _hbxOriginals[p].CanCollide
+                        root.Massless   = _hbxOriginals[p].Massless
+                    end)
+                end
+            end
+        else
+            -- Solo escribir si el tamaño cambió (evita interferir con replicación cada frame)
+            if root.Size ~= targetSize then
                 pcall(function()
-                    root.Size       = Vector3.new(s * 2, s * 2, s * 2)
+                    root.Size       = targetSize
                     root.CanCollide = false
                     root.Massless   = true
                 end)
-            else
-                pcall(function()
-                    root.Size       = _hbxOriginals[p].Size
-                    root.CanCollide = _hbxOriginals[p].CanCollide
-                    root.Massless   = _hbxOriginals[p].Massless
-                end)
             end
-        else
-            local s = S.hbx_size
-            pcall(function()
-                root.Size       = Vector3.new(s * 2, s * 2, s * 2)
-                root.CanCollide = false
-                root.Massless   = true
-            end)
         end
     else
         if _hbxOriginals[p] then
