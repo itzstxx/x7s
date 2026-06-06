@@ -740,7 +740,7 @@ local function secLabel(parent, text)
     l.Size = UDim2.new(1, -28, 1, 0); l.Position = UDim2.fromOffset(14, 0)
     l.BackgroundTransparency = 1; l.Text = text:upper()
     l.TextColor3 = Color3.fromRGB(58,58,58); l.Font = Enum.Font.GothamBold; l.TextSize = 9
-    l.TextXAlignment = Enum.TextXAlignment.Left; l.LetterSpacing = 3
+    l.TextXAlignment = Enum.TextXAlignment.Left
     return f
 end
 
