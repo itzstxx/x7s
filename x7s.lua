@@ -1845,29 +1845,51 @@ RunService.RenderStepped:Connect(function()
             obj.line.Visible = false
         end
 
-        -- Hitbox visual (caja proporcional al tamaño real expandido de la hitbox) — requiere Drawing
+        -- Hitbox visual: caja ajustada al cuerpo visible del personaje (igual que RysHub)
         if S.hbx_on and S.hbx_show and onS and HAS_DRAWING then
             local isVis = myChar and isVisible(root, myChar)
-            -- Usar el tamaño real actual del HumanoidRootPart (expandido por hbx_size)
-            local rootSize = root.Size  -- refleja la hitbox expandida real
-            local rcf = root.CFrame
-            local hx, hy, hz = rootSize.X/2, rootSize.Y/2, rootSize.Z/2
             local minX2, minY2, maxX2, maxY2 = math.huge, math.huge, -math.huge, -math.huge
-            for _, off in ipairs({
-                Vector3.new( hx, hy, hz), Vector3.new(-hx, hy, hz),
-                Vector3.new( hx,-hy, hz), Vector3.new(-hx,-hy, hz),
-                Vector3.new( hx, hy,-hz), Vector3.new(-hx, hy,-hz),
-                Vector3.new( hx,-hy,-hz), Vector3.new(-hx,-hy,-hz),
-            }) do
-                local wp2 = rcf:PointToWorldSpace(off)
-                local sc3, on3 = camera:WorldToViewportPoint(wp2)
-                if on3 and sc3.Z > 0 then
-                    minX2 = math.min(minX2, sc3.X); minY2 = math.min(minY2, sc3.Y)
-                    maxX2 = math.max(maxX2, sc3.X); maxY2 = math.max(maxY2, sc3.Y)
+            -- Proyectar cada BasePart del personaje (excluyendo HumanoidRootPart expandido)
+            for _, part in ipairs(char:GetDescendants()) do
+                if part:IsA("BasePart") and part.Name ~= "HumanoidRootPart" then
+                    local ps = part.Size
+                    local pcf = part.CFrame
+                    local hx2, hy2, hz2 = ps.X/2, ps.Y/2, ps.Z/2
+                    for _, off in ipairs({
+                        Vector3.new( hx2, hy2, hz2), Vector3.new(-hx2, hy2, hz2),
+                        Vector3.new( hx2,-hy2, hz2), Vector3.new(-hx2,-hy2, hz2),
+                        Vector3.new( hx2, hy2,-hz2), Vector3.new(-hx2, hy2,-hz2),
+                        Vector3.new( hx2,-hy2,-hz2), Vector3.new(-hx2,-hy2,-hz2),
+                    }) do
+                        local wp2 = pcf:PointToWorldSpace(off)
+                        local sc3, on3 = camera:WorldToViewportPoint(wp2)
+                        if on3 and sc3.Z > 0 then
+                            minX2 = math.min(minX2, sc3.X); minY2 = math.min(minY2, sc3.Y)
+                            maxX2 = math.max(maxX2, sc3.X); maxY2 = math.max(maxY2, sc3.Y)
+                        end
+                    end
+                end
+            end
+            -- Fallback: si no se encontraron partes, usar el tamaño original del root (sin expandir)
+            if minX2 == math.huge then
+                local rs = _hbxOriginals[p] and _hbxOriginals[p].Size or Vector3.new(2, 5, 1)
+                local rcf = root.CFrame
+                local hx2, hy2, hz2 = rs.X/2, rs.Y/2, rs.Z/2
+                for _, off in ipairs({
+                    Vector3.new( hx2, hy2, hz2), Vector3.new(-hx2, hy2, hz2),
+                    Vector3.new( hx2,-hy2, hz2), Vector3.new(-hx2,-hy2, hz2),
+                    Vector3.new( hx2, hy2,-hz2), Vector3.new(-hx2, hy2,-hz2),
+                    Vector3.new( hx2,-hy2,-hz2), Vector3.new(-hx2,-hy2,-hz2),
+                }) do
+                    local wp2 = rcf:PointToWorldSpace(off)
+                    local sc3, on3 = camera:WorldToViewportPoint(wp2)
+                    if on3 and sc3.Z > 0 then
+                        minX2 = math.min(minX2, sc3.X); minY2 = math.min(minY2, sc3.Y)
+                        maxX2 = math.max(maxX2, sc3.X); maxY2 = math.max(maxY2, sc3.Y)
+                    end
                 end
             end
             if maxX2 > minX2 and maxY2 > minY2 then
-                -- Color igual al ESP (mismo que highlight/líneas), rojo si detrás de pared
                 local hbxCol = (S.hbx_vis_check and not isVis) and Color3.fromRGB(220, 80, 80) or getEspColor()
                 obj.hbx.Visible   = true
                 obj.hbx.Filled    = false
