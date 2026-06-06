@@ -1447,15 +1447,16 @@ local function applyHighlights(obj, char, isVis)
     end
 end
 
--- Crea BillboardGui de nombre sobre la cabeza del enemigo
+-- Nombre como BillboardGui con tamaño fijo y SizeOffset en mundo (no escala con distancia)
 local function createNameBillboard(p, char)
     if not char then return nil end
     local head = char:FindFirstChild("Head"); if not head then return nil end
     local bb = Instance.new("BillboardGui")
     bb.Name = "x7sName_"..p.Name
-    bb.Size = UDim2.fromOffset(100, 20)
-    bb.StudsOffset = Vector3.new(0, 3.2, 0)   -- nombre justo encima de la cabeza
+    bb.Size = UDim2.fromOffset(110, 18)
+    bb.StudsOffsetWorldSpace = Vector3.new(0, 2.0, 0)
     bb.AlwaysOnTop = true; bb.ResetOnSpawn = false
+    bb.LightInfluence = 0
     bb.Adornee = head; bb.Parent = gui
     bb.Enabled = false
 
@@ -1466,22 +1467,23 @@ local function createNameBillboard(p, char)
     nameLbl.Text = p.Name
     nameLbl.TextColor3 = Color3.fromRGB(230, 220, 245)
     nameLbl.Font = Enum.Font.GothamBold
-    nameLbl.TextSize = 12
+    nameLbl.TextSize = 11
     nameLbl.TextXAlignment = Enum.TextXAlignment.Center
-    nameLbl.TextStrokeTransparency = 0.5
+    nameLbl.TextStrokeTransparency = 0.4
     nameLbl.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
     return bb
 end
 
--- Crea BillboardGui de avatar sobre la cabeza del enemigo (pequeño, redondo)
+-- Avatar BillboardGui con tamaño fijo (no escala con distancia)
 local function createAvatarBillboard(p, char)
     if not char then return nil end
     local head = char:FindFirstChild("Head"); if not head then return nil end
     local bb = Instance.new("BillboardGui")
     bb.Name = "x7sESP_"..p.Name
     bb.Size = UDim2.fromOffset(34, 34)
-    bb.StudsOffset = Vector3.new(0, 5.2, 0)   -- avatar más arriba que el nombre
+    bb.StudsOffsetWorldSpace = Vector3.new(0, 3.8, 0)
     bb.AlwaysOnTop = true; bb.ResetOnSpawn = false
+    bb.LightInfluence = 0
     bb.Adornee = head; bb.Parent = gui
     bb.Enabled = false
 
@@ -1843,28 +1845,39 @@ RunService.RenderStepped:Connect(function()
             obj.line.Visible = false
         end
 
-        -- Hitbox visual (caja en pantalla, tamaño fijo en píxeles como RysHub) — requiere Drawing
+        -- Hitbox visual (caja proporcional al tamaño real expandido de la hitbox) — requiere Drawing
         if S.hbx_on and S.hbx_show and onS and HAS_DRAWING then
             local isVis = myChar and isVisible(root, myChar)
-            -- Tamaño fijo en píxeles: no cambia con la distancia
-            local HBX_W = 44
-            local HBX_H = 72
-            local cx = sp.X
-            local cy = sp.Y
-            -- Centrar la caja sobre el centro del personaje (ligeramente arriba del root)
-            local headPart2 = char:FindFirstChild("Head")
-            if headPart2 then
-                local hsp = camera:WorldToViewportPoint(headPart2.Position)
-                cy = (sp.Y + hsp.Y) / 2
+            -- Usar el tamaño real actual del HumanoidRootPart (expandido por hbx_size)
+            local rootSize = root.Size  -- refleja la hitbox expandida real
+            local rcf = root.CFrame
+            local hx, hy, hz = rootSize.X/2, rootSize.Y/2, rootSize.Z/2
+            local minX2, minY2, maxX2, maxY2 = math.huge, math.huge, -math.huge, -math.huge
+            for _, off in ipairs({
+                Vector3.new( hx, hy, hz), Vector3.new(-hx, hy, hz),
+                Vector3.new( hx,-hy, hz), Vector3.new(-hx,-hy, hz),
+                Vector3.new( hx, hy,-hz), Vector3.new(-hx, hy,-hz),
+                Vector3.new( hx,-hy,-hz), Vector3.new(-hx,-hy,-hz),
+            }) do
+                local wp2 = rcf:PointToWorldSpace(off)
+                local sc3, on3 = camera:WorldToViewportPoint(wp2)
+                if on3 and sc3.Z > 0 then
+                    minX2 = math.min(minX2, sc3.X); minY2 = math.min(minY2, sc3.Y)
+                    maxX2 = math.max(maxX2, sc3.X); maxY2 = math.max(maxY2, sc3.Y)
+                end
             end
-            -- Color igual al ESP color (mismo que el highlight/líneas)
-            local hbxCol = (S.hbx_vis_check and not isVis) and Color3.fromRGB(220, 80, 80) or getEspColor()
-            obj.hbx.Visible   = true
-            obj.hbx.Filled    = false
-            obj.hbx.Thickness = 1.5
-            obj.hbx.Color     = hbxCol
-            obj.hbx.Size      = Vector2.new(HBX_W, HBX_H)
-            obj.hbx.Position  = Vector2.new(cx - HBX_W / 2, cy - HBX_H / 2)
+            if maxX2 > minX2 and maxY2 > minY2 then
+                -- Color igual al ESP (mismo que highlight/líneas), rojo si detrás de pared
+                local hbxCol = (S.hbx_vis_check and not isVis) and Color3.fromRGB(220, 80, 80) or getEspColor()
+                obj.hbx.Visible   = true
+                obj.hbx.Filled    = false
+                obj.hbx.Thickness = 1.5
+                obj.hbx.Color     = hbxCol
+                obj.hbx.Size      = Vector2.new(maxX2 - minX2, maxY2 - minY2)
+                obj.hbx.Position  = Vector2.new(minX2, minY2)
+            else
+                obj.hbx.Visible = false
+            end
         else
             obj.hbx.Visible = false
         end
