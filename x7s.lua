@@ -71,6 +71,8 @@ local player    = Players.LocalPlayer
 local playerGui = player:WaitForChild("PlayerGui")
 local camera    = Workspace.CurrentCamera
 
+local _hbxOriginals = {}  -- declarado aquí para que esté disponible en toda la GUI
+
 local CONFIG_FILE = "x7s_v1.json"
 
 local function mkDefault()
@@ -1189,48 +1191,19 @@ statusLbl.BackgroundTransparency=1; statusLbl.Text="ONLINE"
 statusLbl.TextColor3=Color3.fromRGB(42,42,42); statusLbl.Font=Enum.Font.GothamBold
 statusLbl.TextSize=7; statusLbl.TextXAlignment=Enum.TextXAlignment.Right
 
--- ── ESP + HBX en dos columnas ─────────────────
--- Roblox no soporta Flexbox, usaremos dos frames side by side
-local rowESP_HBX = Instance.new("Frame", pg_inicio)
-rowESP_HBX.Size = UDim2.new(1, 0, 0, 0); rowESP_HBX.AutomaticSize = Enum.AutomaticSize.Y
-rowESP_HBX.BackgroundTransparency = 1; rowESP_HBX.BorderSizePixel = 0
-
-local COL_W = (CONTENT_W - 28 - 8) / 2   -- 8 = gap, 28 = padding total
-
-local espCol = Instance.new("Frame", rowESP_HBX)
-espCol.Size = UDim2.fromOffset(COL_W, 0); espCol.AutomaticSize = Enum.AutomaticSize.Y
-espCol.Position = UDim2.fromOffset(0, 0); espCol.BackgroundTransparency = 1
-local espColLayout = Instance.new("UIListLayout", espCol)
-espColLayout.SortOrder = Enum.SortOrder.LayoutOrder; espColLayout.Padding = UDim.new(0,0)
-
-local hbxCol = Instance.new("Frame", rowESP_HBX)
-hbxCol.Size = UDim2.fromOffset(COL_W, 0); hbxCol.AutomaticSize = Enum.AutomaticSize.Y
-hbxCol.Position = UDim2.fromOffset(COL_W + 8, 0); hbxCol.BackgroundTransparency = 1
-local hbxColLayout = Instance.new("UIListLayout", hbxCol)
-hbxColLayout.SortOrder = Enum.SortOrder.LayoutOrder; hbxColLayout.Padding = UDim.new(0,0)
-
--- Altura del rowESP_HBX se ajusta al hijo más alto
-local function updateRowHeight()
-    local eH = espCol.AbsoluteSize.Y
-    local hH = hbxCol.AbsoluteSize.Y
-    rowESP_HBX.Size = UDim2.new(1, 0, 0, math.max(eH, hH))
-end
-espColLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(updateRowHeight)
-hbxColLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(updateRowHeight)
-
--- ── ESP Column ─────────────────────────────────
-local espCard = makeCard(espCol)
-espCard.Size = UDim2.fromOffset(COL_W, 0)
+-- ── ESP + HBX en una sola columna funcional ───────
+local espCard = makeCard(pg_inicio)
 makeSecHeader(espCard, "†", "ESP")
-makeToggle(espCard, "esp_on",    "esp_on_d",    "esp_on")
+makeToggle(espCard, "esp_on",      "esp_on_d",    "esp_on")
 makeDivider(espCard)
-makeToggle(espCard, "esp_names", nil,           "esp_names")
+makeToggle(espCard, "esp_names",   nil,            "esp_names")
 makeDivider(espCard)
-makeToggle(espCard, "esp_avatar","esp_avatar_d","esp_avatar")
+makeToggle(espCard, "esp_avatar",  "esp_avatar_d", "esp_avatar")
 makeDivider(espCard)
-makeToggle(espCard, "esp_lines", "esp_lines_d", "esp_lines")
+makeToggle(espCard, "esp_lines",   "esp_lines_d",  "esp_lines")
 makeDivider(espCard)
--- Color ESP picker (swatch)
+makeToggle(espCard, "esp_rainbow", "esp_rainbow_d","esp_rainbow")
+makeDivider(espCard)
 local espColorRow, espColorPop = makeColorPicker(espCard, "ESP Color",
     function() return S.esp_char_r end,
     function() return S.esp_char_g end,
@@ -1238,26 +1211,19 @@ local espColorRow, espColorPop = makeColorPicker(espCard, "ESP Color",
     function(r,g,b) S.esp_char_r=r; S.esp_char_g=g; S.esp_char_b=b end
 )
 makeDivider(espCard)
-makeToggle(espCard, "esp_rainbow", "esp_rainbow_d", "esp_rainbow")
-makeDivider(espCard)
 makeKeybind(espCard, "esp_key", "esp_key")
 
--- ── HBX Column ─────────────────────────────────
-local hbxCard = makeCard(hbxCol)
-hbxCard.Size = UDim2.fromOffset(COL_W, 0)
-makeSecHeader(hbxCard, "†", "GUI")
-
--- Triggerbot row separado debajo de las columnas
-local trgCard = makeCard(pg_inicio)
-makeSecHeader(trgCard, "·", "Triggerbot")
-
--- ── INICIO content ──────────────────────────────
-makeToggle(hbxCard, "hbx_on",   "hbx_on_d",   "hbx_on", function(on)
+local hbxCard = makeCard(pg_inicio)
+makeSecHeader(hbxCard, "†", "Hitbox")
+makeToggle(hbxCard, "hbx_on",  "hbx_on_d",  "hbx_on", function(on)
     if not on then
         for _, p2 in ipairs(Players:GetPlayers()) do
             if p2 ~= player and p2.Character then
                 local root2 = p2.Character:FindFirstChild("HumanoidRootPart")
-                if root2 then pcall(function() root2.Size = Vector3.new(2,2,1) end) end
+                if root2 and _hbxOriginals and _hbxOriginals[p2] then
+                    pcall(function() root2.Size = _hbxOriginals[p2] end)
+                    _hbxOriginals[p2] = nil
+                end
             end
         end
     end
@@ -1267,12 +1233,13 @@ makeToggle(hbxCard, "hbx_vis",  "hbx_vis_d",  "hbx_vis_check")
 makeDivider(hbxCard)
 makeSlider(hbxCard, "hbx_size", "hbx_size", 1, 20)
 makeDivider(hbxCard)
-makeToggle(hbxCard, "hbx_show", nil,           "hbx_show")
+makeToggle(hbxCard, "hbx_show", nil, "hbx_show")
 makeDivider(hbxCard)
 makeKeybind(hbxCard, "hbx_key", "hbx_key")
 
--- Triggerbot card (full width)
-makeToggle(trgCard, "trg_on",   "trg_on_d",   "trg_on")
+local trgCard = makeCard(pg_inicio)
+makeSecHeader(trgCard, "·", "Triggerbot")
+makeToggle(trgCard, "trg_on",  "trg_on_d",  "trg_on")
 makeDivider(trgCard)
 makeKeybind(trgCard, "trg_key", "trg_key")
 
@@ -2129,7 +2096,7 @@ for _, p in ipairs(Players:GetPlayers()) do createEspObj(p) end
 Players.PlayerAdded:Connect(createEspObj)
 Players.PlayerRemoving:Connect(removeEspObj)
 
-local _hbxOriginals = {}
+-- (_hbxOriginals declarado al inicio del script)
 
 -- ══════════════════════════════════════════════
 --  VISIBLE CHECK — raycast desde cámara al root
