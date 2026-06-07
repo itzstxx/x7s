@@ -193,6 +193,7 @@ local function mkDefault()
         trg_on=false, trg_key="R",
         aim_on=false, aim_key="X", aim_fov=100, aim_range=500, aim_body="Head", aim_wall_check=true, aim_show_fov=false, aim_npc=false, aim_whitelist={}, aim_lock_speed=0.3,
         stream_mode=false,
+        summer_on=false,
         panel_bg=true, notifs=true, lang="English", gui_key="L",
     }
 end
@@ -224,6 +225,8 @@ local Locale = {
         trg_on="Triggerbot",        trg_on_d="Shoots when your cursor is directly over a visible enemy.",
         trg_key="Triggerbot Keybind",
 
+        summer_on="Summer 2026",    summer_on_d="Collects Summer 2026 drops automatically. Only in matches.",
+
         st_bg="Toggle Panel Background",
         st_notif="Enable Notifications",
         st_lang="Language",
@@ -250,6 +253,8 @@ local Locale = {
         hbx_vis="Visible Check",    hbx_vis_d="Solo registra el hit si el enemigo está a la vista. Evita matar a través de paredes.",
         trg_on="Triggerbot",         trg_on_d="Dispara cuando el cursor está sobre un enemigo visible.",
         trg_key="Tecla Triggerbot",
+
+        summer_on="Summer 2026",     summer_on_d="Recolecta los drops del Summer 2026 automáticamente. Solo en partidas.",
         st_bg="Fondo del Panel",
         st_notif="Activar Notificaciones",
         st_lang="Idioma",
@@ -353,6 +358,7 @@ local streamModeOn = false
 local streamSaved = {esp_on=nil, esp_avatar=nil, esp_names=nil, esp_lines=nil}
 -- La función se asigna más abajo tras definir panel/glow/espObjects
 local applyStreamMode  -- forward declaration
+local applyHitbox      -- forward declaration
 
 
 local GW, GH = 660, 520          -- ancho total, alto total
@@ -1409,6 +1415,11 @@ makeToggle(trgCard, "trg_on",  "trg_on_d",  "trg_on")
 makeDivider(trgCard)
 makeKeybind(trgCard, "trg_key", "trg_key")
 
+-- ══ SUMMER 2026 ═══════════════════════════════════
+local summerCard = makeCard(pg_inicio)
+makeSecHeader(summerCard, "☀", "Summer 2026")
+makeToggle(summerCard, "summer_on", "summer_on_d", "summer_on")
+
 -- ══ AJUSTES PAGE ══════════════════════════════════
 local cfgCard = makeCard(pg_ajustes)
 makeSecHeader(cfgCard, "†", "Settings")
@@ -1801,7 +1812,7 @@ local function isVisible(targetRoot, myChar)
     return result.Distance >= dist - 0.5
 end
 
-local function applyHitbox(p, on)
+applyHitbox = function(p, on)
     if not p.Character then return end
     local root = p.Character:FindFirstChild("HumanoidRootPart"); if not root then return end
     
@@ -2171,5 +2182,36 @@ task.defer(function()
     panel.BackgroundTransparency = S.panel_bg and 0 or 0.15
 end)
 
-print("✝  x7s  Loaded — "..player.Name.."  ✝")
+-- ══ SUMMER 2026 COLLECTOR ═══════════════════════════
+task.spawn(function()
+    local RS = game:GetService("RunService")
+    while true do
+        RS.Heartbeat:Wait()
+        if S.summer_on then
+            local char = player.Character
+            local root = char and char:FindFirstChild("HumanoidRootPart")
+            if root then
+                local sp = workspace:FindFirstChild("Spawnables")
+                local sc = sp and sp:FindFirstChild("SpawnablesClient")
+                if sc then
+                    for _, drop in ipairs(sc:GetChildren()) do
+                        local touch = drop:FindFirstChild("Touch")
+                        if touch and touch:IsA("BasePart") then
+                            -- Simula el touch sin moverse
+                            pcall(function()
+                                firetouchinterest(root, touch, 0)
+                                task.wait(0.05)
+                                firetouchinterest(root, touch, 1)
+                            end)
+                            task.wait(0.1)
+                        end
+                    end
+                end
+            end
+        end
+        task.wait(0.5)
+    end
+end)
+
+
 print("   "..S.gui_key.." = Toggle GUI  ·  "..S.esp_key.." = ESP  ·  "..S.hbx_key.." = Hitbox  ·  "..S.trg_key.." = Trigger")
