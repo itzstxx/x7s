@@ -2192,12 +2192,10 @@ task.spawn(function()
             local root = char and char:FindFirstChild("HumanoidRootPart")
             if root then
                 local sp = workspace:FindFirstChild("Spawnables")
-                local sc = sp and sp:FindFirstChild("SpawnablesClient")
-                if sc then
-                    for _, drop in ipairs(sc:GetChildren()) do
-                        local touch = drop:FindFirstChild("Touch")
-                        if touch and touch:IsA("BasePart") then
-                            -- Simula el touch sin moverse
+                if sp then
+                    -- Busca todos los Parts llamados "Touch" dentro de Spawnables
+                    for _, touch in ipairs(sp:GetDescendants()) do
+                        if touch.Name == "Touch" and touch:IsA("BasePart") then
                             pcall(function()
                                 firetouchinterest(root, touch, 0)
                                 task.wait(0.05)
