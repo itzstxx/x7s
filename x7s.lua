@@ -2191,17 +2191,24 @@ task.spawn(function()
             if root then
                 local sp = workspace:FindFirstChild("Spawnables")
                 if sp then
-                    -- Busca todos los Parts llamados "Touch" dentro de Spawnables
+                    -- Primero, guarda todos los Touches en una tabla
+                    local touches = {}
                     for _, touch in ipairs(sp:GetDescendants()) do
                         if touch.Name == "Touch" and touch:IsA("BasePart") then
+                            table.insert(touches, touch)
+                        end
+                    end
+                    
+                    -- Ahora recolecta cada uno
+                    for _, touch in ipairs(touches) do
+                        if touch and touch.Parent then  -- Verifica que aún exista
                             pcall(function()
-                                -- Intenta usar la RemoteFunction
                                 local rf = game.ReplicatedStorage.Packages.Networking.RF.FreeItem.RequestClaimFreeItem
                                 if rf then
                                     rf:InvokeServer(touch)
                                 end
                             end)
-                            task.wait(0.1)
+                            task.wait(0.15)
                         end
                     end
                 end
