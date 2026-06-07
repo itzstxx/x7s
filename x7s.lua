@@ -2184,42 +2184,26 @@ end)
 
 -- ══ SUMMER 2026 COLLECTOR ═══════════════════════════
 task.spawn(function()
-    while true do
+    local COLLECTION_RADIUS = 200
+    while task.wait(0.2) do
         if S.summer_on then
             local char = player.Character
             local root = char and char:FindFirstChild("HumanoidRootPart")
-            if root then
-                local sp = workspace:FindFirstChild("Spawnables")
-                if sp then
-                    -- Primero, guarda todos los Touches en una tabla
-                    local touches = {}
-                    for _, touch in ipairs(sp:GetDescendants()) do
-                        if touch.Name == "Touch" and touch:IsA("BasePart") then
-                            table.insert(touches, touch)
-                        end
-                    end
-                    
-                    if #touches > 0 then
-                        print("[Summer] Recolectando", #touches, "drops...")
-                    end
-                    
-                    -- Ahora recolecta cada uno
-                    for _, touch in ipairs(touches) do
-                        if touch and touch.Parent then  -- Verifica que aún exista
+            local sp = workspace:FindFirstChild("Spawnables")
+            if root and sp then
+                for _, obj in ipairs(sp:GetDescendants()) do
+                    if obj.Name == "Touch" and obj:IsA("BasePart") then
+                        local dist = (root.Position - obj.Position).Magnitude
+                        if dist <= COLLECTION_RADIUS then
                             pcall(function()
-                                local rf = game.ReplicatedStorage.Packages.Networking.RF.FreeItem.RequestClaimFreeItem
-                                if rf then
-                                    rf:InvokeServer(touch)
-                                    print("[Summer] Recolectado:", touch.Parent.Name)
-                                end
+                                firetouchinterest(root, obj, 0)
+                                firetouchinterest(root, obj, 1)
                             end)
-                            task.wait(0.15)
                         end
                     end
                 end
             end
         end
-        task.wait(0.5)
     end
 end)
 
