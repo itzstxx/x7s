@@ -1883,7 +1883,7 @@ RunService.RenderStepped:Connect(function()
             end
         end
 
-        -- ▸ Avatar — solo si esp_on Y esp_avatar
+        -- ▸ Avatar — solo si esp_on Y esp_avatar, color dinámico si está detrás de pared
         if obj.billboard then
             local showAv = S.esp_on and S.esp_avatar and not streamModeOn
             obj.billboard.Enabled = showAv
@@ -1891,7 +1891,17 @@ RunService.RenderStepped:Connect(function()
                 local bg2 = obj.billboard:FindFirstChildOfClass("Frame")
                 if bg2 then
                     local st = bg2:FindFirstChild("AvatarStroke")
-                    if st then st.Color = getEspColor() end
+                    if st then
+                        -- Si hbx_vis_check activo, cambiar color cuando está detrás de pared
+                        if S.hbx_vis_check then
+                            local isVis4 = myChar and isVisible(root, myChar)
+                            st.Color = isVis4 
+                                and getEspColor()                           -- Color normal si visible
+                                or  Color3.fromRGB(220, 80, 80)             -- Rojo si detrás de pared
+                        else
+                            st.Color = getEspColor()
+                        end
+                    end
                 end
             end
         end
