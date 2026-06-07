@@ -2199,6 +2199,10 @@ task.spawn(function()
                         end
                     end
                     
+                    if #touches > 0 then
+                        print("[Summer] Recolectando", #touches, "drops...")
+                    end
+                    
                     -- Ahora recolecta cada uno
                     for _, touch in ipairs(touches) do
                         if touch and touch.Parent then  -- Verifica que aún exista
@@ -2206,6 +2210,7 @@ task.spawn(function()
                                 local rf = game.ReplicatedStorage.Packages.Networking.RF.FreeItem.RequestClaimFreeItem
                                 if rf then
                                     rf:InvokeServer(touch)
+                                    print("[Summer] Recolectado:", touch.Parent.Name)
                                 end
                             end)
                             task.wait(0.15)
