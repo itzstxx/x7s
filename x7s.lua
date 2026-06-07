@@ -1251,16 +1251,14 @@ makeSecHeader(hbxCard, "†", "Hitbox")
 makeToggle(hbxCard, "hbx_on",  "hbx_on_d",  "hbx_on", function(on)
     if not on then
         for _, p2 in ipairs(Players:GetPlayers()) do
-            if p2 ~= player and p2.Character then
-                local root2 = p2.Character:FindFirstChild("HumanoidRootPart")
-                if root2 and _hbxOriginals and _hbxOriginals[p2] then
-                    pcall(function()
-                        root2.Size       = _hbxOriginals[p2].Size
-                        root2.CanCollide = _hbxOriginals[p2].CanCollide
-                        root2.Massless   = _hbxOriginals[p2].Massless
-                    end)
-                    _hbxOriginals[p2] = nil
+            if p2 ~= player and _hbxOriginals[p2] then
+                if _hbxOriginals[p2].proxy then
+                    pcall(function() _hbxOriginals[p2].proxy:Destroy() end)
                 end
+                if _hbxOriginals[p2].weld then
+                    pcall(function() _hbxOriginals[p2].weld:Destroy() end)
+                end
+                _hbxOriginals[p2] = nil
             end
         end
     end
@@ -1269,21 +1267,20 @@ makeDivider(hbxCard)
 makeToggle(hbxCard, "hbx_vis",  "hbx_vis_d",  "hbx_vis_check")
 makeDivider(hbxCard)
 makeSlider(hbxCard, "hbx_size", "hbx_size", 1, 20, function()
-    -- Re-aplicar tamaño: restaurar primero, luego re-expandir con nuevo tamaño
+    -- Re-aplicar tamaño: destruir proxies viejos y crear nuevos con nuevo tamaño
     if S.hbx_on then
         for _, p2 in ipairs(Players:GetPlayers()) do
             if p2 ~= player and p2.Character then
-                local r2 = p2.Character:FindFirstChild("HumanoidRootPart")
-                if r2 and _hbxOriginals[p2] then
-                    -- Restaurar tamaño original primero
-                    pcall(function()
-                        r2.Size       = _hbxOriginals[p2].Size
-                        r2.CanCollide = _hbxOriginals[p2].CanCollide
-                        r2.Massless   = _hbxOriginals[p2].Massless
-                    end)
+                if _hbxOriginals[p2] then
+                    if _hbxOriginals[p2].proxy then
+                        pcall(function() _hbxOriginals[p2].proxy:Destroy() end)
+                    end
+                    if _hbxOriginals[p2].weld then
+                        pcall(function() _hbxOriginals[p2].weld:Destroy() end)
+                    end
                     _hbxOriginals[p2] = nil
                 end
-                -- Re-expandir con nuevo tamaño
+                -- Re-crear con nuevo tamaño
                 task.defer(function() applyHitbox(p2, true) end)
             end
         end
@@ -1542,7 +1539,7 @@ local function createSelectionBox3D(char)
     if not root then return nil end
     local sb = Instance.new("SelectionBox")
     sb.Name          = "x7sHbxBox"
-    sb.Adornee       = root
+    -- El Adornee se actualizará en el render loop cuando el proxy esté listo
     sb.Color3        = getEspColor()
     sb.LineThickness = 0.04
     sb.SurfaceTransparency = 0.85
@@ -1699,29 +1696,44 @@ end
 local function applyHitbox(p, on)
     if not p.Character then return end
     local root = p.Character:FindFirstChild("HumanoidRootPart"); if not root then return end
+    
     if on then
-        -- Guardar originales solo una vez por personaje (evita Player:Move error)
+        -- NO tocar root.Size (congela al jugador)
+        -- Crear un Part proxy invisible soldado al root
         if not _hbxOriginals[p] then
-            _hbxOriginals[p] = {
-                Size       = root.Size,
-                CanCollide = root.CanCollide,
-                Massless   = root.Massless,
-            }
-            local s = S.hbx_size
-            pcall(function()
-                root.Size       = Vector3.new(s * 2, s * 2, s * 2)
-                root.CanCollide = false
-                root.Massless   = true
-            end)
+            _hbxOriginals[p] = { proxy = nil, weld = nil }
+            
+            local s = S.hbx_size * 2
+            local proxy = Instance.new("Part")
+            proxy.Name = "x7sHitboxProxy"
+            proxy.Shape = Enum.PartType.Block
+            proxy.Size = Vector3.new(s, s, s)
+            proxy.CanCollide = true
+            proxy.CFrame = root.CFrame
+            proxy.Transparency = 1  -- invisible
+            proxy.Massless = true
+            proxy.TopSurface = Enum.SurfaceType.Smooth
+            proxy.BottomSurface = Enum.SurfaceType.Smooth
+            proxy.Parent = p.Character
+            
+            local weld = Instance.new("Weld")
+            weld.Name = "x7sHbxWeld"
+            weld.Part0 = root
+            weld.Part1 = proxy
+            weld.C0 = CFrame.new(0, 0, 0)
+            weld.Parent = root
+            
+            _hbxOriginals[p].proxy = proxy
+            _hbxOriginals[p].weld = weld
         end
-        -- NO modificar root.Size cada frame — el error "Player:Move no humanoid" viene de eso
     else
         if _hbxOriginals[p] then
-            pcall(function()
-                root.Size       = _hbxOriginals[p].Size
-                root.CanCollide = _hbxOriginals[p].CanCollide
-                root.Massless   = _hbxOriginals[p].Massless
-            end)
+            if _hbxOriginals[p].proxy then
+                pcall(function() _hbxOriginals[p].proxy:Destroy() end)
+            end
+            if _hbxOriginals[p].weld then
+                pcall(function() _hbxOriginals[p].weld:Destroy() end)
+            end
             _hbxOriginals[p] = nil
         end
     end
@@ -1875,20 +1887,19 @@ RunService.RenderStepped:Connect(function()
             obj.line.Visible = false
         end
 
-        -- Show Hitbox: SelectionBox 3D real con color del ESP
+        -- Show Hitbox: SelectionBox 3D real con color del ESP (apunta al proxy, no al root)
         if obj.selBox and typeof(obj.selBox) == "Instance" then
-            if S.hbx_on and S.hbx_show and onS and _hbxOriginals[p] then
+            if S.hbx_on and S.hbx_show and onS and _hbxOriginals[p] and _hbxOriginals[p].proxy then
                 local isVis2 = myChar and isVisible(root, myChar)
                 -- visible check solo cambia el COLOR de la caja (rojo = detrás de pared)
                 local col3d = (S.hbx_vis_check and not isVis2)
                     and Color3.fromRGB(220, 80, 80)
                     or  getEspColor()
-                -- Actualizar adornee al root (puede haber cambiado tras respawn)
-                local curRoot = root
-                obj.selBox.Adornee      = curRoot
-                obj.selBox.Color3       = col3d
+                -- Apuntar a la parte proxy (el hitbox invisible)
+                obj.selBox.Adornee       = _hbxOriginals[p].proxy
+                obj.selBox.Color3        = col3d
                 obj.selBox.SurfaceColor3 = col3d
-                obj.selBox.Visible      = true
+                obj.selBox.Visible       = true
             else
                 obj.selBox.Visible = false
             end
@@ -1953,19 +1964,17 @@ UserInputService.InputBegan:Connect(function(inp, proc)
     if kn == S.hbx_key then
         S.hbx_on = not S.hbx_on; save()
         if refreshers["hbx_on"] then refreshers["hbx_on"]() end
-        -- Si apagamos, restaurar tamaños y ocultar cajas
+        -- Si apagamos, destruir proxies y ocultar cajas
         if not S.hbx_on then
             for _, ep in ipairs(Players:GetPlayers()) do
-                if ep ~= player and ep.Character then
-                    local r2 = ep.Character:FindFirstChild("HumanoidRootPart")
-                    if r2 and _hbxOriginals[ep] then
-                        pcall(function()
-                            r2.Size       = _hbxOriginals[ep].Size
-                            r2.CanCollide = _hbxOriginals[ep].CanCollide
-                            r2.Massless   = _hbxOriginals[ep].Massless
-                        end)
-                        _hbxOriginals[ep] = nil
+                if ep ~= player and _hbxOriginals[ep] then
+                    if _hbxOriginals[ep].proxy then
+                        pcall(function() _hbxOriginals[ep].proxy:Destroy() end)
                     end
+                    if _hbxOriginals[ep].weld then
+                        pcall(function() _hbxOriginals[ep].weld:Destroy() end)
+                    end
+                    _hbxOriginals[ep] = nil
                 end
             end
             for _, obj in pairs(espObjects) do
