@@ -1708,7 +1708,7 @@ local function applyHitbox(p, on)
             proxy.Name = "x7sHitboxProxy"
             proxy.Shape = Enum.PartType.Block
             proxy.Size = Vector3.new(s, s, s)
-            proxy.CanCollide = true
+            proxy.CanCollide = false  -- No colisiona (es principalmente visual)
             proxy.CFrame = root.CFrame
             proxy.Transparency = 1  -- invisible
             proxy.Massless = true
