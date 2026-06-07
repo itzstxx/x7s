@@ -1527,14 +1527,23 @@ end
 
 local function createEspObj(p)
     if p == player then return end
+    -- Drawing Square para Show Hitbox (proyectado manualmente cada frame, sin adornments)
+    local selBox = HAS_DRAWING and Drawing.new("Square") or {Visible=false, Remove=function()end}
+    if HAS_DRAWING then
+        selBox.Visible   = false
+        selBox.Filled    = false
+        selBox.Thickness = 1.5
+        selBox.Color     = Color3.fromRGB(100, 220, 100)
+    end
     espObjects[p] = {
         highlights   = {},
         billboard    = nil,   -- avatar billboard
         nameBillboard = nil,  -- nombre billboard
-        box  = newBox(),
-        name = newText(),
-        line = newLine(),
-        hbx  = newBox(),
+        box    = newBox(),
+        name   = newText(),
+        line   = newLine(),
+        hbx    = newBox(),
+        selBox = selBox,
     }
     if p.Character then
         espObjects[p].billboard     = createAvatarBillboard(p, p.Character)
@@ -1558,6 +1567,7 @@ local function removeEspObj(p)
     for _, hl in pairs(obj.highlights) do pcall(function() hl:Destroy() end) end
     if obj.billboard then obj.billboard:Destroy() end
     if obj.nameBillboard then obj.nameBillboard:Destroy() end
+    if obj.selBox then pcall(function() obj.selBox:Remove() end) end
     obj.box:Remove(); obj.name:Remove(); obj.line:Remove(); obj.hbx:Remove()
     espObjects[p] = nil
 end
@@ -1591,6 +1601,7 @@ applyStreamMode = function(on)
                 if obj.billboard     then obj.billboard.Enabled     = false end
                 if obj.nameBillboard then obj.nameBillboard.Enabled = false end
                 obj.line.Visible = false; obj.hbx.Visible = false
+                if obj.selBox then obj.selBox.Visible = false end
             end
         end
     else
@@ -1655,34 +1666,14 @@ local function applyHitbox(p, on)
     if not p.Character then return end
     local root = p.Character:FindFirstChild("HumanoidRootPart"); if not root then return end
     if on then
+        -- Guardar originales solo una vez
         if not _hbxOriginals[p] then
             _hbxOriginals[p] = {
                 Size       = root.Size,
                 CanCollide = root.CanCollide,
                 Massless   = root.Massless,
             }
-        end
-        if S.hbx_vis_check then
-            local myChar2 = player.Character
-            -- Restaurar tamaño original ANTES de hacer el raycast
-            pcall(function() root.Size = _hbxOriginals[p].Size end)
-            local vis = isVisible(root, myChar2)
-            if vis then
-                local s = S.hbx_size
-                pcall(function()
-                    root.Size       = Vector3.new(s * 2, s * 2, s * 2)
-                    root.CanCollide = false   -- no bloquea el paso del jugador
-                    root.Massless   = true    -- no empuja ni tiene peso
-                end)
-            else
-                -- Detrás de pared: restaurar para no bloquear
-                pcall(function()
-                    root.Size       = _hbxOriginals[p].Size
-                    root.CanCollide = _hbxOriginals[p].CanCollide
-                    root.Massless   = _hbxOriginals[p].Massless
-                end)
-            end
-        else
+            -- Expandir UNA SOLA VEZ al activar, no cada frame
             local s = S.hbx_size
             pcall(function()
                 root.Size       = Vector3.new(s * 2, s * 2, s * 2)
@@ -1690,6 +1681,7 @@ local function applyHitbox(p, on)
                 root.Massless   = true
             end)
         end
+        -- NO tocar root.Size aqui cada frame — evita congelar al jugador
     else
         if _hbxOriginals[p] then
             pcall(function()
@@ -1785,6 +1777,7 @@ RunService.RenderStepped:Connect(function()
             if obj.nameBillboard  then obj.nameBillboard.Enabled  = false end
             obj.line.Visible = false
             obj.hbx.Visible  = false
+            if obj.selBox then obj.selBox.Visible = false end
         end
         if not char then allOff(); continue end
         local root = char:FindFirstChild("HumanoidRootPart")
@@ -1845,36 +1838,16 @@ RunService.RenderStepped:Connect(function()
             obj.line.Visible = false
         end
 
-        -- Hitbox visual: caja ajustada al cuerpo visible del personaje (igual que RysHub)
-        if S.hbx_on and S.hbx_show and onS and HAS_DRAWING then
-            local isVis = myChar and isVisible(root, myChar)
-            local minX2, minY2, maxX2, maxY2 = math.huge, math.huge, -math.huge, -math.huge
-            -- Proyectar cada BasePart del personaje (excluyendo HumanoidRootPart expandido)
-            for _, part in ipairs(char:GetDescendants()) do
-                if part:IsA("BasePart") and part.Name ~= "HumanoidRootPart" then
-                    local ps = part.Size
-                    local pcf = part.CFrame
-                    local hx2, hy2, hz2 = ps.X/2, ps.Y/2, ps.Z/2
-                    for _, off in ipairs({
-                        Vector3.new( hx2, hy2, hz2), Vector3.new(-hx2, hy2, hz2),
-                        Vector3.new( hx2,-hy2, hz2), Vector3.new(-hx2,-hy2, hz2),
-                        Vector3.new( hx2, hy2,-hz2), Vector3.new(-hx2, hy2,-hz2),
-                        Vector3.new( hx2,-hy2,-hz2), Vector3.new(-hx2,-hy2,-hz2),
-                    }) do
-                        local wp2 = pcf:PointToWorldSpace(off)
-                        local sc3, on3 = camera:WorldToViewportPoint(wp2)
-                        if on3 and sc3.Z > 0 then
-                            minX2 = math.min(minX2, sc3.X); minY2 = math.min(minY2, sc3.Y)
-                            maxX2 = math.max(maxX2, sc3.X); maxY2 = math.max(maxY2, sc3.Y)
-                        end
-                    end
-                end
-            end
-            -- Fallback: si no se encontraron partes, usar el tamaño original del root (sin expandir)
-            if minX2 == math.huge then
-                local rs = _hbxOriginals[p] and _hbxOriginals[p].Size or Vector3.new(2, 5, 1)
+        -- Show Hitbox: Drawing Square proyectando el root expandido (sin tocar root.Size)
+        if obj.selBox and HAS_DRAWING then
+            if S.hbx_on and S.hbx_show and onS and _hbxOriginals[p] then
+                local isVis2 = myChar and isVisible(root, myChar)
+                -- vis_check solo afecta el COLOR (rojo=detras pared), no oculta la caja
+                local col = (S.hbx_vis_check and not isVis2) and Color3.fromRGB(220, 80, 80) or getEspColor()
+                local rs = root.Size
                 local rcf = root.CFrame
                 local hx2, hy2, hz2 = rs.X/2, rs.Y/2, rs.Z/2
+                local mnX, mnY, mxX, mxY = math.huge, math.huge, -math.huge, -math.huge
                 for _, off in ipairs({
                     Vector3.new( hx2, hy2, hz2), Vector3.new(-hx2, hy2, hz2),
                     Vector3.new( hx2,-hy2, hz2), Vector3.new(-hx2,-hy2, hz2),
@@ -1884,25 +1857,23 @@ RunService.RenderStepped:Connect(function()
                     local wp2 = rcf:PointToWorldSpace(off)
                     local sc3, on3 = camera:WorldToViewportPoint(wp2)
                     if on3 and sc3.Z > 0 then
-                        minX2 = math.min(minX2, sc3.X); minY2 = math.min(minY2, sc3.Y)
-                        maxX2 = math.max(maxX2, sc3.X); maxY2 = math.max(maxY2, sc3.Y)
+                        mnX = math.min(mnX, sc3.X); mnY = math.min(mnY, sc3.Y)
+                        mxX = math.max(mxX, sc3.X); mxY = math.max(mxY, sc3.Y)
                     end
                 end
-            end
-            if maxX2 > minX2 and maxY2 > minY2 then
-                local hbxCol = (S.hbx_vis_check and not isVis) and Color3.fromRGB(220, 80, 80) or getEspColor()
-                obj.hbx.Visible   = true
-                obj.hbx.Filled    = false
-                obj.hbx.Thickness = 1.5
-                obj.hbx.Color     = hbxCol
-                obj.hbx.Size      = Vector2.new(maxX2 - minX2, maxY2 - minY2)
-                obj.hbx.Position  = Vector2.new(minX2, minY2)
+                if mxX > mnX and mxY > mnY then
+                    obj.selBox.Visible  = true
+                    obj.selBox.Color    = col
+                    obj.selBox.Size     = Vector2.new(mxX - mnX, mxY - mnY)
+                    obj.selBox.Position = Vector2.new(mnX, mnY)
+                else
+                    obj.selBox.Visible = false
+                end
             else
-                obj.hbx.Visible = false
+                obj.selBox.Visible = false
             end
-        else
-            obj.hbx.Visible = false
         end
+        obj.hbx.Visible = false
     end
 end)
 
@@ -1952,6 +1923,7 @@ UserInputService.InputBegan:Connect(function(inp, proc)
                 if obj.nameBillboard then obj.nameBillboard.Enabled = false end
                 obj.line.Visible = false
                 obj.hbx.Visible  = false
+                if obj.selBox then obj.selBox.Visible = false end
             end
         end
         return
@@ -1976,7 +1948,10 @@ UserInputService.InputBegan:Connect(function(inp, proc)
                     end
                 end
             end
-            for _, obj in pairs(espObjects) do obj.hbx.Visible = false end
+            for _, obj in pairs(espObjects) do
+                obj.hbx.Visible = false
+                if obj.selBox then obj.selBox.Visible = false end
+            end
         end
         showNotif("✝  Hitbox", S.hbx_on and L("n_on") or L("n_off"), S.hbx_on)
         return
