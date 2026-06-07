@@ -2184,17 +2184,15 @@ end)
 
 -- ══ SUMMER 2026 COLLECTOR ═══════════════════════════
 task.spawn(function()
-    local RS = game:GetService("ReplicatedStorage")
-    local collectRemote = RS:WaitForChild("SummerCollect")
-    
+    local remote = game:GetService("ReplicatedStorage").Packages.Networking:WaitForChild("RE/Events/CollectEventSpawnable")
+    local folder = workspace:WaitForChild("Spawnables"):WaitForChild("SpawnablesClient")
     while task.wait(0.3) do
         if not S.summer_on then continue end
-        local sp = workspace:FindFirstChild("Spawnables")
-        if not sp then continue end
-        for _, touch in ipairs(sp:GetDescendants()) do
-            if touch.Name == "Touch" and touch:IsA("BasePart") and touch.Parent then
+        for _, spawn in ipairs(folder:GetChildren()) do
+            local touch = spawn:FindFirstChild("Touch")
+            if touch then
                 pcall(function()
-                    collectRemote:FireServer(touch)
+                    remote:FireServer(touch)
                 end)
                 task.wait(0.05)
             end
