@@ -2184,9 +2184,7 @@ end)
 
 -- ══ SUMMER 2026 COLLECTOR ═══════════════════════════
 task.spawn(function()
-    local RS = game:GetService("RunService")
     while true do
-        RS.Heartbeat:Wait()
         if S.summer_on then
             local char = player.Character
             local root = char and char:FindFirstChild("HumanoidRootPart")
@@ -2197,9 +2195,11 @@ task.spawn(function()
                     for _, touch in ipairs(sp:GetDescendants()) do
                         if touch.Name == "Touch" and touch:IsA("BasePart") then
                             pcall(function()
-                                firetouchinterest(root, touch, 0)
-                                task.wait(0.05)
-                                firetouchinterest(root, touch, 1)
+                                -- Intenta usar la RemoteFunction
+                                local rf = game.ReplicatedStorage.Packages.Networking.RF.FreeItem.RequestClaimFreeItem
+                                if rf then
+                                    rf:InvokeServer(touch)
+                                end
                             end)
                             task.wait(0.1)
                         end
