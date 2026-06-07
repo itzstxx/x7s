@@ -73,112 +73,7 @@ local camera    = Workspace.CurrentCamera
 
 local _hbxOriginals = {}  -- declarado aquí para que esté disponible en toda la GUI
 
--- ═══ AIMBOT FUNCTIONS ═══
-local _aimTarget, _aimLocking, _fovDisplay = nil, false, nil
-local HAS_DRAWING = pcall(function() return Drawing.new end) and true or false
-
-local function getBodyPart(char, partType)
-    if not char then return nil end
-    if partType == "Head" then return char:FindFirstChild("Head") end
-    if partType == "Chest" then return char:FindFirstChild("Torso") or char:FindFirstChild("UpperTorso") end
-    if partType == "Legs" then return char:FindFirstChild("LowerTorso") or char:FindFirstChild("Torso") end
-    return char:FindFirstChild("HumanoidRootPart")
-end
-
-local function isInWhitelist(playerName)
-    if not S.aim_whitelist or #S.aim_whitelist == 0 then return false end
-    for _, name in ipairs(S.aim_whitelist) do if name == playerName then return true end end
-    return false
-end
-
-local function isAimbotTargetVisible(targetRoot)
-    if not targetRoot or not player.Character then return false end
-    local origin = camera.CFrame.Position
-    local target = targetRoot.Position
-    local dist = (target - origin).Magnitude
-    if dist > S.aim_range then return false end
-    local ok, obs = pcall(function() return camera:GetPartsObscuringTarget({target}, {player.Character}) end)
-    return ok and #obs == 0
-end
-
-local function findAimbotTarget()
-    local closestDist = S.aim_fov
-    local closestTarget, closestPart = nil, nil
-    for _, p in ipairs(Players:GetPlayers()) do
-        if p == player or not p.Character or isInWhitelist(p.Name) then continue end
-        local root = p.Character:FindFirstChild("HumanoidRootPart")
-        local hum = p.Character:FindFirstChild("Humanoid")
-        if not root or not hum or hum.Health <= 0 then continue end
-        local screenPos, onScreen = camera:WorldToScreenPoint(root.Position)
-        if not onScreen then continue end
-        local screenCenter = camera.ViewportSize / 2
-        local dist = (Vector2.new(screenPos.X, screenPos.Y) - screenCenter).Magnitude
-        if dist < closestDist then
-            if S.aim_wall_check and not isAimbotTargetVisible(root) then continue end
-            closestDist = dist
-            closestTarget = p
-            closestPart = getBodyPart(p.Character, S.aim_body)
-        end
-    end
-    
-    if S.aim_npc then
-        for _, descendant in ipairs(Workspace:GetDescendants()) do
-            if descendant:IsA("Humanoid") and descendant.Parent and descendant.Parent:FindFirstChild("HumanoidRootPart") then
-                if not Players:FindFirstChild(descendant.Parent.Name) then
-                    local root = descendant.Parent:FindFirstChild("HumanoidRootPart")
-                    if descendant.Health <= 0 then continue end
-                    local screenPos, onScreen = camera:WorldToScreenPoint(root.Position)
-                    if not onScreen then continue end
-                    local screenCenter = camera.ViewportSize / 2
-                    local dist = (Vector2.new(screenPos.X, screenPos.Y) - screenCenter).Magnitude
-                    if dist < closestDist then
-                        if S.aim_wall_check and not isAimbotTargetVisible(root) then continue end
-                        closestDist = dist
-                        closestTarget = descendant.Parent
-                        closestPart = getBodyPart(descendant.Parent, S.aim_body)
-                    end
-                end
-            end
-        end
-    end
-    return closestTarget, closestPart
-end
-
-local function performAimbotLock(targetPart)
-    if not targetPart or _aimLocking then return end
-    _aimLocking = true
-    local speed = math.clamp(S.aim_lock_speed, 0.1, 1.0)
-    local maxSteps = 5
-    local stepCount = 0
-    local conn; conn = RunService.RenderStepped:Connect(function()
-        if not targetPart or not targetPart.Parent then
-            conn:Disconnect(); _aimLocking = false; return
-        end
-        stepCount = stepCount + 1
-        if stepCount > maxSteps then
-            conn:Disconnect(); _aimLocking = false; return
-        end
-        local targetCF = CFrame.lookAt(camera.CFrame.Position, targetPart.Position)
-        camera.CFrame = camera.CFrame:Lerp(targetCF, speed * 0.2)
-    end)
-end
-
-local function updateFOVDisplay()
-    if not S.aim_show_fov then
-        if _fovDisplay and _fovDisplay.Remove then pcall(function() _fovDisplay:Remove() end); _fovDisplay = nil end
-        return
-    end
-    if not HAS_DRAWING then return end
-    if not _fovDisplay then
-        _fovDisplay = Drawing.new("Circle")
-        _fovDisplay.Thickness = 2; _fovDisplay.NumSides = 64
-        _fovDisplay.Color = C.ACCENT; _fovDisplay.Transparency = 0.7
-    end
-    _fovDisplay.Position = camera.ViewportSize / 2
-    _fovDisplay.Radius = S.aim_fov
-    _fovDisplay.Visible = S.aim_on
-end
--- ═══════════════════════════
+local CONFIG_FILE = "x7s_v1.json"
 
 local function mkDefault()
     return {
@@ -189,7 +84,6 @@ local function mkDefault()
         hbx_on=false, hbx_size=5, hbx_show=false, hbx_key="G",
         hbx_vis_check=true,
         trg_on=false, trg_key="R",
-        aim_on=false, aim_key="X", aim_fov=100, aim_range=500, aim_body="Head", aim_wall_check=true, aim_show_fov=false, aim_npc=false, aim_whitelist={}, aim_lock_speed=0.3,
         stream_mode=false,
         panel_bg=true, notifs=true, lang="English", gui_key="L",
     }
@@ -221,6 +115,16 @@ local Locale = {
 
         trg_on="Triggerbot",        trg_on_d="Shoots when your cursor is directly over a visible enemy.",
         trg_key="Triggerbot Keybind",
+        -- ═══ AIMBOT LOCALES ═══
+        aim_on="Enable Aimbot", aim_on_d="Auto aim at enemies in FOV.",
+        aim_key="Aimbot Keybind", aim_fov="Aimbot FOV", aim_fov_d="Detection radius in pixels.",
+        aim_range="Aimbot Range", aim_range_d="Maximum distance in studs.",
+        aim_body="Body Part", aim_body_d="Select: Head, Chest, Legs, Random, or Combo.",
+        aim_wall_check="Wall Check", aim_wall_check_d="Don't aim through walls.",
+        aim_show_fov="Show FOV", aim_show_fov_d="Display FOV circle.",
+        aim_npc="Target NPCs", aim_npc_d="Include NPCs in aimbot.",
+        aim_lock_speed="Lock Speed", aim_lock_speed_d="Camera lock smoothness.",
+        -- ═════════════════════
 
         st_bg="Toggle Panel Background",
         st_notif="Enable Notifications",
@@ -248,6 +152,16 @@ local Locale = {
         hbx_vis="Visible Check",    hbx_vis_d="Solo registra el hit si el enemigo está a la vista. Evita matar a través de paredes.",
         trg_on="Triggerbot",         trg_on_d="Dispara cuando el cursor está sobre un enemigo visible.",
         trg_key="Tecla Triggerbot",
+        -- ═══ AIMBOT LOCALES ═══
+        aim_on="Activar Aimbot", aim_on_d="Apunta automático en FOV.",
+        aim_key="Tecla Aimbot", aim_fov="FOV Aimbot", aim_fov_d="Radio de detección en píxeles.",
+        aim_range="Rango Aimbot", aim_range_d="Distancia máxima en studs.",
+        aim_body="Parte del Cuerpo", aim_body_d="Selecciona: Cabeza, Pecho, Piernas, Aleatorio o Combo.",
+        aim_wall_check="Wall Check", aim_wall_check_d="No apunta a través de paredes.",
+        aim_show_fov="Mostrar FOV", aim_show_fov_d="Muestra el círculo FOV.",
+        aim_npc="Apuntar NPCs", aim_npc_d="Incluye NPCs en aimbot.",
+        aim_lock_speed="Velocidad Lock", aim_lock_speed_d="Suavidad del bloqueo de cámara.",
+        -- ═════════════════════
         st_bg="Fondo del Panel",
         st_notif="Activar Notificaciones",
         st_lang="Idioma",
@@ -1407,6 +1321,31 @@ makeToggle(trgCard, "trg_on",  "trg_on_d",  "trg_on")
 makeDivider(trgCard)
 makeKeybind(trgCard, "trg_key", "trg_key")
 
+-- ══ AIM SECTION ═══════════════════════════════════
+local aimCard = makeCard(pg_inicio)
+makeSecHeader(aimCard, "◆", "Aimbot")
+makeToggle(aimCard, "aim_on", "aim_on_d", "aim_on")
+makeDivider(aimCard)
+makeSlider(aimCard, "aim_fov", "aim_fov", 50, 300)
+makeDivider(aimCard)
+makeSlider(aimCard, "aim_range", "aim_range", 100, 2000)
+makeDivider(aimCard)
+makeToggle(aimCard, "aim_wall_check", "aim_wall_check_d", "aim_wall_check")
+makeDivider(aimCard)
+makeToggle(aimCard, "aim_show_fov", "aim_show_fov_d", "aim_show_fov")
+makeDivider(aimCard)
+makeToggle(aimCard, "aim_npc", "aim_npc_d", "aim_npc")
+makeDivider(aimCard)
+makeKeybind(aimCard, "aim_key", "aim_key")
+
+-- ══ CAM LOCK SECTION ══════════════════════════════
+local camCard = makeCard(pg_inicio)
+makeSecHeader(camCard, "⊙", "Cam Lock")
+makeSlider(camCard, "aim_lock_speed", "aim_lock_speed", 0.1, 1.0)
+makeDivider(camCard)
+secLabel(camCard, "· · · BODY PART · · ·")
+makeDropdown(pg_inicio, "aim_body", "aim_body", {"Head", "Chest", "Legs", "Random", "Combo"})
+
 -- ══ AJUSTES PAGE ══════════════════════════════════
 local cfgCard = makeCard(pg_ajustes)
 makeSecHeader(cfgCard, "†", "Settings")
@@ -2136,29 +2075,7 @@ UserInputService.InputBegan:Connect(function(inp, proc)
         showNotif("✝  Triggerbot", S.trg_on and L("n_on") or L("n_off"), S.trg_on)
         return
     end
-
-    -- Toggle Aimbot
-    if kn == S.aim_key then
-        S.aim_on = not S.aim_on; save()
-        showNotif("⚡ AIMBOT", S.aim_on and L("n_on") or L("n_off"), S.aim_on)
-        return
-    end
 end)
-
--- ═══ AIMBOT RENDER LOOP ═══
-RunService.RenderStepped:Connect(function()
-    if S.aim_on then
-        updateFOVDisplay()
-        local target, targetPart = findAimbotTarget()
-        if target then
-            _aimTarget = target
-            if targetPart then performAimbotLock(targetPart) end
-        else
-            _aimTarget = nil
-        end
-    end
-end)
--- ═════════════════════════
 
 player.CharacterAdded:Connect(function()
     task.wait(0.5)
