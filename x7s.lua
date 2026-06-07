@@ -1846,30 +1846,40 @@ RunService.RenderStepped:Connect(function()
             end
         end
 
-        -- ▸ Ajustar tamaño y colisión de hitbox según Visible Check (dinámico cada frame)
+        -- ▸ Ajustar tamaño de hitbox según Visible Check (dinámico cada frame)
         if S.hbx_on and S.hbx_vis_check and _hbxOriginals[p] and _hbxOriginals[p].proxy then
             local isVis2 = myChar and isVisible(root, myChar)
             local targetSize = isVis2 
                 and (S.hbx_size * 2)      -- Expandido si está visible
                 or  2                      -- Normal si está detrás de pared
-            local targetCanCollide = isVis2  -- True si visible, False si detrás de pared
             
             pcall(function()
                 local currentSize = _hbxOriginals[p].proxy.Size.X
                 if math.abs(currentSize - targetSize) > 0.1 then
                     _hbxOriginals[p].proxy.Size = Vector3.new(targetSize, targetSize, targetSize)
                 end
-                _hbxOriginals[p].proxy.CanCollide = targetCanCollide
+                -- CanCollide siempre false para que puedas pasar (tamaño visual indica estado)
+                _hbxOriginals[p].proxy.CanCollide = false
             end)
         end
 
-        -- ▸ Nombre encima del personaje — solo si esp_on Y esp_names
+        -- ▸ Nombre encima del personaje — color dinámico si está detrás de pared
         if obj.nameBillboard then
             local showName = S.esp_on and S.esp_names and not streamModeOn
             obj.nameBillboard.Enabled = showName
             if showName then
                 local nameLbl = obj.nameBillboard:FindFirstChild("NameLbl")
-                if nameLbl then nameLbl.TextColor3 = getEspColor() end
+                if nameLbl then
+                    -- Si hbx_vis_check activo, cambiar color cuando está detrás de pared
+                    if S.hbx_vis_check then
+                        local isVis3 = myChar and isVisible(root, myChar)
+                        nameLbl.TextColor3 = isVis3 
+                            and getEspColor()                           -- Color normal si visible
+                            or  Color3.fromRGB(220, 80, 80)             -- Rojo si detrás de pared
+                    else
+                        nameLbl.TextColor3 = getEspColor()
+                    end
+                end
             end
         end
 
