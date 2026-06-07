@@ -1846,6 +1846,20 @@ RunService.RenderStepped:Connect(function()
             end
         end
 
+        -- ▸ Ajustar tamaño de hitbox según Visible Check (dinámico cada frame)
+        if S.hbx_on and S.hbx_vis_check and _hbxOriginals[p] and _hbxOriginals[p].proxy then
+            local isVis2 = myChar and isVisible(root, myChar)
+            local targetSize = isVis2 
+                and (S.hbx_size * 2)      -- Expandido si está visible
+                or  2                      -- Normal si está detrás de pared
+            local currentSize = _hbxOriginals[p].proxy.Size.X
+            if math.abs(currentSize - targetSize) > 0.1 then
+                pcall(function()
+                    _hbxOriginals[p].proxy.Size = Vector3.new(targetSize, targetSize, targetSize)
+                end)
+            end
+        end
+
         -- ▸ Nombre encima del personaje — solo si esp_on Y esp_names
         if obj.nameBillboard then
             local showName = S.esp_on and S.esp_names and not streamModeOn
