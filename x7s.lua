@@ -2184,24 +2184,19 @@ end)
 
 -- ══ SUMMER 2026 COLLECTOR ═══════════════════════════
 task.spawn(function()
-    local COLLECTION_RADIUS = 200
-    while task.wait(0.2) do
-        if S.summer_on then
-            local char = player.Character
-            local root = char and char:FindFirstChild("HumanoidRootPart")
-            local sp = workspace:FindFirstChild("Spawnables")
-            if root and sp then
-                for _, obj in ipairs(sp:GetDescendants()) do
-                    if obj.Name == "Touch" and obj:IsA("BasePart") then
-                        local dist = (root.Position - obj.Position).Magnitude
-                        if dist <= COLLECTION_RADIUS then
-                            pcall(function()
-                                firetouchinterest(root, obj, 0)
-                                firetouchinterest(root, obj, 1)
-                            end)
-                        end
-                    end
-                end
+    local RS = game:GetService("ReplicatedStorage")
+    local collectRemote = RS:WaitForChild("SummerCollect")
+    
+    while task.wait(0.3) do
+        if not S.summer_on then continue end
+        local sp = workspace:FindFirstChild("Spawnables")
+        if not sp then continue end
+        for _, touch in ipairs(sp:GetDescendants()) do
+            if touch.Name == "Touch" and touch:IsA("BasePart") and touch.Parent then
+                pcall(function()
+                    collectRemote:FireServer(touch)
+                end)
+                task.wait(0.05)
             end
         end
     end
