@@ -180,6 +180,8 @@ local function updateFOVDisplay()
 end
 -- ═══════════════════════════
 
+local CONFIG_FILE = "x7s_config.json"
+
 local function mkDefault()
     return {
         esp_on=false, esp_names=false, esp_lines=false, esp_key="T",
