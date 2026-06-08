@@ -1828,8 +1828,9 @@ applyHitbox = function(p, on)
             proxy.Shape = Enum.PartType.Block
             proxy.Size = Vector3.new(s, s, s)
             proxy.CanCollide = false  -- No colisiona (es principalmente visual)
+            proxy.CanQuery = true     -- Detectable por raycast
             proxy.CFrame = root.CFrame
-            proxy.Transparency = 1  -- invisible
+            proxy.Transparency = 0.99 -- casi invisible pero detectable por raycast
             proxy.Massless = true
             proxy.TopSurface = Enum.SurfaceType.Smooth
             proxy.BottomSurface = Enum.SurfaceType.Smooth
@@ -1934,17 +1935,25 @@ RunService.RenderStepped:Connect(function()
                         local blocked = S.hbx_vis_check and enemyRoot2 and not isVisible(enemyRoot2, myChar)
                         if not blocked then
                             _tbCooldown = now
-                            local fired = false
                             pcall(function()
-                                if mouse1click then mouse1click(); fired = true end
+                                -- Usa el RemoteEvent fire de la Tool equipada
+                                local tool = myChar:FindFirstChildOfClass("Tool")
+                                local fireRE = tool and tool:FindFirstChild("fire")
+                                if fireRE then
+                                    local target = enemyRoot2 or hitChar:FindFirstChild("HumanoidRootPart")
+                                    if target then
+                                        fireRE:FireServer(target.Position)
+                                    end
+                                else
+                                    -- Fallback: simula click
+                                    local fired = false
+                                    pcall(function() if mouse1click then mouse1click(); fired = true end end)
+                                    if not fired then pcall(function()
+                                        game:GetService("VirtualInputManager"):SendMouseButtonEvent(0,0,0,true,game,0)
+                                        task.delay(0.05,function() pcall(function() game:GetService("VirtualInputManager"):SendMouseButtonEvent(0,0,0,false,game,0) end) end)
+                                    end) end
+                                end
                             end)
-                            if not fired then pcall(function()
-                                if mouse1press then mouse1press(); task.delay(0.05, function() pcall(mouse1release) end); fired = true end
-                            end) end
-                            if not fired then pcall(function()
-                                game:GetService("VirtualInputManager"):SendMouseButtonEvent(0,0,0,true,game,0)
-                                task.delay(0.05,function() pcall(function() game:GetService("VirtualInputManager"):SendMouseButtonEvent(0,0,0,false,game,0) end) end)
-                            end) end
                         end
                         end
                     end
