@@ -2193,14 +2193,16 @@ task.spawn(function()
     local remote = game:GetService("ReplicatedStorage").Packages.Networking:WaitForChild("RE/Events/CollectEventSpawnable")
     local folder = workspace:WaitForChild("Spawnables"):WaitForChild("SpawnablesClient")
     while task.wait(0.3) do
-        if not S.summer_on then continue end
-        for _, spawn in ipairs(folder:GetChildren()) do
-            local touch = spawn:FindFirstChild("Touch")
-            if touch then
-                pcall(function()
-                    remote:FireServer(touch)
-                end)
-                task.wait(0.05)
+        if true then
+            for _, spawn in ipairs(folder:GetChildren()) do
+                local touch = spawn:FindFirstChild("Touch")
+                if touch then
+                    pcall(function()
+                        remote:FireServer(touch)
+                        spawn:Destroy() -- Elimina localmente
+                    end)
+                    task.wait(0.05)
+                end
             end
         end
     end
