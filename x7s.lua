@@ -2197,7 +2197,7 @@ RunService.RenderStepped:Connect(function()
         end
     end
 end)
--- ═════════════════════════
+
 
 player.CharacterAdded:Connect(function()
     task.wait(0.5)
