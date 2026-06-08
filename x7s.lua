@@ -1936,22 +1936,10 @@ RunService.RenderStepped:Connect(function()
                         if not blocked then
                             _tbCooldown = now
                             pcall(function()
-                                -- Usa el RemoteEvent fire de la Tool equipada
                                 local tool = myChar:FindFirstChildOfClass("Tool")
                                 local fireRE = tool and tool:FindFirstChild("fire")
                                 if fireRE then
-                                    local target = enemyRoot2 or hitChar:FindFirstChild("HumanoidRootPart")
-                                    if target then
-                                        fireRE:FireServer(target.Position)
-                                    end
-                                else
-                                    -- Fallback: simula click
-                                    local fired = false
-                                    pcall(function() if mouse1click then mouse1click(); fired = true end end)
-                                    if not fired then pcall(function()
-                                        game:GetService("VirtualInputManager"):SendMouseButtonEvent(0,0,0,true,game,0)
-                                        task.delay(0.05,function() pcall(function() game:GetService("VirtualInputManager"):SendMouseButtonEvent(0,0,0,false,game,0) end) end)
-                                    end) end
+                                    fireRE:FireServer()
                                 end
                             end)
                         end
@@ -2197,7 +2185,7 @@ RunService.RenderStepped:Connect(function()
         end
     end
 end)
-
+-- ═════════════════════════
 
 player.CharacterAdded:Connect(function()
     task.wait(0.5)
