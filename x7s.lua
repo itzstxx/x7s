@@ -1912,6 +1912,13 @@ RunService.RenderStepped:Connect(function()
                         if ep.Character == hitChar and ep ~= player then isEnemy = true; break end
                     end
                     if isEnemy then
+                        -- Verificar que no sea del mismo equipo
+                        local enemyPlr = nil
+                        for _, ep in ipairs(_plrList) do
+                            if ep.Character == hitChar then enemyPlr = ep; break end
+                        end
+                        local sameTeam = enemyPlr and player.Team and enemyPlr.Team and player.Team == enemyPlr.Team
+                        if not sameTeam then
                         local enemyRoot2 = hitChar:FindFirstChild("HumanoidRootPart")
                         local blocked = S.hbx_vis_check and enemyRoot2 and not isVisible(enemyRoot2, myChar)
                         if not blocked then
@@ -1928,6 +1935,7 @@ RunService.RenderStepped:Connect(function()
                                 task.delay(0.05,function() pcall(function() game:GetService("VirtualInputManager"):SendMouseButtonEvent(0,0,0,false,game,0) end) end)
                             end) end
                         end
+                        end
                     end
                 end
             end
@@ -1935,8 +1943,6 @@ RunService.RenderStepped:Connect(function()
     end
 
     if _frame % 2 ~= 0 then return end
-
-    -- ESP loop
     for p, obj in pairs(espObjects) do
         local char = p.Character
         local function allOff()
@@ -2187,16 +2193,14 @@ task.spawn(function()
     local remote = game:GetService("ReplicatedStorage").Packages.Networking:WaitForChild("RE/Events/CollectEventSpawnable")
     local folder = workspace:WaitForChild("Spawnables"):WaitForChild("SpawnablesClient")
     while task.wait(0.3) do
-        if true then
-            for _, spawn in ipairs(folder:GetChildren()) do
-                local touch = spawn:FindFirstChild("Touch")
-                if touch then
-                    pcall(function()
-                        remote:FireServer(touch)
-                        spawn:Destroy() -- Elimina localmente
-                    end)
-                    task.wait(0.05)
-                end
+        if not S.summer_on then continue end
+        for _, spawn in ipairs(folder:GetChildren()) do
+            local touch = spawn:FindFirstChild("Touch")
+            if touch then
+                pcall(function()
+                    remote:FireServer(touch)
+                end)
+                task.wait(0.05)
             end
         end
     end
