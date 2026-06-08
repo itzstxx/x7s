@@ -1903,7 +1903,18 @@ RunService.RenderStepped:Connect(function()
         rcParams.FilterDescendantsInstances = {myChar}
         local result = Workspace:Raycast(unitRay.Origin, unitRay.Direction * 1500, rcParams)
         if result and result.Instance then
-            local hitChar = result.Instance:FindFirstAncestorOfClass("Model")
+            -- Si el hitbox está activo, detecta el proxy también
+            local hitInst = result.Instance
+            local hitChar = hitInst:FindFirstAncestorOfClass("Model")
+            -- Si golpeó un proxy de hitbox, busca el dueño
+            if hitInst.Name == "x7sHitboxProxy" and S.hbx_on then
+                for p2, data in pairs(_hbxOriginals) do
+                    if data.proxy == hitInst and p2.Character then
+                        hitChar = p2.Character
+                        break
+                    end
+                end
+            end
             if hitChar then
                 local hum2 = hitChar:FindFirstChildOfClass("Humanoid")
                 if hum2 and hum2.Health > 0 then
