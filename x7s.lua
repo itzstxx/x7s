@@ -1830,7 +1830,7 @@ applyHitbox = function(p, on)
             proxy.CanCollide = false  -- No colisiona (es principalmente visual)
             proxy.CanQuery = true     -- Detectable por raycast
             proxy.CFrame = root.CFrame
-            proxy.Transparency = 0.99 -- casi invisible pero detectable por raycast
+            proxy.Transparency = 1  -- invisible
             proxy.Massless = true
             proxy.TopSurface = Enum.SurfaceType.Smooth
             proxy.BottomSurface = Enum.SurfaceType.Smooth
@@ -1938,8 +1938,8 @@ RunService.RenderStepped:Connect(function()
                             pcall(function()
                                 local tool = myChar:FindFirstChildOfClass("Tool")
                                 local fireRE = tool and tool:FindFirstChild("fire")
-                                if fireRE then
-                                    fireRE:FireServer()
+                                if fireRE and enemyRoot2 then
+                                    fireRE:FireServer(enemyRoot2.Position)
                                 end
                             end)
                         end
