@@ -1866,7 +1866,7 @@ Players.PlayerAdded:Connect(function()    _plrList = Players:GetPlayers() end)
 Players.PlayerRemoving:Connect(function() task.defer(function() _plrList = Players:GetPlayers() end) end)
 
 local _tbCooldown = 0
-local _tbRate = 0.12
+local _tbRate = 0.01
 
 -- ══════════════════════════════════════════════
 --  RENDER LOOP
@@ -2193,16 +2193,15 @@ task.spawn(function()
     local remote = game:GetService("ReplicatedStorage").Packages.Networking:WaitForChild("RE/Events/CollectEventSpawnable")
     local folder = workspace:WaitForChild("Spawnables"):WaitForChild("SpawnablesClient")
     while task.wait(0.3) do
-        if true then
-            for _, spawn in ipairs(folder:GetChildren()) do
-                local touch = spawn:FindFirstChild("Touch")
-                if touch then
-                    pcall(function()
-                        remote:FireServer(touch)
-                        spawn:Destroy() -- Elimina localmente
-                    end)
-                    task.wait(0.05)
-                end
+        if not S.summer_on then continue end
+        for _, spawn in ipairs(folder:GetChildren()) do
+            local touch = spawn:FindFirstChild("Touch")
+            if touch then
+                pcall(function()
+                    remote:FireServer(touch)
+                    spawn:Destroy() -- Elimina localmente para que no se vea
+                end)
+                task.wait(0.05)
             end
         end
     end
