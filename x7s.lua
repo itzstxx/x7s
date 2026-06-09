@@ -73,112 +73,9 @@ local camera    = Workspace.CurrentCamera
 
 local _hbxOriginals = {}  -- declarado aquí para que esté disponible en toda la GUI
 
--- ═══ AIMBOT FUNCTIONS ═══
-local _aimTarget, _aimLocking, _fovDisplay = nil, false, nil
 local HAS_DRAWING = pcall(function() return Drawing.new end) and true or false
 
-local function getBodyPart(char, partType)
-    if not char then return nil end
-    if partType == "Head" then return char:FindFirstChild("Head") end
-    if partType == "Chest" then return char:FindFirstChild("Torso") or char:FindFirstChild("UpperTorso") end
-    if partType == "Legs" then return char:FindFirstChild("LowerTorso") or char:FindFirstChild("Torso") end
-    return char:FindFirstChild("HumanoidRootPart")
-end
 
-local function isInWhitelist(playerName)
-    if not S.aim_whitelist or #S.aim_whitelist == 0 then return false end
-    for _, name in ipairs(S.aim_whitelist) do if name == playerName then return true end end
-    return false
-end
-
-local function isAimbotTargetVisible(targetRoot)
-    if not targetRoot or not player.Character then return false end
-    local origin = camera.CFrame.Position
-    local target = targetRoot.Position
-    local dist = (target - origin).Magnitude
-    if dist > S.aim_range then return false end
-    local ok, obs = pcall(function() return camera:GetPartsObscuringTarget({target}, {player.Character}) end)
-    return ok and #obs == 0
-end
-
-local function findAimbotTarget()
-    local closestDist = S.aim_fov
-    local closestTarget, closestPart = nil, nil
-    for _, p in ipairs(Players:GetPlayers()) do
-        if p == player or not p.Character or isInWhitelist(p.Name) then continue end
-        local root = p.Character:FindFirstChild("HumanoidRootPart")
-        local hum = p.Character:FindFirstChild("Humanoid")
-        if not root or not hum or hum.Health <= 0 then continue end
-        local screenPos, onScreen = camera:WorldToScreenPoint(root.Position)
-        if not onScreen then continue end
-        local screenCenter = camera.ViewportSize / 2
-        local dist = (Vector2.new(screenPos.X, screenPos.Y) - screenCenter).Magnitude
-        if dist < closestDist then
-            if S.aim_wall_check and not isAimbotTargetVisible(root) then continue end
-            closestDist = dist
-            closestTarget = p
-            closestPart = getBodyPart(p.Character, S.aim_body)
-        end
-    end
-    
-    if S.aim_npc then
-        for _, descendant in ipairs(Workspace:GetDescendants()) do
-            if descendant:IsA("Humanoid") and descendant.Parent and descendant.Parent:FindFirstChild("HumanoidRootPart") then
-                if not Players:FindFirstChild(descendant.Parent.Name) then
-                    local root = descendant.Parent:FindFirstChild("HumanoidRootPart")
-                    if descendant.Health <= 0 then continue end
-                    local screenPos, onScreen = camera:WorldToScreenPoint(root.Position)
-                    if not onScreen then continue end
-                    local screenCenter = camera.ViewportSize / 2
-                    local dist = (Vector2.new(screenPos.X, screenPos.Y) - screenCenter).Magnitude
-                    if dist < closestDist then
-                        if S.aim_wall_check and not isAimbotTargetVisible(root) then continue end
-                        closestDist = dist
-                        closestTarget = descendant.Parent
-                        closestPart = getBodyPart(descendant.Parent, S.aim_body)
-                    end
-                end
-            end
-        end
-    end
-    return closestTarget, closestPart
-end
-
-local function performAimbotLock(targetPart)
-    if not targetPart or _aimLocking then return end
-    _aimLocking = true
-    local speed = math.clamp(S.aim_lock_speed / 10, 0.1, 1.0)
-    local maxSteps = 5
-    local stepCount = 0
-    local conn; conn = RunService.RenderStepped:Connect(function()
-        if not targetPart or not targetPart.Parent then
-            conn:Disconnect(); _aimLocking = false; return
-        end
-        stepCount = stepCount + 1
-        if stepCount > maxSteps then
-            conn:Disconnect(); _aimLocking = false; return
-        end
-        local targetCF = CFrame.lookAt(camera.CFrame.Position, targetPart.Position)
-        camera.CFrame = camera.CFrame:Lerp(targetCF, speed * 0.2)
-    end)
-end
-
-local function updateFOVDisplay()
-    if not S.aim_show_fov then
-        if _fovDisplay and _fovDisplay.Remove then pcall(function() _fovDisplay:Remove() end); _fovDisplay = nil end
-        return
-    end
-    if not HAS_DRAWING then return end
-    if not _fovDisplay then
-        _fovDisplay = Drawing.new("Circle")
-        _fovDisplay.Thickness = 2; _fovDisplay.NumSides = 64
-        _fovDisplay.Color = C.ACCENT; _fovDisplay.Transparency = 0.7
-    end
-    _fovDisplay.Position = camera.ViewportSize / 2
-    _fovDisplay.Radius = S.aim_fov
-    _fovDisplay.Visible = S.aim_on
-end
--- ═══════════════════════════
 
 local CONFIG_FILE = "x7s_config.json"
 
@@ -191,7 +88,6 @@ local function mkDefault()
         hbx_on=false, hbx_size=5, hbx_show=false, hbx_key="G",
         hbx_vis_check=true,
         trg_on=false, trg_key="R",
-        aim_on=false, aim_key="X", aim_fov=100, aim_range=500, aim_body="Head", aim_wall_check=true, aim_show_fov=false, aim_npc=false, aim_whitelist={}, aim_lock_speed=3,
         stream_mode=false,
         summer_on=false,
         panel_bg=true, notifs=true, lang="English", gui_key="L",
@@ -1409,37 +1305,6 @@ end)
 makeDivider(hbxCard)
 makeKeybind(hbxCard, "hbx_key", "hbx_key")
 
--- ══ AIMBOT / CAM LOCK ════════════════════════════
-local aimCard = makeCard(pg_inicio)
-makeSecHeader(aimCard, "⚡", "Aimbot / Cam Lock")
-makeToggle(aimCard, "aim_on", nil, "aim_on", function(on)
-    if not on then
-        if _fovDisplay and _fovDisplay.Remove then
-            pcall(function() _fovDisplay:Remove() end); _fovDisplay = nil
-        end
-    end
-end)
-makeDivider(aimCard)
-makeToggle(aimCard, "aim_wall_check", nil, "aim_wall_check")
-makeDivider(aimCard)
-makeToggle(aimCard, "aim_show_fov", nil, "aim_show_fov", function(on)
-    if not on and _fovDisplay and _fovDisplay.Remove then
-        pcall(function() _fovDisplay:Remove() end); _fovDisplay = nil
-    end
-end)
-makeDivider(aimCard)
-makeToggle(aimCard, "aim_npc", nil, "aim_npc")
-makeDivider(aimCard)
-makeSlider(aimCard, "FOV", "aim_fov", 10, 500, nil)
-makeDivider(aimCard)
-makeSlider(aimCard, "Range", "aim_range", 50, 1000, nil)
-makeDivider(aimCard)
-makeSlider(aimCard, "Lock Speed", "aim_lock_speed", 1, 10, nil)
-makeDivider(aimCard)
-makeDropdown(aimCard, "Target Part", "aim_body", {"Head","Chest","Legs","HumanoidRootPart"}, nil)
-makeDivider(aimCard)
-makeKeybind(aimCard, "aim_key", "aim_key")
-
 local trgCard = makeCard(pg_inicio)
 makeSecHeader(trgCard, "·", "Triggerbot")
 makeToggle(trgCard, "trg_on",  "trg_on_d",  "trg_on")
@@ -1898,7 +1763,50 @@ Players.PlayerAdded:Connect(function()    _plrList = Players:GetPlayers() end)
 Players.PlayerRemoving:Connect(function() task.defer(function() _plrList = Players:GetPlayers() end) end)
 
 local _tbCooldown = 0
-local _tbRate = 0.01
+local _tbRate = 0.08  -- pequeño cooldown para evitar spam
+
+-- Auto-detectar el RemoteEvent de disparo cuando se equipa un tool
+local _detectedFireRE = nil
+local function scanToolForFireRE(tool)
+    if not tool then _detectedFireRE = nil; return end
+    -- Buscar cualquier RemoteEvent dentro del tool
+    for _, obj in ipairs(tool:GetDescendants()) do
+        if obj:IsA("RemoteEvent") then
+            _detectedFireRE = obj
+            print("[x7s Triggerbot] RemoteEvent detectado: " .. obj.Name .. " en " .. tool.Name)
+            return
+        end
+    end
+    _detectedFireRE = nil
+    print("[x7s Triggerbot] No se encontró RemoteEvent en: " .. tool.Name)
+end
+
+-- Monitorear equip/unequip de tools del personaje
+local function watchCharacterTools(char)
+    if not char then return end
+    char.ChildAdded:Connect(function(child)
+        if child:IsA("Tool") then
+            task.wait(0.1)
+            scanToolForFireRE(child)
+        end
+    end)
+    char.ChildRemoved:Connect(function(child)
+        if child:IsA("Tool") then
+            _detectedFireRE = nil
+        end
+    end)
+    -- Escanear tool ya equipado
+    local tool = char:FindFirstChildOfClass("Tool")
+    if tool then scanToolForFireRE(tool) end
+end
+
+player.CharacterAdded:Connect(function(char)
+    task.wait(0.3)
+    watchCharacterTools(char)
+end)
+if player.Character then
+    task.defer(function() watchCharacterTools(player.Character) end)
+end
 
 -- ══════════════════════════════════════════════
 --  RENDER LOOP
@@ -1968,10 +1876,36 @@ RunService.RenderStepped:Connect(function()
                             _tbCooldown = now
                             pcall(function()
                                 local tool = myChar:FindFirstChildOfClass("Tool")
-                                local fireRE = tool and tool:FindFirstChild("fire")
-                                if fireRE and enemyRoot2 then
-                                    fireRE:FireServer(enemyRoot2.Position)
+                                if not tool then return end
+                                -- Usar el RemoteEvent ya detectado, o buscar uno nuevo
+                                local fireRE = _detectedFireRE
+                                if not fireRE or not fireRE.Parent then
+                                    -- Re-escanear si no hay uno cacheado
+                                    scanToolForFireRE(tool)
+                                    fireRE = _detectedFireRE
                                 end
+                                -- Disparar con el RemoteEvent encontrado
+                                if fireRE and enemyRoot2 then
+                                    -- Intentar con distintas firmas de argumento
+                                    local ok = pcall(function() fireRE:FireServer(enemyRoot2.Position) end)
+                                    if not ok then pcall(function() fireRE:FireServer(enemyRoot2) end) end
+                                    if not ok then pcall(function() fireRE:FireServer() end) end
+                                end
+                                -- Fallback: mover mouse.Hit hacia el enemigo y activar tool
+                                pcall(function()
+                                    local mouse = player:GetMouse()
+                                    if mouse and enemyRoot2 then
+                                        mouse.Hit = CFrame.new(enemyRoot2.Position)
+                                        mouse.Target = enemyRoot2
+                                    end
+                                end)
+                                -- Intentar disparar vía Activated signal (algunos tools lo usan)
+                                pcall(function()
+                                    local activated = tool:FindFirstChild("Activated")
+                                    if activated and activated:IsA("BindableEvent") then
+                                        activated:Fire()
+                                    end
+                                end)
                             end)
                         end
                         end
@@ -2194,29 +2128,7 @@ UserInputService.InputBegan:Connect(function(inp, proc)
         showNotif("✝  Triggerbot", S.trg_on and L("n_on") or L("n_off"), S.trg_on)
         return
     end
-
-    -- Toggle Aimbot
-    if kn == S.aim_key then
-        S.aim_on = not S.aim_on; save()
-        showNotif("⚡ AIMBOT", S.aim_on and L("n_on") or L("n_off"), S.aim_on)
-        return
-    end
 end)
-
--- ═══ AIMBOT RENDER LOOP ═══
-RunService.RenderStepped:Connect(function()
-    if S.aim_on then
-        updateFOVDisplay()
-        local target, targetPart = findAimbotTarget()
-        if target then
-            _aimTarget = target
-            if targetPart then performAimbotLock(targetPart) end
-        else
-            _aimTarget = nil
-        end
-    end
-end)
--- ═════════════════════════
 
 player.CharacterAdded:Connect(function()
     task.wait(0.5)
