@@ -1776,11 +1776,22 @@ local _nwBeamRE    = nil   -- "showBeam" RemoteEvent del tool
 local _nwGunKillRE = nil   -- Net GunKill RemoteEvent global
 local _nwHandle    = nil   -- Handle del tool equipado
 
--- Obtener GunKill via Net (igual que el script original)
+-- Obtener GunKill via ruta directa (sin require para evitar error de contexto)
 local function resolveGunKillRE()
     pcall(function()
-        local Net = require(game:GetService("ReplicatedStorage"):WaitForChild("Packages").Net)
-        _nwGunKillRE = Net:RemoteEvent("GunKill")
+        local RS = game:GetService("ReplicatedStorage")
+        local netFolder = RS:WaitForChild("Net", 5)
+        if not netFolder then
+            print("[x7s] Net folder no encontrado")
+            return
+        end
+        local re = netFolder:FindFirstChild("RE/GunKill")
+        if re and re:IsA("RemoteEvent") then
+            _nwGunKillRE = re
+            print("[x7s] GunKill encontrado: " .. re:GetFullName())
+        else
+            print("[x7s] RE/GunKill no encontrado en Net")
+        end
     end)
 end
 task.defer(resolveGunKillRE)
