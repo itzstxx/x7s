@@ -1763,22 +1763,59 @@ Players.PlayerAdded:Connect(function()    _plrList = Players:GetPlayers() end)
 Players.PlayerRemoving:Connect(function() task.defer(function() _plrList = Players:GetPlayers() end) end)
 
 local _tbCooldown = 0
-local _tbRate = 0.08  -- pequeño cooldown para evitar spam
+local _tbRate = 2.6  -- cooldown igual al del juego (2.5s entre disparos)
 
--- Auto-detectar el RemoteEvent de disparo cuando se equipa un tool
-local _detectedFireRE = nil
-local function scanToolForFireRE(tool)
-    if not tool then _detectedFireRE = nil; return end
-    -- Buscar cualquier RemoteEvent dentro del tool
+-- ── NightWeaver remotes ───────────────────────────────────────────────────
+-- fire    : RemoteEvent dentro del tool  → FireServer() sin args
+-- showBeam: RemoteEvent dentro del tool  → FireServer(hitPos, originPos, handle)
+-- GunKill : Net RemoteEvent global       → FireServer(uuid, victima, direccion)
+local GUNKILL_UUID = "9576996e-66e6-4d56-b791-f3b062eb597c"
+
+local _nwFireRE    = nil   -- "fire" RemoteEvent del tool
+local _nwBeamRE    = nil   -- "showBeam" RemoteEvent del tool
+local _nwGunKillRE = nil   -- Net GunKill RemoteEvent global
+local _nwHandle    = nil   -- Handle del tool equipado
+
+-- Obtener GunKill via Net (igual que el script original)
+local function resolveGunKillRE()
+    pcall(function()
+        local Net = require(game:GetService("ReplicatedStorage"):WaitForChild("Packages").Net)
+        _nwGunKillRE = Net:RemoteEvent("GunKill")
+    end)
+end
+task.defer(resolveGunKillRE)
+
+local function scanToolForNightWeaver(tool)
+    _nwFireRE = nil; _nwBeamRE = nil; _nwHandle = nil
+    if not tool then return end
+    -- Buscar Handle
+    _nwHandle = tool:FindFirstChild("Handle")
+    -- Buscar los RemoteEvents por nombre
     for _, obj in ipairs(tool:GetDescendants()) do
         if obj:IsA("RemoteEvent") then
-            _detectedFireRE = obj
-            print("[x7s Triggerbot] RemoteEvent detectado: " .. obj.Name .. " en " .. tool.Name)
-            return
+            local n = obj.Name:lower()
+            if n == "fire" then
+                _nwFireRE = obj
+                print("[x7s Triggerbot] RemoteEvent detectado: " .. obj.Name .. " en " .. tool.Name)
+            elseif n == "showbeam" then
+                _nwBeamRE = obj
+                print("[x7s Triggerbot] RemoteEvent detectado: " .. obj.Name .. " en " .. tool.Name)
+            end
         end
     end
-    _detectedFireRE = nil
-    print("[x7s Triggerbot] No se encontró RemoteEvent en: " .. tool.Name)
+    -- Si no encontró "fire" por nombre, tomar el primero disponible como fallback
+    if not _nwFireRE then
+        for _, obj in ipairs(tool:GetDescendants()) do
+            if obj:IsA("RemoteEvent") then
+                _nwFireRE = obj
+                print("[x7s Triggerbot] RemoteEvent fallback: " .. obj.Name .. " en " .. tool.Name)
+                break
+            end
+        end
+    end
+    if not _nwFireRE then
+        print("[x7s Triggerbot] No se encontró RemoteEvent en: " .. tool.Name)
+    end
 end
 
 -- Monitorear equip/unequip de tools del personaje
@@ -1787,17 +1824,16 @@ local function watchCharacterTools(char)
     char.ChildAdded:Connect(function(child)
         if child:IsA("Tool") then
             task.wait(0.1)
-            scanToolForFireRE(child)
+            scanToolForNightWeaver(child)
         end
     end)
     char.ChildRemoved:Connect(function(child)
         if child:IsA("Tool") then
-            _detectedFireRE = nil
+            _nwFireRE = nil; _nwBeamRE = nil; _nwHandle = nil
         end
     end)
-    -- Escanear tool ya equipado
     local tool = char:FindFirstChildOfClass("Tool")
-    if tool then scanToolForFireRE(tool) end
+    if tool then scanToolForNightWeaver(tool) end
 end
 
 player.CharacterAdded:Connect(function(char)
@@ -1877,35 +1913,37 @@ RunService.RenderStepped:Connect(function()
                             pcall(function()
                                 local tool = myChar:FindFirstChildOfClass("Tool")
                                 if not tool then return end
-                                -- Usar el RemoteEvent ya detectado, o buscar uno nuevo
-                                local fireRE = _detectedFireRE
-                                if not fireRE or not fireRE.Parent then
-                                    -- Re-escanear si no hay uno cacheado
-                                    scanToolForFireRE(tool)
-                                    fireRE = _detectedFireRE
+
+                                -- Re-escanear si los remotes no están cacheados
+                                if not _nwFireRE or not _nwFireRE.Parent then
+                                    scanToolForNightWeaver(tool)
                                 end
-                                -- Disparar con el RemoteEvent encontrado
-                                if fireRE and enemyRoot2 then
-                                    -- Intentar con distintas firmas de argumento
-                                    local ok = pcall(function() fireRE:FireServer(enemyRoot2.Position) end)
-                                    if not ok then pcall(function() fireRE:FireServer(enemyRoot2) end) end
-                                    if not ok then pcall(function() fireRE:FireServer() end) end
+
+                                local handle = _nwHandle or tool:FindFirstChild("Handle")
+                                local myHRP  = myChar:FindFirstChild("HumanoidRootPart")
+                                if not handle or not myHRP or not enemyRoot2 then return end
+
+                                local hitPos    = enemyRoot2.Position
+                                local originPos = myHRP.Position
+                                local lookDir   = CFrame.lookAt(handle.Position, hitPos).LookVector
+
+                                -- 1) fire:FireServer()  → notifica al servidor que disparaste
+                                if _nwFireRE then
+                                    pcall(function() _nwFireRE:FireServer() end)
                                 end
-                                -- Fallback: mover mouse.Hit hacia el enemigo y activar tool
-                                pcall(function()
-                                    local mouse = player:GetMouse()
-                                    if mouse and enemyRoot2 then
-                                        mouse.Hit = CFrame.new(enemyRoot2.Position)
-                                        mouse.Target = enemyRoot2
-                                    end
-                                end)
-                                -- Intentar disparar vía Activated signal (algunos tools lo usan)
-                                pcall(function()
-                                    local activated = tool:FindFirstChild("Activated")
-                                    if activated and activated:IsA("BindableEvent") then
-                                        activated:Fire()
-                                    end
-                                end)
+
+                                -- 2) showBeam:FireServer(hitPos, originPos, handle) → efecto visual
+                                if _nwBeamRE then
+                                    pcall(function() _nwBeamRE:FireServer(hitPos, originPos, handle) end)
+                                end
+
+                                -- 3) GunKill:FireServer(uuid, victima, dirección) → daño real
+                                if not _nwGunKillRE then resolveGunKillRE() end
+                                if _nwGunKillRE and enemyPlr then
+                                    pcall(function()
+                                        _nwGunKillRE:FireServer(GUNKILL_UUID, enemyPlr, lookDir)
+                                    end)
+                                end
                             end)
                         end
                         end
