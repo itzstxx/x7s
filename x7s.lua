@@ -1776,38 +1776,22 @@ local _nwBeamRE    = nil   -- "showBeam" RemoteEvent del tool
 local _nwGunKillRE = nil   -- Net GunKill RemoteEvent global
 local _nwHandle    = nil   -- Handle del tool equipado
 
--- Obtener GunKill escaneando ReplicatedStorage completo
+-- Obtener GunKill via ruta directa: ReplicatedStorage.Net["RE/GunKill"]
 local function resolveGunKillRE()
     pcall(function()
-        local RS = game:GetService("ReplicatedStorage")
-        -- Buscar nombre exacto "RE/GunKill"
-        for _, obj in ipairs(RS:GetDescendants()) do
-            if obj:IsA("RemoteEvent") and obj.Name == "RE/GunKill" then
-                _nwGunKillRE = obj
-                print("[x7s] GunKill encontrado: " .. obj:GetFullName())
-                return
-            end
+        local RS  = game:GetService("ReplicatedStorage")
+        local net = RS:WaitForChild("Net", 10)
+        if not net then print("[x7s] Net no encontrado"); return end
+        local re  = net:WaitForChild("RE/GunKill", 10)
+        if re and re:IsA("RemoteEvent") then
+            _nwGunKillRE = re
+            print("[x7s] GunKill OK: " .. re:GetFullName())
+        else
+            print("[x7s] RE/GunKill no encontrado dentro de Net")
         end
-        -- Fallback: cualquier RemoteEvent con "gunkill" en el nombre
-        for _, obj in ipairs(RS:GetDescendants()) do
-            if obj:IsA("RemoteEvent") and obj.Name:lower():find("gunkill") then
-                _nwGunKillRE = obj
-                print("[x7s] GunKill fallback: " .. obj:GetFullName())
-                return
-            end
-        end
-        print("[x7s] GunKill no encontrado en ReplicatedStorage")
     end)
 end
 task.defer(resolveGunKillRE)
-
--- Re-intentar cada 3s hasta encontrarlo (por si carga tarde)
-task.spawn(function()
-    while not _nwGunKillRE do
-        task.wait(3)
-        resolveGunKillRE()
-    end
-end)
 
 local function scanToolForNightWeaver(tool)
     _nwFireRE = nil; _nwBeamRE = nil; _nwHandle = nil
