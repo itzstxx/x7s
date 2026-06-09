@@ -147,7 +147,7 @@ end
 local function performAimbotLock(targetPart)
     if not targetPart or _aimLocking then return end
     _aimLocking = true
-    local speed = math.clamp(S.aim_lock_speed, 0.1, 1.0)
+    local speed = math.clamp(S.aim_lock_speed / 10, 0.1, 1.0)
     local maxSteps = 5
     local stepCount = 0
     local conn; conn = RunService.RenderStepped:Connect(function()
@@ -191,7 +191,7 @@ local function mkDefault()
         hbx_on=false, hbx_size=5, hbx_show=false, hbx_key="G",
         hbx_vis_check=true,
         trg_on=false, trg_key="R",
-        aim_on=false, aim_key="X", aim_fov=100, aim_range=500, aim_body="Head", aim_wall_check=true, aim_show_fov=false, aim_npc=false, aim_whitelist={}, aim_lock_speed=0.3,
+        aim_on=false, aim_key="X", aim_fov=100, aim_range=500, aim_body="Head", aim_wall_check=true, aim_show_fov=false, aim_npc=false, aim_whitelist={}, aim_lock_speed=3,
         stream_mode=false,
         summer_on=false,
         panel_bg=true, notifs=true, lang="English", gui_key="L",
@@ -1408,6 +1408,37 @@ makeToggle(hbxCard, "hbx_show", nil, "hbx_show", function(on)
 end)
 makeDivider(hbxCard)
 makeKeybind(hbxCard, "hbx_key", "hbx_key")
+
+-- ══ AIMBOT / CAM LOCK ════════════════════════════
+local aimCard = makeCard(pg_inicio)
+makeSecHeader(aimCard, "⚡", "Aimbot / Cam Lock")
+makeToggle(aimCard, "aim_on", nil, "aim_on", function(on)
+    if not on then
+        if _fovDisplay and _fovDisplay.Remove then
+            pcall(function() _fovDisplay:Remove() end); _fovDisplay = nil
+        end
+    end
+end)
+makeDivider(aimCard)
+makeToggle(aimCard, "aim_wall_check", nil, "aim_wall_check")
+makeDivider(aimCard)
+makeToggle(aimCard, "aim_show_fov", nil, "aim_show_fov", function(on)
+    if not on and _fovDisplay and _fovDisplay.Remove then
+        pcall(function() _fovDisplay:Remove() end); _fovDisplay = nil
+    end
+end)
+makeDivider(aimCard)
+makeToggle(aimCard, "aim_npc", nil, "aim_npc")
+makeDivider(aimCard)
+makeSlider(aimCard, "FOV", "aim_fov", 10, 500, nil)
+makeDivider(aimCard)
+makeSlider(aimCard, "Range", "aim_range", 50, 1000, nil)
+makeDivider(aimCard)
+makeSlider(aimCard, "Lock Speed", "aim_lock_speed", 1, 10, nil)
+makeDivider(aimCard)
+makeDropdown(aimCard, "Target Part", "aim_body", {"Head","Chest","Legs","HumanoidRootPart"}, nil)
+makeDivider(aimCard)
+makeKeybind(aimCard, "aim_key", "aim_key")
 
 local trgCard = makeCard(pg_inicio)
 makeSecHeader(trgCard, "·", "Triggerbot")
