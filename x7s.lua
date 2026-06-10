@@ -85,7 +85,7 @@ local function mkDefault()
         esp_char_r=100, esp_char_g=220, esp_char_b=100,  -- Color del Character ESP (verde por defecto)
         esp_avatar=true,   -- Mostrar thumbnail del avatar en el ESP
         esp_rainbow=false, -- Modo arcoíris RGB (cicla el color automáticamente)
-        hbx_on=false, hbx_size=5, hbx_show=false, hbx_key="G",
+        hbx_on=false, hbx_size=5, hbx_show=false, hbx_show2=false, hbx_key="G",
         hbx_vis_check=true,
         trg_on=false, trg_key="R",
         stream_mode=false,
@@ -115,6 +115,7 @@ local Locale = {
         hbx_on="Enable Hitbox",     hbx_on_d="Show and expand enemy hitboxes.",
         hbx_size="Hitbox Size",
         hbx_show="Show Hitbox",
+        hbx_show2="Show Hitbox (Always)",  hbx_show2_d="Shows the hitbox box at the selected size regardless of whether the player is hidden.",
         hbx_key="Hitbox Keybind",
         hbx_vis="Visible Check",    hbx_vis_d="Only register hits when the enemy is actually visible. Prevents kills through walls.",
 
@@ -145,6 +146,7 @@ local Locale = {
         hbx_on="Activar Hitbox",    hbx_on_d="Muestra y expande las hitboxes enemigas.",
         hbx_size="Tamaño Hitbox",
         hbx_show="Mostrar Hitbox",
+        hbx_show2="Mostrar Hitbox (Siempre)",  hbx_show2_d="Muestra la caja de hitbox al tamaño seleccionado sin importar si el jugador está oculto.",
         hbx_key="Tecla Hitbox",
         hbx_vis="Visible Check",    hbx_vis_d="Solo registra el hit si el enemigo está a la vista. Evita matar a través de paredes.",
         trg_on="Triggerbot",         trg_on_d="Dispara cuando el cursor está sobre un enemigo visible.",
@@ -1271,6 +1273,9 @@ makeToggle(hbxCard, "hbx_on",  "hbx_on_d",  "hbx_on", function(on)
                 _hbxOriginals[p2] = nil
             end
         end
+        for _, obj in pairs(espObjects) do
+            if obj.selBox2 then obj.selBox2.Visible = false end
+        end
     end
 end)
 makeDivider(hbxCard)
@@ -1300,6 +1305,14 @@ makeDivider(hbxCard)
 makeToggle(hbxCard, "hbx_show", nil, "hbx_show", function(on)
     if not on and espObjects then
         for _, obj in pairs(espObjects) do obj.hbx.Visible = false end
+    end
+end)
+makeDivider(hbxCard)
+makeToggle(hbxCard, "hbx_show2", "hbx_show2_d", "hbx_show2", function(on)
+    if not on and espObjects then
+        for _, obj in pairs(espObjects) do
+            if obj.selBox2 then obj.selBox2.Visible = false end
+        end
     end
 end)
 makeDivider(hbxCard)
@@ -1564,12 +1577,29 @@ local function createSelectionBox3D(char)
     return sb
 end
 
+-- SelectionBox independiente: siempre visible sin importar si el jugador está oculto
+local function createSelectionBox3D_always(char)
+    local root = char and char:FindFirstChild("HumanoidRootPart")
+    if not root then return nil end
+    local sb = Instance.new("SelectionBox")
+    sb.Name          = "x7sHbxBox2"
+    sb.Color3        = Color3.fromRGB(255, 200, 0)   -- amarillo por defecto para distinguirla
+    sb.LineThickness = 0.05
+    sb.SurfaceTransparency = 0.88
+    sb.SurfaceColor3 = Color3.fromRGB(255, 200, 0)
+    sb.Visible       = false
+    sb.Parent        = gui
+    return sb
+end
+
 local function createEspObj(p)
     if p == player then return end
     -- SelectionBox 3D real para Show Hitbox
     local selBox3D = nil
+    local selBox3D2 = nil
     if p.Character then
         selBox3D = createSelectionBox3D(p.Character)
+        selBox3D2 = createSelectionBox3D_always(p.Character)
     end
     espObjects[p] = {
         highlights   = {},
@@ -1580,6 +1610,7 @@ local function createEspObj(p)
         line   = newLine(),
         hbx    = newBox(),
         selBox = selBox3D,   -- SelectionBox 3D Instance (puede ser nil si sin Drawing)
+        selBox2 = selBox3D2, -- SelectionBox independiente (siempre visible)
     }
     if p.Character then
         espObjects[p].billboard     = createAvatarBillboard(p, p.Character)
@@ -1595,11 +1626,15 @@ local function createEspObj(p)
         if obj2.selBox and typeof(obj2.selBox) == "Instance" then
             obj2.selBox:Destroy(); obj2.selBox = nil
         end
+        if obj2.selBox2 and typeof(obj2.selBox2) == "Instance" then
+            obj2.selBox2:Destroy(); obj2.selBox2 = nil
+        end
         task.wait(0.5)
         if espObjects[p] then
             espObjects[p].billboard     = createAvatarBillboard(p, char)
             espObjects[p].nameBillboard = createNameBillboard(p, char)
             espObjects[p].selBox        = createSelectionBox3D(char)
+            espObjects[p].selBox2       = createSelectionBox3D_always(char)
         end
     end)
 end
@@ -1613,6 +1648,9 @@ local function removeEspObj(p)
         pcall(function() obj.selBox:Destroy() end)
     elseif obj.selBox and obj.selBox.Remove then
         pcall(function() obj.selBox:Remove() end)
+    end
+    if obj.selBox2 and typeof(obj.selBox2) == "Instance" then
+        pcall(function() obj.selBox2:Destroy() end)
     end
     obj.box:Remove(); obj.name:Remove(); obj.line:Remove(); obj.hbx:Remove()
     espObjects[p] = nil
@@ -1776,22 +1814,69 @@ local _nwBeamRE    = nil   -- "showBeam" RemoteEvent del tool
 local _nwGunKillRE = nil   -- Net GunKill RemoteEvent global
 local _nwHandle    = nil   -- Handle del tool equipado
 
--- Obtener GunKill via ruta directa: ReplicatedStorage.Net["RE/GunKill"]
+-- Obtener GunKill probando múltiples rutas
 local function resolveGunKillRE()
     pcall(function()
-        local RS  = game:GetService("ReplicatedStorage")
-        local net = RS:WaitForChild("Net", 10)
-        if not net then print("[x7s] Net no encontrado"); return end
-        local re  = net:WaitForChild("RE/GunKill", 10)
-        if re and re:IsA("RemoteEvent") then
-            _nwGunKillRE = re
-            print("[x7s] GunKill OK: " .. re:GetFullName())
-        else
-            print("[x7s] RE/GunKill no encontrado dentro de Net")
+        local RS = game:GetService("ReplicatedStorage")
+
+        -- Ruta 1: RS.Net["RE/GunKill"]  (visible en Dex)
+        local net = RS:FindFirstChild("Net")
+        if net then
+            local re = net:FindFirstChild("RE/GunKill")
+            if re and re:IsA("RemoteEvent") then
+                _nwGunKillRE = re
+                print("[x7s] GunKill OK (Net): " .. re:GetFullName())
+                return
+            end
         end
+
+        -- Ruta 2: RS.Packages.Net["RE/GunKill"]
+        local pkgs = RS:FindFirstChild("Packages")
+        if pkgs then
+            local pnet = pkgs:FindFirstChild("Net")
+            if pnet then
+                local re = pnet:FindFirstChild("RE/GunKill")
+                if re and re:IsA("RemoteEvent") then
+                    _nwGunKillRE = re
+                    print("[x7s] GunKill OK (Packages.Net): " .. re:GetFullName())
+                    return
+                end
+            end
+        end
+
+        -- Ruta 3: RS.Remotes (folder "Remotes" visible en Dex)
+        local remotes = RS:FindFirstChild("Remotes")
+        if remotes then
+            for _, obj in ipairs(remotes:GetDescendants()) do
+                if obj:IsA("RemoteEvent") and obj.Name:lower():find("gunkill") then
+                    _nwGunKillRE = obj
+                    print("[x7s] GunKill OK (Remotes): " .. obj:GetFullName())
+                    return
+                end
+            end
+        end
+
+        -- Ruta 4: scan profundo de todo RS
+        for _, obj in ipairs(RS:GetDescendants()) do
+            if obj:IsA("RemoteEvent") and (obj.Name == "RE/GunKill" or obj.Name:lower() == "gunkill") then
+                _nwGunKillRE = obj
+                print("[x7s] GunKill OK (scan): " .. obj:GetFullName())
+                return
+            end
+        end
+
+        print("[x7s] GunKill no encontrado — reintentando...")
     end)
 end
 task.defer(resolveGunKillRE)
+
+-- Reintentar cada 2s hasta resolverlo
+task.spawn(function()
+    while not _nwGunKillRE do
+        task.wait(2)
+        resolveGunKillRE()
+    end
+end)
 
 local function scanToolForNightWeaver(tool)
     _nwFireRE = nil; _nwBeamRE = nil; _nwHandle = nil
@@ -2085,6 +2170,18 @@ RunService.RenderStepped:Connect(function()
                 obj.selBox.Visible = false
             end
         end
+
+        -- Show Hitbox (Always): SelectionBox independiente, sin visible check
+        if obj.selBox2 and typeof(obj.selBox2) == "Instance" then
+            if S.hbx_on and S.hbx_show2 and _hbxOriginals[p] and _hbxOriginals[p].proxy then
+                obj.selBox2.Adornee       = _hbxOriginals[p].proxy
+                obj.selBox2.Color3        = Color3.fromRGB(255, 200, 0)
+                obj.selBox2.SurfaceColor3 = Color3.fromRGB(255, 200, 0)
+                obj.selBox2.Visible       = true
+            else
+                obj.selBox2.Visible = false
+            end
+        end
         obj.hbx.Visible = false
     end
 end)
@@ -2161,6 +2258,7 @@ UserInputService.InputBegan:Connect(function(inp, proc)
             for _, obj in pairs(espObjects) do
                 obj.hbx.Visible = false
                 if obj.selBox then obj.selBox.Visible = false end
+                if obj.selBox2 then obj.selBox2.Visible = false end
             end
         end
         showNotif("✝  Hitbox", S.hbx_on and L("n_on") or L("n_off"), S.hbx_on)
@@ -2205,4 +2303,4 @@ task.spawn(function()
 end)
 
 
-print("   "..S.gui_key.." = Toggle GUI  ·  "..S.esp_key.." = ESP  ·  "..S.hbx_key.." = Hitbox  ·  "..S.trg_key.." = Trigger")
+print("   "..S.gui_key.." = Toggle GUI  ·  "..S.esp_key.." = ESP  ·  "..S.hbx_key.." = Hitbox  ·  "..S.trg_key.." = Trigger")www
