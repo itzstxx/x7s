@@ -87,7 +87,6 @@ local function mkDefault()
         esp_rainbow=false, -- Modo arcoíris RGB (cicla el color automáticamente)
         hbx_on=false, hbx_size=5, hbx_show=false, hbx_show2=false, hbx_key="G",
         hbx_vis_check=true,
-        trg_on=false, trg_key="R",
         stream_mode=false,
         summer_on=false,
         panel_bg=true, notifs=true, lang="English", gui_key="L",
@@ -119,9 +118,6 @@ local Locale = {
         hbx_key="Hitbox Keybind",
         hbx_vis="Visible Check",    hbx_vis_d="Only register hits when the enemy is actually visible. Prevents kills through walls.",
 
-        trg_on="Triggerbot",        trg_on_d="Shoots when your cursor is directly over a visible enemy.",
-        trg_key="Triggerbot Keybind",
-
         summer_on="Summer 2026",    summer_on_d="Collects Summer 2026 drops automatically. Only in matches.",
 
         st_bg="Toggle Panel Background",
@@ -149,9 +145,6 @@ local Locale = {
         hbx_show2="Mostrar Hitbox (Siempre)",  hbx_show2_d="Muestra la caja de hitbox al tamaño seleccionado sin importar si el jugador está oculto.",
         hbx_key="Tecla Hitbox",
         hbx_vis="Visible Check",    hbx_vis_d="Solo registra el hit si el enemigo está a la vista. Evita matar a través de paredes.",
-        trg_on="Triggerbot",         trg_on_d="Dispara cuando el cursor está sobre un enemigo visible.",
-        trg_key="Tecla Triggerbot",
-
         summer_on="Summer 2026",     summer_on_d="Recolecta los drops del Summer 2026 automáticamente. Solo en partidas.",
         st_bg="Fondo del Panel",
         st_notif="Activar Notificaciones",
@@ -1318,12 +1311,6 @@ end)
 makeDivider(hbxCard)
 makeKeybind(hbxCard, "hbx_key", "hbx_key")
 
-local trgCard = makeCard(pg_inicio)
-makeSecHeader(trgCard, "·", "Triggerbot")
-makeToggle(trgCard, "trg_on",  "trg_on_d",  "trg_on")
-makeDivider(trgCard)
-makeKeybind(trgCard, "trg_key", "trg_key")
-
 -- ══ SUMMER 2026 ═══════════════════════════════════
 local summerCard = makeCard(pg_inicio)
 makeSecHeader(summerCard, "☀", "Summer 2026")
@@ -1361,7 +1348,7 @@ makeResetBtn(keyCard2, "st_r1", "st_r1_d", function()
 end)
 makeDivider(keyCard2)
 makeResetBtn(keyCard2, "st_r2", "st_r2_d", function()
-    S.esp_key="T"; S.hbx_key="G"; S.trg_key="R"; S.gui_key="L"
+    S.esp_key="T"; S.hbx_key="G"; S.gui_key="L"
     for k, fn in pairs(refreshers) do if k:find("_key") then fn() end end; save()
 end)
 
@@ -1800,143 +1787,6 @@ local _plrList = Players:GetPlayers()
 Players.PlayerAdded:Connect(function()    _plrList = Players:GetPlayers() end)
 Players.PlayerRemoving:Connect(function() task.defer(function() _plrList = Players:GetPlayers() end) end)
 
-local _tbCooldown = 0
-local _tbRate = 2.6  -- cooldown igual al del juego (2.5s entre disparos)
-
--- ── NightWeaver remotes ───────────────────────────────────────────────────
--- fire    : RemoteEvent dentro del tool  → FireServer() sin args
--- showBeam: RemoteEvent dentro del tool  → FireServer(hitPos, originPos, handle)
--- GunKill : Net RemoteEvent global       → FireServer(uuid, victima, direccion)
-local GUNKILL_UUID = "9576996e-66e6-4d56-b791-f3b062eb597c"
-
-local _nwFireRE    = nil   -- "fire" RemoteEvent del tool
-local _nwBeamRE    = nil   -- "showBeam" RemoteEvent del tool
-local _nwGunKillRE = nil   -- Net GunKill RemoteEvent global
-local _nwHandle    = nil   -- Handle del tool equipado
-
--- Obtener GunKill probando múltiples rutas
-local function resolveGunKillRE()
-    pcall(function()
-        local RS = game:GetService("ReplicatedStorage")
-
-        -- Ruta 1: RS.Net["RE/GunKill"]  (visible en Dex)
-        local net = RS:FindFirstChild("Net")
-        if net then
-            local re = net:FindFirstChild("RE/GunKill")
-            if re and re:IsA("RemoteEvent") then
-                _nwGunKillRE = re
-                print("[x7s] GunKill OK (Net): " .. re:GetFullName())
-                return
-            end
-        end
-
-        -- Ruta 2: RS.Packages.Net["RE/GunKill"]
-        local pkgs = RS:FindFirstChild("Packages")
-        if pkgs then
-            local pnet = pkgs:FindFirstChild("Net")
-            if pnet then
-                local re = pnet:FindFirstChild("RE/GunKill")
-                if re and re:IsA("RemoteEvent") then
-                    _nwGunKillRE = re
-                    print("[x7s] GunKill OK (Packages.Net): " .. re:GetFullName())
-                    return
-                end
-            end
-        end
-
-        -- Ruta 3: RS.Remotes (folder "Remotes" visible en Dex)
-        local remotes = RS:FindFirstChild("Remotes")
-        if remotes then
-            for _, obj in ipairs(remotes:GetDescendants()) do
-                if obj:IsA("RemoteEvent") and obj.Name:lower():find("gunkill") then
-                    _nwGunKillRE = obj
-                    print("[x7s] GunKill OK (Remotes): " .. obj:GetFullName())
-                    return
-                end
-            end
-        end
-
-        -- Ruta 4: scan profundo de todo RS
-        for _, obj in ipairs(RS:GetDescendants()) do
-            if obj:IsA("RemoteEvent") and (obj.Name == "RE/GunKill" or obj.Name:lower() == "gunkill") then
-                _nwGunKillRE = obj
-                print("[x7s] GunKill OK (scan): " .. obj:GetFullName())
-                return
-            end
-        end
-
-        print("[x7s] GunKill no encontrado — reintentando...")
-    end)
-end
-task.defer(resolveGunKillRE)
-
--- Reintentar cada 2s hasta resolverlo
-task.spawn(function()
-    while not _nwGunKillRE do
-        task.wait(2)
-        resolveGunKillRE()
-    end
-end)
-
-local function scanToolForNightWeaver(tool)
-    _nwFireRE = nil; _nwBeamRE = nil; _nwHandle = nil
-    if not tool then return end
-    -- Buscar Handle
-    _nwHandle = tool:FindFirstChild("Handle")
-    -- Buscar los RemoteEvents por nombre
-    for _, obj in ipairs(tool:GetDescendants()) do
-        if obj:IsA("RemoteEvent") then
-            local n = obj.Name:lower()
-            if n == "fire" then
-                _nwFireRE = obj
-                print("[x7s Triggerbot] RemoteEvent detectado: " .. obj.Name .. " en " .. tool.Name)
-            elseif n == "showbeam" then
-                _nwBeamRE = obj
-                print("[x7s Triggerbot] RemoteEvent detectado: " .. obj.Name .. " en " .. tool.Name)
-            end
-        end
-    end
-    -- Si no encontró "fire" por nombre, tomar el primero disponible como fallback
-    if not _nwFireRE then
-        for _, obj in ipairs(tool:GetDescendants()) do
-            if obj:IsA("RemoteEvent") then
-                _nwFireRE = obj
-                print("[x7s Triggerbot] RemoteEvent fallback: " .. obj.Name .. " en " .. tool.Name)
-                break
-            end
-        end
-    end
-    if not _nwFireRE then
-        print("[x7s Triggerbot] No se encontró RemoteEvent en: " .. tool.Name)
-    end
-end
-
--- Monitorear equip/unequip de tools del personaje
-local function watchCharacterTools(char)
-    if not char then return end
-    char.ChildAdded:Connect(function(child)
-        if child:IsA("Tool") then
-            task.wait(0.1)
-            scanToolForNightWeaver(child)
-        end
-    end)
-    char.ChildRemoved:Connect(function(child)
-        if child:IsA("Tool") then
-            _nwFireRE = nil; _nwBeamRE = nil; _nwHandle = nil
-        end
-    end)
-    local tool = char:FindFirstChildOfClass("Tool")
-    if tool then scanToolForNightWeaver(tool) end
-end
-
-player.CharacterAdded:Connect(function(char)
-    task.wait(0.3)
-    watchCharacterTools(char)
-end)
-if player.Character then
-    task.defer(function() watchCharacterTools(player.Character) end)
-end
-
 -- ══════════════════════════════════════════════
 --  RENDER LOOP
 -- ══════════════════════════════════════════════
@@ -1960,88 +1810,6 @@ RunService.RenderStepped:Connect(function()
         for _, p in ipairs(_plrList) do
             if p ~= player and p.Character and not _hbxOriginals[p] then
                 applyHitbox(p, true)
-            end
-        end
-    end
-
-    -- Triggerbot
-    if S.trg_on and myChar and now - _tbCooldown > _tbRate then
-        local unitRay = camera:ScreenPointToRay(mousePos.X, mousePos.Y)
-        local rcParams = RaycastParams.new()
-        rcParams.FilterType = Enum.RaycastFilterType.Exclude
-        rcParams.FilterDescendantsInstances = {myChar}
-        local result = Workspace:Raycast(unitRay.Origin, unitRay.Direction * 1500, rcParams)
-        if result and result.Instance then
-            -- Si el hitbox está activo, detecta el proxy también
-            local hitInst = result.Instance
-            local hitChar = hitInst:FindFirstAncestorOfClass("Model")
-            -- Si golpeó un proxy de hitbox, busca el dueño
-            if hitInst.Name == "x7sHitboxProxy" and S.hbx_on then
-                for p2, data in pairs(_hbxOriginals) do
-                    if data.proxy == hitInst and p2.Character then
-                        hitChar = p2.Character
-                        break
-                    end
-                end
-            end
-            if hitChar then
-                local hum2 = hitChar:FindFirstChildOfClass("Humanoid")
-                if hum2 and hum2.Health > 0 then
-                    local isEnemy = false
-                    for _, ep in ipairs(_plrList) do
-                        if ep.Character == hitChar and ep ~= player then isEnemy = true; break end
-                    end
-                    if isEnemy then
-                        -- Verificar que no sea del mismo equipo
-                        local enemyPlr = nil
-                        for _, ep in ipairs(_plrList) do
-                            if ep.Character == hitChar then enemyPlr = ep; break end
-                        end
-                        local sameTeam = enemyPlr and player.Team and enemyPlr.Team and player.Team == enemyPlr.Team
-                        if not sameTeam then
-                        local enemyRoot2 = hitChar:FindFirstChild("HumanoidRootPart")
-                        local blocked = S.hbx_vis_check and enemyRoot2 and not isVisible(enemyRoot2, myChar)
-                        if not blocked then
-                            _tbCooldown = now
-                            pcall(function()
-                                local tool = myChar:FindFirstChildOfClass("Tool")
-                                if not tool then return end
-
-                                -- Re-escanear si los remotes no están cacheados
-                                if not _nwFireRE or not _nwFireRE.Parent then
-                                    scanToolForNightWeaver(tool)
-                                end
-
-                                local handle = _nwHandle or tool:FindFirstChild("Handle")
-                                local myHRP  = myChar:FindFirstChild("HumanoidRootPart")
-                                if not handle or not myHRP or not enemyRoot2 then return end
-
-                                local hitPos    = enemyRoot2.Position
-                                local originPos = myHRP.Position
-                                local lookDir   = CFrame.lookAt(handle.Position, hitPos).LookVector
-
-                                -- 1) fire:FireServer()  → notifica al servidor que disparaste
-                                if _nwFireRE then
-                                    pcall(function() _nwFireRE:FireServer() end)
-                                end
-
-                                -- 2) showBeam:FireServer(hitPos, originPos, handle) → efecto visual
-                                if _nwBeamRE then
-                                    pcall(function() _nwBeamRE:FireServer(hitPos, originPos, handle) end)
-                                end
-
-                                -- 3) GunKill:FireServer(uuid, victima, dirección) → daño real
-                                if not _nwGunKillRE then resolveGunKillRE() end
-                                if _nwGunKillRE and enemyPlr then
-                                    pcall(function()
-                                        _nwGunKillRE:FireServer(GUNKILL_UUID, enemyPlr, lookDir)
-                                    end)
-                                end
-                            end)
-                        end
-                        end
-                    end
-                end
             end
         end
     end
@@ -2265,13 +2033,6 @@ UserInputService.InputBegan:Connect(function(inp, proc)
         return
     end
 
-    -- Toggle Triggerbot
-    if kn == S.trg_key then
-        S.trg_on = not S.trg_on; save()
-        if refreshers["trg_on"] then refreshers["trg_on"]() end
-        showNotif("✝  Triggerbot", S.trg_on and L("n_on") or L("n_off"), S.trg_on)
-        return
-    end
 end)
 
 player.CharacterAdded:Connect(function()
@@ -2303,4 +2064,4 @@ task.spawn(function()
 end)
 
 
-print("   "..S.gui_key.." = Toggle GUI  ·  "..S.esp_key.." = ESP  ·  "..S.hbx_key.." = Hitbox  ·  "..S.trg_key.." = Trigger")
+print("   "..S.gui_key.." = Toggle GUI  ·  "..S.esp_key.." = ESP  ·  "..S.hbx_key.." = Hitbox")
