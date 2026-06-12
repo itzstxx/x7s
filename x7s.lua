@@ -1738,9 +1738,40 @@ local function isVisible(targetRoot, myChar)
 end
 
 -- ══════════════════════════════════════════════
---  HITBOX ALTERNATIVO (SL) — Sin física conflictiva
+--  HITBOX (SL) 2D — Sin cubo 3D, solo visual 2D
 -- ══════════════════════════════════════════════
 local _hbxOriginals_SL = {}
+local _hbxVisuals_SL = {}  -- Para los visuales 2D
+
+local function createHitboxVisual2D_SL(p, char)
+    if not char then return nil end
+    local head = char:FindFirstChild("Head")
+    if not head then return nil end
+    
+    -- BillboardGui con un cuadro 2D
+    local bb = Instance.new("BillboardGui")
+    bb.Name = "x7sHbxVisual2D_SL"
+    bb.Size = UDim2.fromOffset(60, 60)
+    bb.StudsOffsetWorldSpace = Vector3.new(0, 2.5, 0)
+    bb.AlwaysOnTop = true
+    bb.ResetOnSpawn = false
+    bb.LightInfluence = 0
+    bb.Adornee = head
+    bb.Parent = gui
+    bb.Enabled = false
+    
+    -- Frame cuadrado 2D
+    local frame = Instance.new("Frame", bb)
+    frame.Size = UDim2.new(1, 0, 1, 0)
+    frame.BackgroundColor3 = Color3.fromRGB(100, 220, 100)
+    frame.BackgroundTransparency = 0.5
+    frame.BorderSizePixel = 2
+    frame.BorderColor3 = Color3.fromRGB(100, 220, 100)
+    
+    Instance.new("UICorner", frame).CornerRadius = UDim.new(0, 4)
+    
+    return bb
+end
 
 local function applyHitbox_SL(p, on)
     if not p.Character then return end
@@ -1754,12 +1785,15 @@ local function applyHitbox_SL(p, on)
                 originalCanCollide = root.CanCollide,
             }
             
-            -- Expandir sin colisión física para evitar desconexiones
+            -- Expandir sin visual 3D
             local newSize = S.hbx_size * 2
             root.Size = Vector3.new(newSize, newSize, newSize)
-            root.CanCollide = false  -- ✅ CRÍTICO: false para evitar desconexiones
-            root.CanQuery = false    -- No detectable por raycast
-            root.Massless = true     -- Sin peso
+            root.CanCollide = false
+            root.CanQuery = false
+            root.Massless = true
+            
+            -- Crear visual 2D exclusivo
+            _hbxVisuals_SL[p] = createHitboxVisual2D_SL(p, p.Character)
         end
     else
         if _hbxOriginals_SL[p] then
@@ -1774,8 +1808,30 @@ local function applyHitbox_SL(p, on)
             end
             _hbxOriginals_SL[p] = nil
         end
+        
+        -- Destruir visual 2D
+        if _hbxVisuals_SL[p] then
+            pcall(function() _hbxVisuals_SL[p]:Destroy() end)
+            _hbxVisuals_SL[p] = nil
+        end
     end
 end
+
+-- Mostrar/Ocultar visual 2D del hitbox SL en el render loop
+-- Agregar después de la sección de Show Hitbox normal (línea ~1943):
+-- if S.hbx_sl then
+--     for p, visual in pairs(_hbxVisuals_SL) do
+--         if visual and visual.Parent then
+--             visual.Enabled = true
+--         end
+--     end
+-- else
+--     for _, visual in pairs(_hbxVisuals_SL) do
+--         if visual and visual.Parent then
+--             visual.Enabled = false
+--         end
+--     end
+-- end
 
 applyHitbox = function(p, on)
     if not p.Character then return end
@@ -2001,6 +2057,27 @@ RunService.RenderStepped:Connect(function()
             end
         end
 
+        -- ✅ NUEVO: Show Hitbox visual 2D para hitbox SL
+        if _hbxVisuals_SL[p] then
+            if S.hbx_sl and S.hbx_show and onS then
+                _hbxVisuals_SL[p].Enabled = true
+                -- Cambiar color según visible check
+                local frame = _hbxVisuals_SL[p]:FindFirstChildOfClass("Frame")
+                if frame then
+                    local isVis_SL = myChar and isVisible(root, myChar)
+                    if S.hbx_vis_check and not isVis_SL then
+                        frame.BorderColor3 = Color3.fromRGB(220, 80, 80)
+                        frame.BackgroundColor3 = Color3.fromRGB(220, 80, 80)
+                    else
+                        frame.BorderColor3 = Color3.fromRGB(100, 220, 100)
+                        frame.BackgroundColor3 = Color3.fromRGB(100, 220, 100)
+                    end
+                end
+            else
+                _hbxVisuals_SL[p].Enabled = false
+            end
+        end
+
         -- Show Hitbox (Always): SelectionBox independiente, sin visible check
         if obj.selBox2 and typeof(obj.selBox2) == "Instance" then
             if S.hbx_on and S.hbx_show2 and _hbxOriginals[p] and _hbxOriginals[p].proxy then
@@ -2100,7 +2177,11 @@ end)
 player.CharacterAdded:Connect(function()
     task.wait(0.5)
     _hbxOriginals = {}
-    _hbxOriginals_SL = {}  -- ✅ NUEVO: Limpiar también el hitbox SL
+    _hbxOriginals_SL = {}
+    for p, visual in pairs(_hbxVisuals_SL) do
+        pcall(function() visual:Destroy() end)
+    end
+    _hbxVisuals_SL = {}
 end)
 
 task.defer(function()
