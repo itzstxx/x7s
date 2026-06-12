@@ -1738,7 +1738,7 @@ local function isVisible(targetRoot, myChar)
 end
 
 -- ══════════════════════════════════════════════
---  HITBOX ALTERNATIVO (SL) — Sistema mejorado
+--  HITBOX ALTERNATIVO (SL) — Sin física conflictiva
 -- ══════════════════════════════════════════════
 local _hbxOriginals_SL = {}
 
@@ -1754,18 +1754,23 @@ local function applyHitbox_SL(p, on)
                 originalCanCollide = root.CanCollide,
             }
             
-            -- MÉTODO SL: Expandir directamente el HumanoidRootPart
-            local newSize = S.hbx_size * 2.5
+            -- Expandir sin colisión física para evitar desconexiones
+            local newSize = S.hbx_size * 2
             root.Size = Vector3.new(newSize, newSize, newSize)
-            root.CanCollide = true
-            root.Massless = true
+            root.CanCollide = false  -- ✅ CRÍTICO: false para evitar desconexiones
+            root.CanQuery = false    -- No detectable por raycast
+            root.Massless = true     -- Sin peso
         end
     else
         if _hbxOriginals_SL[p] then
             local root = p.Character:FindFirstChild("HumanoidRootPart")
             if root then
-                root.Size = _hbxOriginals_SL[p].originalSize
-                root.CanCollide = _hbxOriginals_SL[p].originalCanCollide
+                pcall(function()
+                    root.Size = _hbxOriginals_SL[p].originalSize
+                    root.CanCollide = _hbxOriginals_SL[p].originalCanCollide
+                    root.CanQuery = true
+                    root.Massless = false
+                end)
             end
             _hbxOriginals_SL[p] = nil
         end
