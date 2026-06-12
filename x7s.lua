@@ -85,7 +85,7 @@ local function mkDefault()
         esp_char_r=100, esp_char_g=220, esp_char_b=100,  -- Color del Character ESP (verde por defecto)
         esp_avatar=true,   -- Mostrar thumbnail del avatar en el ESP
         esp_rainbow=false, -- Modo arcoíris RGB (cicla el color automáticamente)
-        hbx_on=false, hbx_size=5, hbx_show=false, hbx_show2=false, hbx_key="G",
+        hbx_on=false, hbx_size=5, hbx_show=false, hbx_show2=false, hbx_sl=false, hbx_key="G",
         hbx_vis_check=true,
         stream_mode=false,
         summer_on=false,
@@ -115,6 +115,7 @@ local Locale = {
         hbx_size="Hitbox Size",
         hbx_show="Show Hitbox",
         hbx_show2="Show Hitbox (Always)",  hbx_show2_d="Shows the hitbox box at the selected size regardless of whether the player is hidden.",
+        hbx_sl="Hitbox (SL)",       hbx_sl_d="Alternative hitbox system. Expands enemy size directly.",
         hbx_key="Hitbox Keybind",
         hbx_vis="Visible Check",    hbx_vis_d="Only register hits when the enemy is actually visible. Prevents kills through walls.",
 
@@ -143,6 +144,7 @@ local Locale = {
         hbx_size="Tamaño Hitbox",
         hbx_show="Mostrar Hitbox",
         hbx_show2="Mostrar Hitbox (Siempre)",  hbx_show2_d="Muestra la caja de hitbox al tamaño seleccionado sin importar si el jugador está oculto.",
+        hbx_sl="Hitbox (SL)",       hbx_sl_d="Sistema alternativo de hitbox. Expande el tamaño enemigo directamente.",
         hbx_key="Tecla Hitbox",
         hbx_vis="Visible Check",    hbx_vis_d="Solo registra el hit si el enemigo está a la vista. Evita matar a través de paredes.",
         summer_on="Summer 2026",     summer_on_d="Recolecta los drops del Summer 2026 automáticamente. Solo en partidas.",
@@ -1309,6 +1311,8 @@ makeToggle(hbxCard, "hbx_show2", "hbx_show2_d", "hbx_show2", function(on)
     end
 end)
 makeDivider(hbxCard)
+makeToggle(hbxCard, "hbx_sl", "hbx_sl_d", "hbx_sl")
+makeDivider(hbxCard)
 makeKeybind(hbxCard, "hbx_key", "hbx_key")
 
 -- ══ SUMMER 2026 ═══════════════════════════════════
@@ -1733,6 +1737,41 @@ local function isVisible(targetRoot, myChar)
     return result.Distance >= dist - 0.5
 end
 
+-- ══════════════════════════════════════════════
+--  HITBOX ALTERNATIVO (SL) — Sistema mejorado
+-- ══════════════════════════════════════════════
+local _hbxOriginals_SL = {}
+
+local function applyHitbox_SL(p, on)
+    if not p.Character then return end
+    local root = p.Character:FindFirstChild("HumanoidRootPart")
+    if not root then return end
+    
+    if on then
+        if not _hbxOriginals_SL[p] then
+            _hbxOriginals_SL[p] = {
+                originalSize = root.Size,
+                originalCanCollide = root.CanCollide,
+            }
+            
+            -- MÉTODO SL: Expandir directamente el HumanoidRootPart
+            local newSize = S.hbx_size * 2.5
+            root.Size = Vector3.new(newSize, newSize, newSize)
+            root.CanCollide = true
+            root.Massless = true
+        end
+    else
+        if _hbxOriginals_SL[p] then
+            local root = p.Character:FindFirstChild("HumanoidRootPart")
+            if root then
+                root.Size = _hbxOriginals_SL[p].originalSize
+                root.CanCollide = _hbxOriginals_SL[p].originalCanCollide
+            end
+            _hbxOriginals_SL[p] = nil
+        end
+    end
+end
+
 applyHitbox = function(p, on)
     if not p.Character then return end
     local root = p.Character:FindFirstChild("HumanoidRootPart"); if not root then return end
@@ -1748,12 +1787,11 @@ applyHitbox = function(p, on)
             proxy.Name = "x7sHitboxProxy"
             proxy.Shape = Enum.PartType.Block
             proxy.Size = Vector3.new(s, s, s)
-            proxy.CanCollide = true   -- ✅ AHORA true PARA REGISTRAR GOLPES
+            proxy.CanCollide = false  -- No colisiona (es principalmente visual)
             proxy.CanQuery = true     -- Detectable por raycast
             proxy.CFrame = root.CFrame
             proxy.Transparency = 1  -- invisible
             proxy.Massless = true
-            proxy.CustomPhysicalProperties = PhysicalProperties.new(0, 0, 0, 0, 0)  -- ✅ No afecta gameplay
             proxy.TopSurface = Enum.SurfaceType.Smooth
             proxy.BottomSurface = Enum.SurfaceType.Smooth
             proxy.Parent = p.Character
@@ -1811,6 +1849,24 @@ RunService.RenderStepped:Connect(function()
         for _, p in ipairs(_plrList) do
             if p ~= player and p.Character and not _hbxOriginals[p] then
                 applyHitbox(p, true)
+            end
+        end
+    end
+
+    -- ✅ NUEVO: Aplicar hitbox SL si está activo
+    if _frame % 30 == 0 and S.hbx_sl then
+        for _, p in ipairs(_plrList) do
+            if p ~= player and p.Character and not _hbxOriginals_SL[p] then
+                applyHitbox_SL(p, true)
+            end
+        end
+    end
+
+    -- Desactivar hitbox SL si se apaga
+    if _frame % 30 == 0 and not S.hbx_sl then
+        for _, p in ipairs(_plrList) do
+            if p ~= player and _hbxOriginals_SL[p] then
+                applyHitbox_SL(p, false)
             end
         end
     end
@@ -2039,6 +2095,7 @@ end)
 player.CharacterAdded:Connect(function()
     task.wait(0.5)
     _hbxOriginals = {}
+    _hbxOriginals_SL = {}  -- ✅ NUEVO: Limpiar también el hitbox SL
 end)
 
 task.defer(function()
