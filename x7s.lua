@@ -85,7 +85,7 @@ local function mkDefault()
         esp_char_r=100, esp_char_g=220, esp_char_b=100,  -- Color del Character ESP (verde por defecto)
         esp_avatar=true,   -- Mostrar thumbnail del avatar en el ESP
         esp_rainbow=false, -- Modo arcoíris RGB (cicla el color automáticamente)
-        hbx_on=false, hbx_size=5, hbx_show=false, hbx_show2=false, hbx_sl=false, hbx_sl_show=false, hbx_key="G",
+        hbx_on=false, hbx_size=5, hbx_show=false, hbx_show2=false, hbx_key="G",
         hbx_vis_check=true,
         stream_mode=false,
         summer_on=false,
@@ -115,8 +115,6 @@ local Locale = {
         hbx_size="Hitbox Size",
         hbx_show="Show Hitbox",
         hbx_show2="Show Hitbox (Always)",  hbx_show2_d="Shows the hitbox box at the selected size regardless of whether the player is hidden.",
-        hbx_sl="Hitbox (SL)",       hbx_sl_d="Alternative hitbox system. Expands enemy size directly.",
-        hbx_sl_show="Show Hitbox (SL)",  hbx_sl_show_d="Shows the hitbox visual for SL system.",
         hbx_key="Hitbox Keybind",
         hbx_vis="Visible Check",    hbx_vis_d="Only register hits when the enemy is actually visible. Prevents kills through walls.",
 
@@ -145,8 +143,6 @@ local Locale = {
         hbx_size="Tamaño Hitbox",
         hbx_show="Mostrar Hitbox",
         hbx_show2="Mostrar Hitbox (Siempre)",  hbx_show2_d="Muestra la caja de hitbox al tamaño seleccionado sin importar si el jugador está oculto.",
-        hbx_sl="Hitbox (SL)",       hbx_sl_d="Sistema alternativo de hitbox. Expande el tamaño enemigo directamente.",
-        hbx_sl_show="Mostrar Hitbox (SL)",  hbx_sl_show_d="Muestra el visual del hitbox para el sistema SL.",
         hbx_key="Tecla Hitbox",
         hbx_vis="Visible Check",    hbx_vis_d="Solo registra el hit si el enemigo está a la vista. Evita matar a través de paredes.",
         summer_on="Summer 2026",     summer_on_d="Recolecta los drops del Summer 2026 automáticamente. Solo en partidas.",
@@ -1313,8 +1309,6 @@ makeToggle(hbxCard, "hbx_show2", "hbx_show2_d", "hbx_show2", function(on)
     end
 end)
 makeDivider(hbxCard)
-makeToggle(hbxCard, "hbx_sl", "hbx_sl_d", "hbx_sl")
-makeToggle(hbxCard, "hbx_sl_show", "hbx_sl_show_d", "hbx_sl_show")
 makeDivider(hbxCard)
 makeKeybind(hbxCard, "hbx_key", "hbx_key")
 
@@ -1741,107 +1735,14 @@ local function isVisible(targetRoot, myChar)
 end
 
 -- ══════════════════════════════════════════════
---  HITBOX (SL) 2D — Sin congelación, proxy invisible
--- ══════════════════════════════════════════════
-local _hbxOriginals_SL = {}
-local _hbxVisuals_SL = {}  -- Para los visuales 2D
-
-local function createHitboxVisual2D_SL(p, char)
-    if not char then return nil end
-    local head = char:FindFirstChild("Head")
-    if not head then return nil end
-    
-    -- BillboardGui con un cuadro 2D
-    local bb = Instance.new("BillboardGui")
-    bb.Name = "x7sHbxVisual2D_SL"
-    bb.Size = UDim2.fromOffset(60, 60)
-    bb.StudsOffsetWorldSpace = Vector3.new(0, 2.5, 0)
-    bb.AlwaysOnTop = true
-    bb.ResetOnSpawn = false
-    bb.LightInfluence = 0
-    bb.Adornee = head
-    bb.Parent = gui
-    bb.Enabled = false
-    
-    -- Frame cuadrado 2D
-    local frame = Instance.new("Frame", bb)
-    frame.Size = UDim2.new(1, 0, 1, 0)
-    frame.BackgroundColor3 = Color3.fromRGB(100, 220, 100)
-    frame.BackgroundTransparency = 0.5
-    frame.BorderSizePixel = 2
-    frame.BorderColor3 = Color3.fromRGB(100, 220, 100)
-    
-    Instance.new("UICorner", frame).CornerRadius = UDim.new(0, 4)
-    
-    return bb
-end
-
-local function applyHitbox_SL(p, on)
-    if not p.Character then return end
-    local root = p.Character:FindFirstChild("HumanoidRootPart")
-    if not root then return end
-    
-    if on then
-        if not _hbxOriginals_SL[p] then
-            _hbxOriginals_SL[p] = { proxy = nil, weld = nil }
-            
-            -- Crear proxy invisible (sin expandir Size del root)
-            local s = S.hbx_size * 2
-            local proxy = Instance.new("Part")
-            proxy.Name = "x7sHbxProxy_SL"
-            proxy.Shape = Enum.PartType.Block
-            proxy.Size = Vector3.new(s, s, s)
-            proxy.CanCollide = false    -- ✅ SIN colisión física
-            proxy.CanQuery = false
-            proxy.CFrame = root.CFrame
-            proxy.Transparency = 1  -- Invisible
-            proxy.Massless = true
-            proxy.TopSurface = Enum.SurfaceType.Smooth
-            proxy.BottomSurface = Enum.SurfaceType.Smooth
-            proxy.Parent = p.Character
-            
-            local weld = Instance.new("Weld")
-            weld.Name = "x7sHbxWeld_SL"
-            weld.Part0 = root
-            weld.Part1 = proxy
-            weld.C0 = CFrame.new(0, 0, 0)
-            weld.Parent = root
-            
-            _hbxOriginals_SL[p].proxy = proxy
-            _hbxOriginals_SL[p].weld = weld
-            
-            -- Crear visual 2D
-            _hbxVisuals_SL[p] = createHitboxVisual2D_SL(p, p.Character)
-        end
-    else
-        if _hbxOriginals_SL[p] then
-            if _hbxOriginals_SL[p].proxy then
-                pcall(function() _hbxOriginals_SL[p].proxy:Destroy() end)
-            end
-            if _hbxOriginals_SL[p].weld then
-                pcall(function() _hbxOriginals_SL[p].weld:Destroy() end)
-            end
-            _hbxOriginals_SL[p] = nil
-        end
-        
-        -- Destruir visual 2D
-        if _hbxVisuals_SL[p] then
-            pcall(function() _hbxVisuals_SL[p]:Destroy() end)
-            _hbxVisuals_SL[p] = nil
-        end
-    end
-end
 
 -- Mostrar/Ocultar visual 2D del hitbox SL en el render loop
 -- Agregar después de la sección de Show Hitbox normal (línea ~1943):
--- if S.hbx_sl then
---     for p, visual in pairs(_hbxVisuals_SL) do
 --         if visual and visual.Parent then
 --             visual.Enabled = true
 --         end
 --     end
 -- else
---     for _, visual in pairs(_hbxVisuals_SL) do
 --         if visual and visual.Parent then
 --             visual.Enabled = false
 --         end
@@ -1930,19 +1831,13 @@ RunService.RenderStepped:Connect(function()
     end
 
     -- ✅ NUEVO: Aplicar hitbox SL si está activo
-    if _frame % 30 == 0 and S.hbx_sl then
         for _, p in ipairs(_plrList) do
-            if p ~= player and p.Character and not _hbxOriginals_SL[p] then
-                applyHitbox_SL(p, true)
             end
         end
     end
 
     -- Desactivar hitbox SL si se apaga
-    if _frame % 30 == 0 and not S.hbx_sl then
         for _, p in ipairs(_plrList) do
-            if p ~= player and _hbxOriginals_SL[p] then
-                applyHitbox_SL(p, false)
             end
         end
     end
@@ -2073,11 +1968,7 @@ RunService.RenderStepped:Connect(function()
         end
 
         -- ✅ NUEVO: Show Hitbox visual 2D para hitbox SL
-        if _hbxVisuals_SL[p] then
-            if S.hbx_sl and S.hbx_show and onS then
-                _hbxVisuals_SL[p].Enabled = true
                 -- Cambiar color según visible check
-                local frame = _hbxVisuals_SL[p]:FindFirstChildOfClass("Frame")
                 if frame then
                     local isVis_SL = myChar and isVisible(root, myChar)
                     if S.hbx_vis_check and not isVis_SL then
@@ -2089,7 +1980,6 @@ RunService.RenderStepped:Connect(function()
                     end
                 end
             else
-                _hbxVisuals_SL[p].Enabled = false
             end
         end
 
@@ -2192,11 +2082,8 @@ end)
 player.CharacterAdded:Connect(function()
     task.wait(0.5)
     _hbxOriginals = {}
-    _hbxOriginals_SL = {}
-    for p, visual in pairs(_hbxVisuals_SL) do
         pcall(function() visual:Destroy() end)
     end
-    _hbxVisuals_SL = {}
 end)
 
 task.defer(function()
