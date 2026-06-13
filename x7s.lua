@@ -1309,7 +1309,6 @@ makeToggle(hbxCard, "hbx_show2", "hbx_show2_d", "hbx_show2", function(on)
     end
 end)
 makeDivider(hbxCard)
-makeDivider(hbxCard)
 makeKeybind(hbxCard, "hbx_key", "hbx_key")
 
 -- ══ SUMMER 2026 ═══════════════════════════════════
@@ -1436,6 +1435,21 @@ local function newDrawingFallback()
 end
 
 local _rainbowHue = 0
+local _rainbowRunning = false
+
+local function startRainbowLoop()
+    if _rainbowRunning then return end
+    _rainbowRunning = true
+    task.spawn(function()
+        while _rainbowRunning do
+            _rainbowHue = (_rainbowHue + 0.002) % 1
+            task.wait(0.016)
+        end
+    end)
+end
+
+startRainbowLoop()
+
 local function getEspColor()
     if S.esp_rainbow then
         return Color3.fromHSV(_rainbowHue, 1, 1)
@@ -1734,21 +1748,6 @@ local function isVisible(targetRoot, myChar)
     return result.Distance >= dist - 0.5
 end
 
--- ══════════════════════════════════════════════
-
--- Mostrar/Ocultar visual 2D del hitbox SL en el render loop
--- Agregar después de la sección de Show Hitbox normal (línea ~1943):
---         if visual and visual.Parent then
---             visual.Enabled = true
---         end
---     end
--- else
---         if visual and visual.Parent then
---             visual.Enabled = false
---         end
---     end
--- end
-
 applyHitbox = function(p, on)
     if not p.Character then return end
     local root = p.Character:FindFirstChild("HumanoidRootPart"); if not root then return end
@@ -1826,18 +1825,6 @@ RunService.RenderStepped:Connect(function()
         for _, p in ipairs(_plrList) do
             if p ~= player and p.Character and not _hbxOriginals[p] then
                 applyHitbox(p, true)
-            end
-        end
-    end
-
-    -- ✅ NUEVO: Aplicar hitbox SL si está activo
-        for _, p in ipairs(_plrList) do
-            end
-        end
-    end
-
-    -- Desactivar hitbox SL si se apaga
-        for _, p in ipairs(_plrList) do
             end
         end
     end
@@ -1967,22 +1954,6 @@ RunService.RenderStepped:Connect(function()
             end
         end
 
-        -- ✅ NUEVO: Show Hitbox visual 2D para hitbox SL
-                -- Cambiar color según visible check
-                if frame then
-                    local isVis_SL = myChar and isVisible(root, myChar)
-                    if S.hbx_vis_check and not isVis_SL then
-                        frame.BorderColor3 = Color3.fromRGB(220, 80, 80)
-                        frame.BackgroundColor3 = Color3.fromRGB(220, 80, 80)
-                    else
-                        frame.BorderColor3 = Color3.fromRGB(100, 220, 100)
-                        frame.BackgroundColor3 = Color3.fromRGB(100, 220, 100)
-                    end
-                end
-            else
-            end
-        end
-
         -- Show Hitbox (Always): SelectionBox independiente, sin visible check
         if obj.selBox2 and typeof(obj.selBox2) == "Instance" then
             if S.hbx_on and S.hbx_show2 and _hbxOriginals[p] and _hbxOriginals[p].proxy then
@@ -2082,8 +2053,6 @@ end)
 player.CharacterAdded:Connect(function()
     task.wait(0.5)
     _hbxOriginals = {}
-        pcall(function() visual:Destroy() end)
-    end
 end)
 
 task.defer(function()
@@ -2101,7 +2070,7 @@ task.spawn(function()
             if touch then
                 pcall(function()
                     remote:FireServer(touch)
-                    spawn:Destroy() -- Elimina localmente para que no se vea
+                    spawn:Destroy()
                 end)
                 task.wait(0.05)
             end
