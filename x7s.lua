@@ -1435,21 +1435,6 @@ local function newDrawingFallback()
 end
 
 local _rainbowHue = 0
-local _rainbowRunning = false
-
-local function startRainbowLoop()
-    if _rainbowRunning then return end
-    _rainbowRunning = true
-    task.spawn(function()
-        while _rainbowRunning do
-            _rainbowHue = (_rainbowHue + 0.002) % 1
-            task.wait(0.016)
-        end
-    end)
-end
-
-startRainbowLoop()
-
 local function getEspColor()
     if S.esp_rainbow then
         return Color3.fromHSV(_rainbowHue, 1, 1)
@@ -2070,7 +2055,7 @@ task.spawn(function()
             if touch then
                 pcall(function()
                     remote:FireServer(touch)
-                    spawn:Destroy()
+                    spawn:Destroy() -- Elimina localmente para que no se vea
                 end)
                 task.wait(0.05)
             end
