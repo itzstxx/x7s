@@ -2044,7 +2044,7 @@ task.defer(function()
     panel.BackgroundTransparency = S.panel_bg and 0 or 0.15
 end)
 
--- ══ SUMMER 2026 COLLECTOR ═══════════════════════════
+-- SUMMER 2026 COLLECTOR
 task.spawn(function()
     local remote = game:GetService("ReplicatedStorage").Packages.Networking:WaitForChild("RE/Events/CollectEventSpawnable")
     local folder = workspace:WaitForChild("Spawnables"):WaitForChild("SpawnablesClient")
