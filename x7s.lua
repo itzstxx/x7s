@@ -2051,17 +2051,20 @@ task.spawn(function()
     while task.wait(0.3) do
         if not S.summer_on then continue end
         for _, spawn in ipairs(folder:GetChildren()) do
+            -- Intenta con "Touch", si no existe usa cualquier BasePart del modelo
             local touch = spawn:FindFirstChild("Touch")
+                       or spawn:FindFirstChildOfClass("Part")
+                       or spawn:FindFirstChildOfClass("MeshPart")
+                       or (spawn:IsA("BasePart") and spawn)
             if touch then
                 pcall(function()
                     remote:FireServer(touch)
-                    spawn:Destroy() -- Elimina localmente para que no se vea
+                    spawn:Destroy()
                 end)
                 task.wait(0.05)
             end
         end
     end
 end)
-
 
 print("   "..S.gui_key.." = Toggle GUI  ·  "..S.esp_key.." = ESP  ·  "..S.hbx_key.." = Hitbox")
