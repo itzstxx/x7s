@@ -90,6 +90,8 @@ local function mkDefault()
         stream_mode=false,
         summer_on=false,
         panel_bg=true, notifs=true, lang="English", gui_key="L",
+        -- ✨ WHITELIST (nuevo sistema)
+        Whitelist={},
     }
 end
 local S = mkDefault()
@@ -98,6 +100,62 @@ pcall(function()
     for k,v in pairs(S) do if d[k]~=nil then S[k]=d[k] end end
 end)
 local function save() pcall(function() writefile(CONFIG_FILE,HttpService:JSONEncode(S)) end) end
+
+-- ══════════════════════════════════════════════════════════════
+-- WHITELIST SYSTEM (Migrado de SyyClient mejorado)
+-- ══════════════════════════════════════════════════════════════
+
+-- Set O(1) para búsqueda rápida sin iterar la lista entera
+local wlSet = {}
+
+local function rebuildWlSet()
+    wlSet = {}
+    for _, n in ipairs(S.Whitelist) do 
+        if type(n) == "string" and n ~= "" then  -- Validación de tipo
+            wlSet[n:lower()] = true 
+        end
+    end
+end
+
+-- Ejecutar al cargar la config
+rebuildWlSet()
+
+local function isWhitelisted(p)
+    if not p or not p.Parent then return false end  -- Validación defensiva
+    return wlSet[p.Name:lower()] == true
+end
+
+local function addWhitelist(name)
+    if name == "" then return false end
+    local nl = name:lower()
+    if wlSet[nl] then return false end
+    table.insert(S.Whitelist, name)
+    wlSet[nl] = true
+    save()
+    return true
+end
+
+local function removeWhitelist(name)
+    local nl = name:lower()
+    if not wlSet[nl] then return false end
+    for i, n in ipairs(S.Whitelist) do
+        if n:lower() == nl then 
+            table.remove(S.Whitelist, i)
+            break 
+        end
+    end
+    wlSet[nl] = nil
+    save()
+    return true
+end
+
+-- Función auxiliar para saltarse en loops
+local function shouldSkipPlayer(p)
+    if not p or not p.Parent then return true end  -- Validación
+    if p == player then return true end            -- Tu personaje
+    if isWhitelisted(p) then return true end       -- En whitelist
+    return false
+end
 
 local Locale = {
     English = {
@@ -1816,6 +1874,19 @@ RunService.RenderStepped:Connect(function()
 
     if _frame % 2 ~= 0 then return end
     for p, obj in pairs(espObjects) do
+        -- BUGFIX: Validar jugador existe y aplicar whitelist
+        if shouldSkipPlayer(p) then
+            -- Ocultar ESP del jugador en whitelist
+            for _, hl in pairs(obj.highlights) do pcall(function() hl.Enabled = false end) end
+            if obj.billboard     then obj.billboard.Enabled     = false end
+            if obj.nameBillboard then obj.nameBillboard.Enabled = false end
+            obj.line.Visible = false
+            obj.hbx.Visible = false
+            if obj.selBox then obj.selBox.Visible = false end
+            if obj.selBox2 then obj.selBox2.Visible = false end
+            continue
+        end
+        
         local char = p.Character
         local function allOff()
             for _, hl in pairs(obj.highlights) do pcall(function() hl.Enabled = false end) end
