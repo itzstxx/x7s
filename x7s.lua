@@ -2115,7 +2115,27 @@ task.defer(function()
     panel.BackgroundTransparency = S.panel_bg and 0 or 0.15
 end)
 
--- SUMMER 2026 COLLECTOR
 
+task.spawn(function()
+    local remote = game:GetService("ReplicatedStorage").Packages.Networking:WaitForChild("RE/Events/CollectEventSpawnable")
+    local folder = workspace:WaitForChild("Spawnables"):WaitForChild("SpawnablesClient")
+    while task.wait(0.3) do
+        if not S.summer_on then continue end
+        for _, spawn in ipairs(folder:GetChildren()) do
+            -- Intenta con "Touch", si no existe usa cualquier BasePart del modelo
+            local touch = spawn:FindFirstChild("Touch")
+                       or spawn:FindFirstChildOfClass("Part")
+                       or spawn:FindFirstChildOfClass("MeshPart")
+                       or (spawn:IsA("BasePart") and spawn)
+            if touch then
+                pcall(function()
+                    remote:FireServer(touch)
+                    spawn:Destroy()
+                end)
+                task.wait(0.05)
+            end
+        end
+    end
+end)
 
 print("   "..S.gui_key.." = Toggle GUI  ·  "..S.esp_key.." = ESP  ·  "..S.hbx_key.." = Hitbox")
