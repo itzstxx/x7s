@@ -578,7 +578,7 @@ end
 -- SVG-like icon labels (usando Unicode para los iconos de nav)
 local NAV_DATA = {
     { icon = "⌂", label = "Inicio" },
-    { icon = "🎯", label = "Aim" },
+    { icon = ":)", label = "Aim" },
     { icon = "⚙", label = "Ajustes" },
 }
 
