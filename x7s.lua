@@ -92,11 +92,6 @@ local function mkDefault()
         panel_bg=true, notifs=true, lang="English", gui_key="L",
         -- ✨ WHITELIST (nuevo sistema)
         Whitelist={},
-        -- x7sBet Cam Lock
-        CamLockEnabled = false,
-        CamLockStrength = 10,
-        CamLockRange = 150,
-        CamLockWallCheck = true,
     }
 end
 local S = mkDefault()
@@ -560,7 +555,6 @@ end
 -- SVG-like icon labels (usando Unicode para los iconos de nav)
 local NAV_DATA = {
     { icon = "⌂", label = "Inicio" },
-    { icon = "⚔", label = "x7sBet" },
     { icon = "⚙", label = "Ajustes" },
 }
 
@@ -1214,10 +1208,9 @@ local function makeColorPicker(parent, label, getR, getG, getB, setRGB)
     return row, popup
 end
 
--- Páginas: 1 = Inicio, 2 = x7sBet, 3 = Ajustes
+-- Páginas: 1 = Inicio, 2 = Ajustes
 local pg_inicio   = pages[1]
-local pg_x7sbet   = pages[2]
-local pg_ajustes  = pages[3]
+local pg_ajustes  = pages[2]
 
 -- ══ INICIO PAGE ══════════════════════════════════
 
@@ -1380,20 +1373,6 @@ makeKeybind(hbxCard, "hbx_key", "hbx_key")
 local summerCard = makeCard(pg_inicio)
 makeSecHeader(summerCard, "☀", "Summer 2026")
 makeToggle(summerCard, "summer_on", "summer_on_d", "summer_on")
-
--- ══ x7sBet PAGE (Nueva pestaña) ═════════════════════
-local betCard = makeCard(pg_x7sbet)
-makeSecHeader(betCard, "⚔", "x7sBet")
-
-makeToggle(betCard, "Cam Lock", nil, "CamLockEnabled", function(on)
-    if not on then camLockTarget = nil end
-end)
-makeSlider(betCard, "CamLock Fuerza", "CamLockStrength", 1, 20)
-makeSlider(betCard, "Rango Detección", "CamLockRange", 10, 600)
-makeToggle(betCard, "Wall Check", nil, "CamLockWallCheck")
-
-secLabel(betCard, "Whitelist (global)")
--- Whitelist ya está integrada en el sistema
 
 -- ══ AJUSTES PAGE ══════════════════════════════════
 local cfgCard = makeCard(pg_ajustes)
