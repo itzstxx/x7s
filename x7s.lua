@@ -592,10 +592,10 @@ end
 
 -- SVG-like icon labels (usando Unicode para los iconos de nav)
 local NAV_DATA = {
-    { icon = "⌂", label = "Inicio" },
-    { icon = "🕸", label = "Aim" },
-    { icon = "✦", label = "Extras" },
-    { icon = "⚙", label = "Ajustes" },
+    { icon = "*", label = "Inicio" },
+    { icon = "o", label = "Aim" },
+    { icon = "+", label = "Extras" },
+    { icon = "#", label = "Ajustes" },
 }
 
 local function setPage(idx)
@@ -1413,13 +1413,13 @@ makeKeybind(hbxCard, "hbx_key", "hbx_key")
 
 -- ══ SUMMER 2026 ═══════════════════════════════════
 local summerCard = makeCard(pg_inicio)
-makeSecHeader(summerCard, "☀", "Summer 2026")
+makeSecHeader(summerCard, "*", "Summer 2026")
 makeToggle(summerCard, "summer_on", "summer_on_d", "summer_on")
 
 
 -- ══ AIM PAGE ═══════════════════════════════════════════════════
 local camLockCard = makeCard(pg_aim)
-makeSecHeader(camLockCard, "🎯", "Cam Lock")
+makeSecHeader(camLockCard, "x", "Cam Lock")
 makeToggle(camLockCard, "camlock_on", "camlock_on_d", "CamLockEnabled", function(on)
     showNotif("✝  Cam Lock", on and L("n_on") or L("n_off"), on)
 end)
@@ -1432,7 +1432,7 @@ makeToggle(camLockCard, "camlock_wallcheck", "camlock_wallcheck_d", "CamLockWall
 
 -- ══ TARGET (igual a SyyClient - dropdown desplegable) ═════════
 local targetCard = makeCard(pg_aim)
-makeSecHeader(targetCard, "⊕", "Target")
+makeSecHeader(targetCard, "+", "Target")
 makeDivider(targetCard)
 makeDropdown(targetCard, "target_part", "TargetPart", {"Head","UpperTorso","LowerTorso","Pierna","Pecho","Combo","Random"})
 
@@ -1455,7 +1455,7 @@ do
     local refreshBtn = Instance.new("TextButton", headerRow)
     refreshBtn.Size = UDim2.fromOffset(68,22); refreshBtn.Position = UDim2.new(1,-72,0.5,-11)
     refreshBtn.BackgroundColor3 = Color3.fromRGB(18,14,24); refreshBtn.BorderSizePixel=0
-    refreshBtn.Text="🔄 Refresh"; refreshBtn.TextColor3=accentColor
+    refreshBtn.Text=">> Refresh"; refreshBtn.TextColor3=accentColor
     refreshBtn.Font=Enum.Font.GothamBold; refreshBtn.TextSize=9; refreshBtn.AutoButtonColor=false
     local rfStroke=Instance.new("UIStroke",refreshBtn); rfStroke.Color=accentColor; rfStroke.Thickness=1
 
@@ -1497,26 +1497,6 @@ do
     wlFrame.AutomaticSize=Enum.AutomaticSize.Y
     local wlLay=Instance.new("UIListLayout",wlFrame); wlLay.SortOrder=Enum.SortOrder.LayoutOrder
     wlLay.Padding=UDim.new(0,2)
-
-    -- Input para añadir manualmente
-    local addInputRow = Instance.new("Frame", whitelistCard)
-    addInputRow.Size = UDim2.new(1,0,0,34); addInputRow.BackgroundTransparency=1
-
-    local inputBox = Instance.new("TextBox", addInputRow)
-    inputBox.Size=UDim2.new(1,-50,1,-6); inputBox.Position=UDim2.fromOffset(0,3)
-    inputBox.BackgroundColor3=Color3.fromRGB(18,14,24); inputBox.BorderSizePixel=0
-    inputBox.PlaceholderText="Player name..."; inputBox.Text=""
-    inputBox.TextColor3=Color3.fromRGB(215,215,215); inputBox.PlaceholderColor3=Color3.fromRGB(85,85,85)
-    inputBox.Font=Enum.Font.GothamMedium; inputBox.TextSize=11
-    local inputStroke=Instance.new("UIStroke",inputBox); inputStroke.Color=Color3.fromRGB(58,58,58); inputStroke.Thickness=1
-    Instance.new("UICorner",inputBox).CornerRadius=UDim.new(0,4)
-
-    local addBtn = Instance.new("TextButton", addInputRow)
-    addBtn.Size=UDim2.fromOffset(40,26); addBtn.Position=UDim2.new(1,-44,0.5,-13)
-    addBtn.BackgroundColor3=accentColor; addBtn.BorderSizePixel=0
-    addBtn.Text="+"; addBtn.TextColor3=Color3.fromRGB(255,255,255)
-    addBtn.Font=Enum.Font.GothamBold; addBtn.TextSize=16; addBtn.AutoButtonColor=false
-    Instance.new("UICorner",addBtn).CornerRadius=UDim.new(0,4)
 
     -- Forward declarations
     local rebuildWL, rebuildServerList
@@ -1617,27 +1597,14 @@ do
     end
 
     local hitArea = Instance.new("TextButton", headerRow)
-    hitArea.Size=UDim2.new(1,-72,1,0); hitArea.BackgroundTransparency=1; hitArea.Text=""; hitArea.ZIndex=5
+    hitArea.Size=UDim2.new(1,-20,1,0); hitArea.BackgroundTransparency=1; hitArea.Text=""; hitArea.ZIndex=5
     hitArea.MouseButton1Click:Connect(toggleServerList)
-    arrowLbl.MouseButton1Click:Connect(toggleServerList)
-
-    addBtn.MouseButton1Click:Connect(function()
-        local playerName = inputBox.Text:match("^%s*(.-)%s*$")
-        if playerName ~= "" then
-            if addWhitelist(playerName) then
-                inputBox.Text = ""; rebuildWL(); rebuildServerList()
-                showNotif("✝  Whitelist", "Added: "..playerName, true)
-            else
-                showNotif("✝  Whitelist", "Already exists or invalid", false)
-            end
-        end
-    end)
 
     rebuildServerList(); rebuildWL()
 
     refreshBtn.MouseButton1Click:Connect(function()
         rebuildServerList()
-        refreshBtn.Text="✅"; task.delay(0.8, function() refreshBtn.Text="🔄 Refresh" end)
+        refreshBtn.Text="OK"; task.delay(0.8, function() refreshBtn.Text=">> Refresh" end)
     end)
     Players.PlayerAdded:Connect(function() rebuildServerList() end)
     Players.PlayerRemoving:Connect(function() task.wait(0.05); rebuildServerList() end)
@@ -1646,7 +1613,7 @@ end
 -- (Inf Stamina, Item en la Mano, Health Bar, Distancia — copiado de SyyClient)
 -- ── INF STAMINA (lógica completa de SyyClient) ────────────────
 local extrasCard = makeCard(pg_extras)
-makeSecHeader(extrasCard, "✦", "Extras")
+makeSecHeader(extrasCard, "+", "Extras")
 makeDivider(extrasCard)
 
 do
