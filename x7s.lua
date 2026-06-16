@@ -92,11 +92,6 @@ local function mkDefault()
         panel_bg=true, notifs=true, lang="English", gui_key="L",
         -- ✨ WHITELIST (nuevo sistema)
         Whitelist={},
-        -- === x7sBet - Cam Lock ===
-        CamLockEnabled = false,
-        CamLockStrength = 10,
-        CamLockRange = 150,
-        CamLockWallCheck = true,
     }
 end
 local S = mkDefault()
