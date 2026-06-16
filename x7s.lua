@@ -92,6 +92,16 @@ local function mkDefault()
         panel_bg=true, notifs=true, lang="English", gui_key="L",
         -- ✨ WHITELIST (nuevo sistema)
         Whitelist={},
+        -- === CAM LOCK ===
+        CamLockEnabled = false,
+        CamLockStrength = 10,
+        CamLockRange = 150,
+        CamLockWallCheck = true,
+        -- === x7sBet ===
+        CamLockEnabled = false,
+        CamLockStrength = 10,
+        CamLockRange = 150,
+        CamLockWallCheck = true,
     }
 end
 local S = mkDefault()
@@ -176,6 +186,13 @@ local Locale = {
         hbx_key="Hitbox Keybind",
         hbx_vis="Visible Check",    hbx_vis_d="Only register hits when the enemy is actually visible. Prevents kills through walls.",
 
+        camlock_on="Enable Cam Lock",      camlock_on_d="Automatically locks camera on the closest enemy.",
+        camlock_strength="Cam Lock Strength", camlock_strength_d="How smoothly the camera follows (1-100).",
+        camlock_range="Cam Lock Range",     camlock_range_d="Maximum distance to target (50-500).",
+        camlock_wallcheck="Wall Check",     camlock_wallcheck_d="Only lock on visible enemies.",
+        
+        whitelist_title="Whitelist Manager", whitelist_add="Add Player", whitelist_remove="Remove",
+
         summer_on="Summer 2026",    summer_on_d="Collects Summer 2026 drops automatically. Only in matches.",
 
         st_bg="Toggle Panel Background",
@@ -203,6 +220,12 @@ local Locale = {
         hbx_show2="Mostrar Hitbox (Siempre)",  hbx_show2_d="Muestra la caja de hitbox al tamaño seleccionado sin importar si el jugador está oculto.",
         hbx_key="Tecla Hitbox",
         hbx_vis="Visible Check",    hbx_vis_d="Solo registra el hit si el enemigo está a la vista. Evita matar a través de paredes.",
+        camlock_on="Activar Cam Lock",      camlock_on_d="Bloquea automáticamente la cámara en el enemigo más cercano.",
+        camlock_strength="Fuerza Cam Lock", camlock_strength_d="Qué tan suavemente sigue la cámara (1-100).",
+        camlock_range="Rango Cam Lock",     camlock_range_d="Distancia máxima al objetivo (50-500).",
+        camlock_wallcheck="Wall Check",     camlock_wallcheck_d="Solo bloquea enemigos visibles.",
+        
+        whitelist_title="Gestor de Whitelist", whitelist_add="Añadir Jugador", whitelist_remove="Eliminar",
         summer_on="Summer 2026",     summer_on_d="Recolecta los drops del Summer 2026 automáticamente. Solo en partidas.",
         st_bg="Fondo del Panel",
         st_notif="Activar Notificaciones",
@@ -555,6 +578,7 @@ end
 -- SVG-like icon labels (usando Unicode para los iconos de nav)
 local NAV_DATA = {
     { icon = "⌂", label = "Inicio" },
+    { icon = "🎯", label = "Aim" },
     { icon = "⚙", label = "Ajustes" },
 }
 
@@ -1208,9 +1232,10 @@ local function makeColorPicker(parent, label, getR, getG, getB, setRGB)
     return row, popup
 end
 
--- Páginas: 1 = Inicio, 2 = Ajustes
+-- Páginas: 1 = Inicio, 2 = Aim, 3 = Ajustes
 local pg_inicio   = pages[1]
-local pg_ajustes  = pages[2]
+local pg_aim      = pages[2]
+local pg_ajustes  = pages[3]
 
 -- ══ INICIO PAGE ══════════════════════════════════
 
@@ -1374,6 +1399,108 @@ local summerCard = makeCard(pg_inicio)
 makeSecHeader(summerCard, "☀", "Summer 2026")
 makeToggle(summerCard, "summer_on", "summer_on_d", "summer_on")
 
+
+-- ══ AIM PAGE ═══════════════════════════════════════════════════
+local camLockCard = makeCard(pg_aim)
+makeSecHeader(camLockCard, "🎯", "Cam Lock")
+makeToggle(camLockCard, "camlock_on", "camlock_on_d", "CamLockEnabled", function(on)
+    showNotif("✝  Cam Lock", on and L("n_on") or L("n_off"), on)
+end)
+makeDivider(camLockCard)
+makeSlider(camLockCard, "camlock_strength", "CamLockStrength", 1, 100)
+makeDivider(camLockCard)
+makeSlider(camLockCard, "camlock_range", "CamLockRange", 50, 500)
+makeDivider(camLockCard)
+makeToggle(camLockCard, "camlock_wallcheck", "camlock_wallcheck_d", "CamLockWallCheck")
+
+-- ══ WHITELIST ═════════════════════════════════════════════════
+local whitelistCard = makeCard(pg_aim)
+makeSecHeader(whitelistCard, "✓", "Whitelist")
+
+-- Mostrar lista de jugadores en whitelist
+local wlListContainer = Instance.new("Frame", whitelistCard)
+wlListContainer.Size = UDim2.new(1, 0, 0, 150); wlListContainer.BackgroundTransparency = 1
+wlListContainer.BorderSizePixel = 0
+local wlScroll = Instance.new("ScrollingFrame", wlListContainer)
+wlScroll.Size = UDim2.new(1, 0, 1, 0); wlScroll.BackgroundColor3 = Color3.fromRGB(10,8,14)
+wlScroll.BorderSizePixel = 0; wlScroll.ScrollBarThickness = 2
+wlScroll.ScrollBarImageColor3 = accentColor
+wlScroll.CanvasSize = UDim2.new(0, 0, 0, 0); wlScroll.AutomaticCanvasSize = Enum.AutomaticSize.Y
+local wlLayout = Instance.new("UIListLayout", wlScroll)
+wlLayout.SortOrder = Enum.SortOrder.LayoutOrder; wlLayout.Padding = UDim.new(0, 4)
+local wlPad = Instance.new("UIPadding", wlScroll)
+wlPad.PaddingTop = UDim.new(0,6); wlPad.PaddingLeft = UDim.new(0,8)
+wlPad.PaddingRight = UDim.new(0,8); wlPad.PaddingBottom = UDim.new(0,6)
+
+local function updateWhitelistDisplay()
+    for _, c in ipairs(wlScroll:GetChildren()) do
+        if c:IsA("Frame") and c.Name ~= "UIListLayout" and c.Name ~= "UIPadding" then
+            c:Destroy()
+        end
+    end
+    
+    for _, name in ipairs(S.Whitelist) do
+        local wlItem = Instance.new("Frame", wlScroll)
+        wlItem.Size = UDim2.new(1, 0, 0, 28); wlItem.BackgroundColor3 = Color3.fromRGB(16,12,22)
+        wlItem.BorderSizePixel = 0
+        local wlStroke = Instance.new("UIStroke", wlItem)
+        wlStroke.Color = Color3.fromRGB(58,58,58); wlStroke.Thickness = 1
+        
+        local nameLbl = Instance.new("TextLabel", wlItem)
+        nameLbl.Size = UDim2.new(1, -38, 1, 0); nameLbl.Position = UDim2.fromOffset(8, 0)
+        nameLbl.BackgroundTransparency = 1; nameLbl.Text = name
+        nameLbl.TextColor3 = Color3.fromRGB(215,215,215); nameLbl.Font = Enum.Font.GothamMedium
+        nameLbl.TextSize = 11; nameLbl.TextXAlignment = Enum.TextXAlignment.Left
+        
+        local removeBtn = Instance.new("TextButton", wlItem)
+        removeBtn.Size = UDim2.fromOffset(24, 24); removeBtn.Position = UDim2.new(1, -28, 0.5, -12)
+        removeBtn.BackgroundColor3 = Color3.fromRGB(220,80,80); removeBtn.BorderSizePixel = 0
+        removeBtn.Text = "✕"; removeBtn.TextColor3 = Color3.fromRGB(255,255,255)
+        removeBtn.Font = Enum.Font.GothamBold; removeBtn.TextSize = 12; removeBtn.AutoButtonColor = false
+        Instance.new("UICorner", removeBtn).CornerRadius = UDim.new(0,4)
+        
+        removeBtn.MouseButton1Click:Connect(function()
+            removeWhitelist(name)
+            updateWhitelistDisplay()
+            showNotif("✝  Whitelist", "Removed: "..name, true)
+        end)
+    end
+end
+updateWhitelistDisplay()
+
+-- Input para añadir jugador
+local addInputRow = Instance.new("Frame", whitelistCard)
+addInputRow.Size = UDim2.new(1, 0, 0, 38); addInputRow.BackgroundTransparency = 1
+
+local inputBox = Instance.new("TextBox", addInputRow)
+inputBox.Size = UDim2.new(1, -56, 1, 0); inputBox.Position = UDim2.fromOffset(8, 0)
+inputBox.BackgroundColor3 = Color3.fromRGB(18,14,24); inputBox.BorderSizePixel = 0
+inputBox.PlaceholderText = "Player name..."; inputBox.Text = ""
+inputBox.TextColor3 = Color3.fromRGB(215,215,215); inputBox.PlaceholderColor3 = Color3.fromRGB(85,85,85)
+inputBox.Font = Enum.Font.GothamMedium; inputBox.TextSize = 11
+local inputStroke = Instance.new("UIStroke", inputBox)
+inputStroke.Color = Color3.fromRGB(58,58,58); inputStroke.Thickness = 1
+Instance.new("UICorner", inputBox).CornerRadius = UDim.new(0,4)
+
+local addBtn = Instance.new("TextButton", addInputRow)
+addBtn.Size = UDim2.fromOffset(40, 28); addBtn.Position = UDim2.new(1, -44, 0.5, -14)
+addBtn.BackgroundColor3 = accentColor; addBtn.BorderSizePixel = 0
+addBtn.Text = "+"; addBtn.TextColor3 = Color3.fromRGB(255,255,255)
+addBtn.Font = Enum.Font.GothamBold; addBtn.TextSize = 14; addBtn.AutoButtonColor = false
+Instance.new("UICorner", addBtn).CornerRadius = UDim.new(0,4)
+
+addBtn.MouseButton1Click:Connect(function()
+    local playerName = inputBox.Text:match("^%s*(.-)%s*$")  -- trim
+    if playerName ~= "" then
+        if addWhitelist(playerName) then
+            inputBox.Text = ""
+            updateWhitelistDisplay()
+            showNotif("✝  Whitelist", "Added: "..playerName, true)
+        else
+            showNotif("✝  Whitelist", "Already exists or invalid", false)
+        end
+    end
+end)
 -- ══ AJUSTES PAGE ══════════════════════════════════
 local cfgCard = makeCard(pg_ajustes)
 makeSecHeader(cfgCard, "†", "Settings")
@@ -1431,7 +1558,7 @@ for _, ch in ipairs(navBtns[1]:GetChildren()) do
 end
 
 -- Expose tabPages alias para compatibilidad con keybinds toggle
-local tabPages = {pages[1], pages[1], pages[1], pages[2]}  -- dummy, no se usa con tabs
+local tabPages = {pages[1], pages[2], pages[2], pages[3]}  -- dummy, no se usa con tabs
 
 -- ══════════════════════════════════════════════
 --  DRAG — mover panel (por el header)
@@ -2022,6 +2149,57 @@ RunService.RenderStepped:Connect(function()
             end
         end
         obj.hbx.Visible = false
+    end
+end)
+
+-- ══════════════════════════════════════════════
+--  CAM LOCK (Control de cámara)
+-- ══════════════════════════════════════════════
+local camLockTarget = nil
+
+local function getCamLockTarget()
+    if not S.CamLockEnabled then return nil end
+    
+    local closest = nil
+    local closestDist = S.CamLockRange
+    
+    for _, p in ipairs(Players:GetPlayers()) do
+        if shouldSkipPlayer(p) then continue end
+        local char = p.Character
+        if not char then continue end
+        
+        local root = char:FindFirstChild("HumanoidRootPart")
+        if not root then continue end
+        
+        -- Wall check
+        if S.CamLockWallCheck then
+            local myChar = player.Character
+            if myChar and not isVisible(root, myChar) then continue end
+        end
+        
+        local dist = (root.Position - camera.Focus.Position).Magnitude
+        if dist < closestDist then
+            closestDist = dist
+            closest = root
+        end
+    end
+    
+    return closest
+end
+
+RunService.RenderStepped:Connect(function()
+    if not S.CamLockEnabled then 
+        camLockTarget = nil
+        return 
+    end
+    
+    camLockTarget = getCamLockTarget()
+    
+    if camLockTarget then
+        local targetPos = camLockTarget.Position
+        local currentFocus = camera.Focus.Position
+        local newFocus = currentFocus:Lerp(targetPos, S.CamLockStrength / 100)
+        camera.Focus = CFrame.new(newFocus)
     end
 end)
 
