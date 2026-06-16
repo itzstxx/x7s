@@ -93,10 +93,8 @@ local function mkDefault()
         -- ✨ WHITELIST (nuevo sistema)
         Whitelist={},
         -- === CAM LOCK ===
-        CamLockEnabled = false,
-        CamLockStrength = 10,
-        CamLockRange = 150,
-        CamLockWallCheck = true,
+        CamLockEnabled=false, CamLockStrength=10, CamLockRange=150,
+        CamLockWallCheck=true, CamLockSafeFov=true,
         -- === x7sBet ===
         CamLockEnabled = false,
         CamLockStrength = 10,
@@ -186,12 +184,11 @@ local Locale = {
         hbx_key="Hitbox Keybind",
         hbx_vis="Visible Check",    hbx_vis_d="Only register hits when the enemy is actually visible. Prevents kills through walls.",
 
-        camlock_on="Enable Cam Lock",      camlock_on_d="Automatically locks camera on the closest enemy.",
-        camlock_strength="Cam Lock Strength", camlock_strength_d="How smoothly the camera follows (1-100).",
-        camlock_range="Cam Lock Range",     camlock_range_d="Maximum distance to target (50-500).",
-        camlock_wallcheck="Wall Check",     camlock_wallcheck_d="Only lock on visible enemies.",
-        
-        whitelist_title="Whitelist Manager", whitelist_add="Add Player", whitelist_remove="Remove",
+        camlock_on="Enable Cam Lock",    camlock_on_d="Automatically locks camera on the closest enemy.",
+        camlock_strength="Cam Lock Strength",
+        camlock_range="Cam Lock Range",
+        camlock_wallcheck="Wall Check",   camlock_wallcheck_d="Only lock on visible enemies.",
+        camlock_safefov="Safe FOV",       camlock_safefov_d="Skip players in a SafeZone (SafeField/SafeZoneShield).",
 
         summer_on="Summer 2026",    summer_on_d="Collects Summer 2026 drops automatically. Only in matches.",
 
@@ -220,12 +217,13 @@ local Locale = {
         hbx_show2="Mostrar Hitbox (Siempre)",  hbx_show2_d="Muestra la caja de hitbox al tamaño seleccionado sin importar si el jugador está oculto.",
         hbx_key="Tecla Hitbox",
         hbx_vis="Visible Check",    hbx_vis_d="Solo registra el hit si el enemigo está a la vista. Evita matar a través de paredes.",
-        camlock_on="Activar Cam Lock",      camlock_on_d="Bloquea automáticamente la cámara en el enemigo más cercano.",
-        camlock_strength="Fuerza Cam Lock", camlock_strength_d="Qué tan suavemente sigue la cámara (1-100).",
-        camlock_range="Rango Cam Lock",     camlock_range_d="Distancia máxima al objetivo (50-500).",
-        camlock_wallcheck="Wall Check",     camlock_wallcheck_d="Solo bloquea enemigos visibles.",
-        
-        whitelist_title="Gestor de Whitelist", whitelist_add="Añadir Jugador", whitelist_remove="Eliminar",
+
+        camlock_on="Activar Cam Lock",    camlock_on_d="Bloquea la cámara automáticamente en el enemigo más cercano.",
+        camlock_strength="Fuerza Cam Lock",
+        camlock_range="Rango Cam Lock",
+        camlock_wallcheck="Wall Check",   camlock_wallcheck_d="Solo bloquea enemigos visibles.",
+        camlock_safefov="Safe FOV",       camlock_safefov_d="Ignora jugadores en zona segura (SafeField/SafeZoneShield).",
+
         summer_on="Summer 2026",     summer_on_d="Recolecta los drops del Summer 2026 automáticamente. Solo en partidas.",
         st_bg="Fondo del Panel",
         st_notif="Activar Notificaciones",
@@ -578,7 +576,7 @@ end
 -- SVG-like icon labels (usando Unicode para los iconos de nav)
 local NAV_DATA = {
     { icon = "⌂", label = "Inicio" },
-    { icon = "🕸", label = "Aim" },
+    { icon = "🎯", label = "Aim" },
     { icon = "⚙", label = "Ajustes" },
 }
 
@@ -1399,10 +1397,10 @@ local summerCard = makeCard(pg_inicio)
 makeSecHeader(summerCard, "☀", "Summer 2026")
 makeToggle(summerCard, "summer_on", "summer_on_d", "summer_on")
 
-
--- ══ AIM PAGE ═══════════════════════════════════════════════════
+-- ══ AIM PAGE ══════════════════════════════════════════════════════
+-- CAM LOCK CARD
 local camLockCard = makeCard(pg_aim)
-makeSecHeader(camLockCard, "🎯", "Cam Lock")
+makeSecHeader(camLockCard, "†", "Cam Lock")
 makeToggle(camLockCard, "camlock_on", "camlock_on_d", "CamLockEnabled", function(on)
     showNotif("✝  Cam Lock", on and L("n_on") or L("n_off"), on)
 end)
@@ -1413,233 +1411,245 @@ makeSlider(camLockCard, "camlock_range", "CamLockRange", 50, 500)
 makeDivider(camLockCard)
 makeToggle(camLockCard, "camlock_wallcheck", "camlock_wallcheck_d", "CamLockWallCheck")
 makeDivider(camLockCard)
+makeToggle(camLockCard, "camlock_safefov", "camlock_safefov_d", "CamLockSafeFov")
+makeDivider(camLockCard)
 
--- TARGET DROPDOWN
-local targetContainer = Instance.new("Frame", camLockCard)
-targetContainer.Size = UDim2.new(1, 0, 0, 42); targetContainer.BackgroundTransparency = 1
+-- TARGET DROPDOWN (jugadores en server)
+do
+    local tgtContainer = Instance.new("Frame", camLockCard)
+    tgtContainer.Size = UDim2.new(1, 0, 0, 42); tgtContainer.BackgroundTransparency = 1
 
-local targetRow = Instance.new("Frame", targetContainer)
-targetRow.Size = UDim2.new(1, 0, 0, 42); targetRow.BackgroundTransparency = 1
+    local tgtRowF = Instance.new("Frame", tgtContainer)
+    tgtRowF.Size = UDim2.new(1, 0, 0, 42); tgtRowF.BackgroundTransparency = 1
 
-local targetLbl = Instance.new("TextLabel", targetRow)
-targetLbl.Size = UDim2.new(1, -120, 0, 16); targetLbl.Position = UDim2.fromOffset(14, 13)
-targetLbl.BackgroundTransparency = 1; targetLbl.Text = "Target"
-targetLbl.TextColor3 = Color3.fromRGB(215,215,215); targetLbl.Font = Enum.Font.GothamMedium
-targetLbl.TextSize = 12; targetLbl.TextXAlignment = Enum.TextXAlignment.Left
+    local tgtTitleLbl = Instance.new("TextLabel", tgtRowF)
+    tgtTitleLbl.Size = UDim2.new(1,-130,0,16); tgtTitleLbl.Position = UDim2.fromOffset(14,13)
+    tgtTitleLbl.BackgroundTransparency = 1; tgtTitleLbl.Text = "Target"
+    tgtTitleLbl.TextColor3 = Color3.fromRGB(215,215,215)
+    tgtTitleLbl.Font = Enum.Font.GothamMedium; tgtTitleLbl.TextSize = 12
+    tgtTitleLbl.TextXAlignment = Enum.TextXAlignment.Left
 
-local targetValLbl = Instance.new("TextLabel", targetRow)
-targetValLbl.Size = UDim2.fromOffset(90, 16); targetValLbl.Position = UDim2.new(1, -110, 0, 13)
-targetValLbl.BackgroundTransparency = 1; targetValLbl.Text = "None"
-targetValLbl.TextColor3 = Color3.fromRGB(85,85,85); targetValLbl.Font = Enum.Font.Gotham
-targetValLbl.TextSize = 11; targetValLbl.TextXAlignment = Enum.TextXAlignment.Right
+    local tgtValLbl = Instance.new("TextLabel", tgtRowF)
+    tgtValLbl.Size = UDim2.fromOffset(100,16); tgtValLbl.Position = UDim2.new(1,-118,0,13)
+    tgtValLbl.BackgroundTransparency = 1; tgtValLbl.Text = "Auto"
+    tgtValLbl.TextColor3 = Color3.fromRGB(85,85,85)
+    tgtValLbl.Font = Enum.Font.Gotham; tgtValLbl.TextSize = 11
+    tgtValLbl.TextXAlignment = Enum.TextXAlignment.Right
 
-local targetArrowLbl = Instance.new("TextLabel", targetRow)
-targetArrowLbl.Size = UDim2.fromOffset(14, 16); targetArrowLbl.Position = UDim2.new(1, -18, 0, 13)
-targetArrowLbl.BackgroundTransparency = 1; targetArrowLbl.Text = "▾"
-targetArrowLbl.TextColor3 = Color3.fromRGB(85,85,85); targetArrowLbl.Font = Enum.Font.GothamBold
-targetArrowLbl.TextSize = 10
+    local tgtArrow = Instance.new("TextLabel", tgtRowF)
+    tgtArrow.Size = UDim2.fromOffset(14,16); tgtArrow.Position = UDim2.new(1,-18,0,13)
+    tgtArrow.BackgroundTransparency = 1; tgtArrow.Text = "▾"
+    tgtArrow.TextColor3 = Color3.fromRGB(85,85,85)
+    tgtArrow.Font = Enum.Font.GothamBold; tgtArrow.TextSize = 10
 
--- Target dropdown frame
-local targetOptH = 32
-local targetDropFrame = Instance.new("Frame", targetContainer)
-targetDropFrame.Size = UDim2.new(1, 0, 0, 0); targetDropFrame.Position = UDim2.fromOffset(0, 42)
-targetDropFrame.BackgroundColor3 = Color3.fromRGB(18,14,22); targetDropFrame.BorderSizePixel = 0
-targetDropFrame.ClipsDescendants = true; targetDropFrame.ZIndex = 50; targetDropFrame.Visible = false
-local targetDFS = Instance.new("UIStroke", targetDropFrame)
-targetDFS.Color = Color3.fromRGB(58,58,58); targetDFS.Thickness = 1
+    local tgtDrop = Instance.new("Frame", tgtContainer)
+    tgtDrop.Size = UDim2.new(1,0,0,0); tgtDrop.Position = UDim2.fromOffset(0,42)
+    tgtDrop.BackgroundColor3 = Color3.fromRGB(16,12,20); tgtDrop.BorderSizePixel = 0
+    tgtDrop.ClipsDescendants = true; tgtDrop.Visible = false
+    local tgtDS = Instance.new("UIStroke", tgtDrop)
+    tgtDS.Color = Color3.fromRGB(58,58,58); tgtDS.Thickness = 1
 
-local function updateTargetDropdown()
-    for _, ob in ipairs(targetDropFrame:GetChildren()) do
-        if ob:IsA("TextButton") then ob:Destroy() end
-    end
-    
-    local idx = 1
-    for _, p in ipairs(_plrList) do
-        if p == player then continue end
-        if not p.Character then continue end
-        local root = p.Character:FindFirstChild("HumanoidRootPart")
-        if not root then continue end
-        
-        local ob = Instance.new("TextButton", targetDropFrame)
-        ob.Size = UDim2.new(1,0,0,targetOptH); ob.Position = UDim2.fromOffset(0,(idx-1)*targetOptH)
-        ob.BackgroundTransparency = 1; ob.BorderSizePixel = 0
-        ob.Text = p.Name; ob.Font = Enum.Font.GothamMedium; ob.TextSize = 11
-        ob.TextColor3 = Color3.fromRGB(215,215,215)
-        ob.ZIndex = 51; ob.AutoButtonColor = false
-        ob.MouseButton1Click:Connect(function()
-            targetValLbl.Text = p.Name
-            TweenService:Create(targetDropFrame, TIF, {Size=UDim2.new(1,0,0,0)}):Play()
-            task.delay(0.25, function() targetDropFrame.Visible=false end)
-            targetContainer.Size = UDim2.new(1,0,0,42); targetArrowLbl.Text = "▾"
+    local camLockFixedTarget = nil
+
+    local function rebuildTargetDrop()
+        for _, c in ipairs(tgtDrop:GetChildren()) do
+            if c:IsA("TextButton") then c:Destroy() end
+        end
+        -- Opción "Auto" (más cercano)
+        local autoBtn = Instance.new("TextButton", tgtDrop)
+        autoBtn.Size = UDim2.new(1,0,0,30); autoBtn.Position = UDim2.fromOffset(0,0)
+        autoBtn.BackgroundTransparency = 1; autoBtn.Text = "  Auto (nearest)"
+        autoBtn.Font = Enum.Font.GothamMedium; autoBtn.TextSize = 11
+        autoBtn.TextColor3 = camLockFixedTarget==nil and accentColor or Color3.fromRGB(215,215,215)
+        autoBtn.TextXAlignment = Enum.TextXAlignment.Left; autoBtn.AutoButtonColor = false
+        autoBtn.MouseButton1Click:Connect(function()
+            camLockFixedTarget = nil
+            tgtValLbl.Text = "Auto"
+            TweenService:Create(tgtDrop,TIF,{Size=UDim2.new(1,0,0,0)}):Play()
+            task.delay(0.25,function() tgtDrop.Visible=false end)
+            tgtContainer.Size = UDim2.new(1,0,0,42); tgtArrow.Text = "▾"
         end)
-        idx = idx + 1
-    end
-end
-updateTargetDropdown()
 
-local targetOpen = false
-local targetHitArea = Instance.new("TextButton", targetRow)
-targetHitArea.Size = UDim2.new(1,0,1,0); targetHitArea.BackgroundTransparency=1; targetHitArea.Text=""; targetHitArea.ZIndex=5
-targetHitArea.MouseButton1Click:Connect(function()
-    targetOpen = not targetOpen
-    updateTargetDropdown()
-    if targetOpen then
-        targetDropFrame.Visible=true; targetDropFrame.Size=UDim2.new(1,0,0,0)
-        TweenService:Create(targetDropFrame, TIF, {Size=UDim2.new(1,0,0,math.min(#_plrList*targetOptH, 200))}):Play()
-        targetContainer.Size=UDim2.new(1,0,0,42+math.min(#_plrList*targetOptH, 200)); targetArrowLbl.Text="▴"
-    else
-        TweenService:Create(targetDropFrame, TIF, {Size=UDim2.new(1,0,0,0)}):Play()
-        task.delay(0.25, function() targetDropFrame.Visible=false end)
-        targetContainer.Size=UDim2.new(1,0,0,42); targetArrowLbl.Text="▾"
-    end
-end)
-
--- ══ WHITELIST ═════════════════════════════════════════════════
-local whitelistCard = makeCard(pg_aim)
-makeSecHeader(whitelistCard, "✓", "Whitelist Manager")
-
--- Botón de refresh
-local refreshRow = Instance.new("Frame", whitelistCard)
-refreshRow.Size = UDim2.new(1, 0, 0, 36); refreshRow.BackgroundTransparency = 1
-
-local refreshBtn = Instance.new("TextButton", refreshRow)
-refreshBtn.Size = UDim2.fromOffset(28, 28); refreshBtn.Position = UDim2.new(1, -42, 0.5, -14)
-refreshBtn.BackgroundColor3 = accentColor; refreshBtn.BorderSizePixel = 0
-refreshBtn.Text = "↻"; refreshBtn.TextColor3 = Color3.fromRGB(255,255,255)
-refreshBtn.Font = Enum.Font.GothamBold; refreshBtn.TextSize = 14; refreshBtn.AutoButtonColor = false
-Instance.new("UICorner", refreshBtn).CornerRadius = UDim.new(0,4)
-
-local refreshLbl = Instance.new("TextLabel", refreshRow)
-refreshLbl.Size = UDim2.new(1, -50, 1, 0); refreshLbl.Position = UDim2.fromOffset(14, 0)
-refreshLbl.BackgroundTransparency = 1; refreshLbl.Text = "Add from server"
-refreshLbl.TextColor3 = Color3.fromRGB(215,215,215); refreshLbl.Font = Enum.Font.GothamMedium
-refreshLbl.TextSize = 12; refreshLbl.TextXAlignment = Enum.TextXAlignment.Left
-
--- Dropdown de jugadores en servidor
-local playerOptH = 28
-local playerDropFrame = Instance.new("Frame", whitelistCard)
-playerDropFrame.Size = UDim2.new(1, 0, 0, 0)
-playerDropFrame.BackgroundColor3 = Color3.fromRGB(14,10,18); playerDropFrame.BorderSizePixel = 0
-playerDropFrame.ClipsDescendants = true; playerDropFrame.ZIndex = 49; playerDropFrame.Visible = false
-local playerDFS = Instance.new("UIStroke", playerDropFrame)
-playerDFS.Color = Color3.fromRGB(58,58,58); playerDFS.Thickness = 1
-
-local function updateServerPlayerDropdown()
-    for _, c in ipairs(playerDropFrame:GetChildren()) do
-        if c:IsA("TextButton") then c:Destroy() end
-    end
-    
-    local idx = 1
-    for _, p in ipairs(_plrList) do
-        if p == player then continue end
-        if not p.Character then continue end
-        local alreadyInWL = false
-        for _, wlName in ipairs(S.Whitelist) do
-            if wlName:lower() == p.Name:lower() then
-                alreadyInWL = true
-                break
-            end
-        end
-        
-        local ob = Instance.new("TextButton", playerDropFrame)
-        ob.Size = UDim2.new(1,0,0,playerOptH); ob.Position = UDim2.fromOffset(0,(idx-1)*playerOptH)
-        ob.BackgroundColor3 = alreadyInWL and Color3.fromRGB(26,20,32) or Color3.fromRGB(18,14,22)
-        ob.BorderSizePixel = 0
-        ob.Text = p.Name .. (alreadyInWL and " ✓" or "")
-        ob.Font = Enum.Font.GothamMedium; ob.TextSize = 11
-        ob.TextColor3 = alreadyInWL and Color3.fromRGB(100,180,100) or Color3.fromRGB(215,215,215)
-        ob.ZIndex = 50; ob.AutoButtonColor = false
-        
-        if not alreadyInWL then
+        local idx = 1
+        for _, p in ipairs(_plrList) do
+            if p == player then continue end
+            if not p.Character then continue end
+            local ob = Instance.new("TextButton", tgtDrop)
+            ob.Size = UDim2.new(1,0,0,30); ob.Position = UDim2.fromOffset(0, 30 + (idx-1)*30)
+            ob.BackgroundTransparency = 1; ob.Text = "  "..p.Name
+            ob.Font = Enum.Font.GothamMedium; ob.TextSize = 11
+            ob.TextColor3 = (camLockFixedTarget == p) and accentColor or Color3.fromRGB(215,215,215)
+            ob.TextXAlignment = Enum.TextXAlignment.Left; ob.AutoButtonColor = false
             ob.MouseButton1Click:Connect(function()
-                addWhitelist(p.Name)
-                updateServerPlayerDropdown()
-                updateWhitelistDisplay()
-                showNotif("✝  Whitelist", "Added: "..p.Name, true)
+                camLockFixedTarget = p
+                tgtValLbl.Text = p.Name
+                TweenService:Create(tgtDrop,TIF,{Size=UDim2.new(1,0,0,0)}):Play()
+                task.delay(0.25,function() tgtDrop.Visible=false end)
+                tgtContainer.Size = UDim2.new(1,0,0,42); tgtArrow.Text = "▾"
             end)
+            idx = idx + 1
         end
-        
-        idx = idx + 1
+        return idx
     end
+
+    local tgtOpen = false
+    local tgtHit = Instance.new("TextButton", tgtRowF)
+    tgtHit.Size = UDim2.new(1,0,1,0); tgtHit.BackgroundTransparency=1; tgtHit.Text=""
+    tgtHit.MouseButton1Click:Connect(function()
+        tgtOpen = not tgtOpen
+        local count = rebuildTargetDrop()
+        local totalH = 30 + (count-1)*30
+        if tgtOpen then
+            tgtDrop.Visible=true; tgtDrop.Size=UDim2.new(1,0,0,0)
+            TweenService:Create(tgtDrop,TIF,{Size=UDim2.new(1,0,0,math.min(totalH,200))}):Play()
+            tgtContainer.Size=UDim2.new(1,0,0,42+math.min(totalH,200))
+            tgtArrow.Text="▴"
+        else
+            TweenService:Create(tgtDrop,TIF,{Size=UDim2.new(1,0,0,0)}):Play()
+            task.delay(0.25,function() tgtDrop.Visible=false end)
+            tgtContainer.Size=UDim2.new(1,0,0,42); tgtArrow.Text="▾"
+        end
+    end)
+
+    -- Exponer para que el Cam Lock pueda leer el target fijo
+    _G.x7s_fixedTarget = function() return camLockFixedTarget end
 end
 
-local playerDropOpen = false
-local refreshHitArea = Instance.new("TextButton", refreshRow)
-refreshHitArea.Size = UDim2.new(1,0,1,0); refreshHitArea.BackgroundTransparency=1; refreshHitArea.Text=""; refreshHitArea.ZIndex=5
-refreshHitArea.MouseButton1Click:Connect(function()
-    playerDropOpen = not playerDropOpen
-    updateServerPlayerDropdown()
-    if playerDropOpen then
-        playerDropFrame.Visible=true; playerDropFrame.Size=UDim2.new(1,0,0,0)
-        local dropH = math.min((#_plrList-1)*playerOptH, 200)
-        TweenService:Create(playerDropFrame, TIF, {Size=UDim2.new(1,0,0,dropH)}):Play()
-        refreshBtn.Text = "▴"
-    else
-        TweenService:Create(playerDropFrame, TIF, {Size=UDim2.new(1,0,0,0)}):Play()
-        task.delay(0.25, function() playerDropFrame.Visible=false end)
-        refreshBtn.Text = "↻"
-    end
-end)
+-- ══ WHITELIST CARD ═════════════════════════════════════════════
+local whitelistCard = makeCard(pg_aim)
+makeSecHeader(whitelistCard, "✓", "Whitelist")
 
--- Lista de whitelisteados actuales
-local wlListContainer = Instance.new("Frame", whitelistCard)
-wlListContainer.Size = UDim2.new(1, 0, 0, 150); wlListContainer.BackgroundTransparency = 1
-wlListContainer.BorderSizePixel = 0
-local wlScroll = Instance.new("ScrollingFrame", wlListContainer)
-wlScroll.Size = UDim2.new(1, 0, 1, 0); wlScroll.BackgroundColor3 = Color3.fromRGB(10,8,14)
-wlScroll.BorderSizePixel = 0; wlScroll.ScrollBarThickness = 2
-wlScroll.ScrollBarImageColor3 = accentColor
-wlScroll.CanvasSize = UDim2.new(0, 0, 0, 0); wlScroll.AutomaticCanvasSize = Enum.AutomaticSize.Y
-local wlLayout = Instance.new("UIListLayout", wlScroll)
-wlLayout.SortOrder = Enum.SortOrder.LayoutOrder; wlLayout.Padding = UDim.new(0, 4)
-local wlPad = Instance.new("UIPadding", wlScroll)
-wlPad.PaddingTop = UDim.new(0,6); wlPad.PaddingLeft = UDim.new(0,8)
-wlPad.PaddingRight = UDim.new(0,8); wlPad.PaddingBottom = UDim.new(0,6)
+-- Scroll de whitelisteados
+local wlListF = Instance.new("Frame", whitelistCard)
+wlListF.Size = UDim2.new(1,0,0,0); wlListF.BackgroundTransparency=1
+wlListF.AutomaticSize = Enum.AutomaticSize.Y
+
+local wlScroll = Instance.new("ScrollingFrame", wlListF)
+wlScroll.Size = UDim2.new(1,0,0,120)
+wlScroll.BackgroundColor3 = Color3.fromRGB(10,8,14); wlScroll.BorderSizePixel=0
+wlScroll.ScrollBarThickness=2; wlScroll.ScrollBarImageColor3=accentColor
+wlScroll.CanvasSize=UDim2.new(0,0,0,0); wlScroll.AutomaticCanvasSize=Enum.AutomaticSize.Y
+local wlLay = Instance.new("UIListLayout", wlScroll)
+wlLay.SortOrder=Enum.SortOrder.LayoutOrder; wlLay.Padding=UDim.new(0,3)
+local wlPadInst = Instance.new("UIPadding", wlScroll)
+wlPadInst.PaddingAll = UDim.new(0,6)
 
 local function updateWhitelistDisplay()
     for _, c in ipairs(wlScroll:GetChildren()) do
-        if c:IsA("Frame") and c.Name ~= "UIListLayout" and c.Name ~= "UIPadding" then
-            c:Destroy()
-        end
+        if c:IsA("Frame") then c:Destroy() end
     end
-    
+    if #S.Whitelist == 0 then
+        wlScroll.Size = UDim2.new(1,0,0,36)
+        local emptyLbl = Instance.new("Frame", wlScroll)
+        emptyLbl.Size = UDim2.new(1,0,0,24); emptyLbl.BackgroundTransparency=1
+        local el = Instance.new("TextLabel", emptyLbl)
+        el.Size=UDim2.new(1,0,1,0); el.BackgroundTransparency=1
+        el.Text="No players in whitelist"; el.TextColor3=Color3.fromRGB(58,58,58)
+        el.Font=Enum.Font.Gotham; el.TextSize=10
+        return
+    end
+    wlScroll.Size = UDim2.new(1,0,0,math.min(#S.Whitelist*32+12, 120))
     for _, name in ipairs(S.Whitelist) do
         local wlItem = Instance.new("Frame", wlScroll)
-        wlItem.Size = UDim2.new(1, 0, 0, 28); wlItem.BackgroundColor3 = Color3.fromRGB(16,12,22)
-        wlItem.BorderSizePixel = 0
-        local wlStroke = Instance.new("UIStroke", wlItem)
-        wlStroke.Color = Color3.fromRGB(58,58,58); wlStroke.Thickness = 1
-        
-        local nameLbl = Instance.new("TextLabel", wlItem)
-        nameLbl.Size = UDim2.new(1, -38, 1, 0); nameLbl.Position = UDim2.fromOffset(8, 0)
-        nameLbl.BackgroundTransparency = 1; nameLbl.Text = name
-        nameLbl.TextColor3 = Color3.fromRGB(215,215,215); nameLbl.Font = Enum.Font.GothamMedium
-        nameLbl.TextSize = 11; nameLbl.TextXAlignment = Enum.TextXAlignment.Left
-        
-        local removeBtn = Instance.new("TextButton", wlItem)
-        removeBtn.Size = UDim2.fromOffset(24, 24); removeBtn.Position = UDim2.new(1, -28, 0.5, -12)
-        removeBtn.BackgroundColor3 = Color3.fromRGB(220,80,80); removeBtn.BorderSizePixel = 0
-        removeBtn.Text = "✕"; removeBtn.TextColor3 = Color3.fromRGB(255,255,255)
-        removeBtn.Font = Enum.Font.GothamBold; removeBtn.TextSize = 12; removeBtn.AutoButtonColor = false
-        Instance.new("UICorner", removeBtn).CornerRadius = UDim.new(0,4)
-        
-        removeBtn.MouseButton1Click:Connect(function()
-            removeWhitelist(name)
-            updateWhitelistDisplay()
-            updateServerPlayerDropdown()
-            showNotif("✝  Whitelist", "Removed: "..name, true)
+        wlItem.Size=UDim2.new(1,0,0,28); wlItem.BackgroundColor3=Color3.fromRGB(16,12,22)
+        wlItem.BorderSizePixel=0
+        Instance.new("UIStroke",wlItem).Color=Color3.fromRGB(42,42,42)
+        local nl = Instance.new("TextLabel", wlItem)
+        nl.Size=UDim2.new(1,-34,1,0); nl.Position=UDim2.fromOffset(8,0)
+        nl.BackgroundTransparency=1; nl.Text=name
+        nl.TextColor3=Color3.fromRGB(215,215,215); nl.Font=Enum.Font.GothamMedium
+        nl.TextSize=11; nl.TextXAlignment=Enum.TextXAlignment.Left
+        local rb = Instance.new("TextButton", wlItem)
+        rb.Size=UDim2.fromOffset(22,22); rb.Position=UDim2.new(1,-26,0.5,-11)
+        rb.BackgroundColor3=Color3.fromRGB(200,60,60); rb.BorderSizePixel=0
+        rb.Text="✕"; rb.TextColor3=Color3.fromRGB(255,255,255)
+        rb.Font=Enum.Font.GothamBold; rb.TextSize=11; rb.AutoButtonColor=false
+        Instance.new("UICorner",rb).CornerRadius=UDim.new(0,4)
+        rb.MouseButton1Click:Connect(function()
+            removeWhitelist(name); updateWhitelistDisplay()
+            showNotif("✝  Whitelist","Removed: "..name,true)
         end)
     end
 end
 updateWhitelistDisplay()
 
--- Refresh automático cuando un jugador se une
-Players.PlayerAdded:Connect(function()
-    task.wait(0.5)
-    updateServerPlayerDropdown()
+-- Fila "Add from server"
+local addServerRow = Instance.new("Frame", whitelistCard)
+addServerRow.Size=UDim2.new(1,0,0,36); addServerRow.BackgroundTransparency=1
+
+local addServerLbl = Instance.new("TextLabel", addServerRow)
+addServerLbl.Size=UDim2.new(1,-50,1,0); addServerLbl.Position=UDim2.fromOffset(14,0)
+addServerLbl.BackgroundTransparency=1; addServerLbl.Text="Add from server"
+addServerLbl.TextColor3=Color3.fromRGB(215,215,215)
+addServerLbl.Font=Enum.Font.GothamMedium; addServerLbl.TextSize=12
+addServerLbl.TextXAlignment=Enum.TextXAlignment.Left
+
+local addServerArrow = Instance.new("TextLabel", addServerRow)
+addServerArrow.Size=UDim2.fromOffset(14,16); addServerArrow.Position=UDim2.new(1,-18,0,10)
+addServerArrow.BackgroundTransparency=1; addServerArrow.Text="▾"
+addServerArrow.TextColor3=Color3.fromRGB(85,85,85)
+addServerArrow.Font=Enum.Font.GothamBold; addServerArrow.TextSize=10
+
+-- Dropdown de jugadores del server
+local srvOptH = 28
+local srvDrop = Instance.new("Frame", whitelistCard)
+srvDrop.Size=UDim2.new(1,0,0,0); srvDrop.BackgroundColor3=Color3.fromRGB(14,10,18)
+srvDrop.BorderSizePixel=0; srvDrop.ClipsDescendants=true; srvDrop.Visible=false
+Instance.new("UIStroke",srvDrop).Color=Color3.fromRGB(58,58,58)
+
+local function rebuildSrvDrop()
+    for _, c in ipairs(srvDrop:GetChildren()) do
+        if c:IsA("TextButton") then c:Destroy() end
+    end
+    local idx=0
+    for _, p in ipairs(_plrList) do
+        if p==player then continue end
+        local inWL=wlSet[p.Name:lower()]==true
+        local ob = Instance.new("TextButton", srvDrop)
+        ob.Size=UDim2.new(1,0,0,srvOptH); ob.Position=UDim2.fromOffset(0,idx*srvOptH)
+        ob.BackgroundColor3=inWL and Color3.fromRGB(20,24,20) or Color3.fromRGB(18,14,22)
+        ob.BorderSizePixel=0
+        ob.Text="  "..p.Name..(inWL and "  ✓" or "")
+        ob.Font=Enum.Font.GothamMedium; ob.TextSize=11
+        ob.TextColor3=inWL and Color3.fromRGB(100,190,100) or Color3.fromRGB(215,215,215)
+        ob.TextXAlignment=Enum.TextXAlignment.Left; ob.AutoButtonColor=false
+        if not inWL then
+            ob.MouseButton1Click:Connect(function()
+                addWhitelist(p.Name)
+                rebuildSrvDrop(); updateWhitelistDisplay()
+                showNotif("✝  Whitelist","Added: "..p.Name,true)
+            end)
+        end
+        idx=idx+1
+    end
+    return idx
+end
+
+local srvDropOpen=false
+local srvHit = Instance.new("TextButton", addServerRow)
+srvHit.Size=UDim2.new(1,0,1,0); srvHit.BackgroundTransparency=1; srvHit.Text=""
+srvHit.MouseButton1Click:Connect(function()
+    srvDropOpen=not srvDropOpen
+    local cnt=rebuildSrvDrop()
+    local dropH=math.min(cnt*srvOptH,180)
+    if srvDropOpen then
+        srvDrop.Visible=true; srvDrop.Size=UDim2.new(1,0,0,0)
+        TweenService:Create(srvDrop,TIF,{Size=UDim2.new(1,0,0,dropH)}):Play()
+        addServerArrow.Text="▴"
+    else
+        TweenService:Create(srvDrop,TIF,{Size=UDim2.new(1,0,0,0)}):Play()
+        task.delay(0.25,function() srvDrop.Visible=false end)
+        addServerArrow.Text="▾"
+    end
 end)
 
--- ══ AJUSTES PAGE ══════════════════════════════════════════════
+Players.PlayerAdded:Connect(function()
+    task.wait(0.5); if srvDropOpen then rebuildSrvDrop() end
+end)
+Players.PlayerRemoving:Connect(function()
+    task.defer(function() if srvDropOpen then rebuildSrvDrop() end end)
+end)
+
 
 -- ══ AJUSTES PAGE ══════════════════════════════════
 local cfgCard = makeCard(pg_ajustes)
@@ -2292,24 +2302,61 @@ RunService.RenderStepped:Connect(function()
     end
 end)
 
+
 -- ══════════════════════════════════════════════
---  CAM LOCK (EXACTAMENTE igual a SyyClient)
+--  CAM LOCK (de SyyClient)
 -- ══════════════════════════════════════════════
 local camLockTarget=nil
+
+local function isSafeZone(char)
+    if not char then return false end
+    -- Detectar si el jugador está en safe zone por sus descendientes
+    for _, d in ipairs(char:GetDescendants()) do
+        local n = d.Name
+        if n=="SafeField" or n=="SafeZoneShield" or n=="SafeHighlight" then
+            return true
+        end
+    end
+    return false
+end
 
 RunService:BindToRenderStep("x7sCamLock", Enum.RenderPriority.Camera.Value+1, function()
     if not S.CamLockEnabled then camLockTarget=nil; return end
 
     local myChar=player.Character
     local myRoot=myChar and myChar:FindFirstChild("HumanoidRootPart")
-    local bestRoot=nil; local bestDist=math.huge
 
+    -- Si hay target fijo, usarlo directamente
+    local fixedTarget = _G.x7s_fixedTarget and _G.x7s_fixedTarget()
+    if fixedTarget then
+        local fChar = fixedTarget.Character
+        local fRoot = fChar and fChar:FindFirstChild("HumanoidRootPart")
+        local fHum  = fChar and fChar:FindFirstChildOfClass("Humanoid")
+        if fRoot and fHum and fHum.Health > 0 then
+            if S.CamLockSafeFov and isSafeZone(fChar) then camLockTarget=nil; return end
+            local camPos=camera.CFrame.Position
+            local tPos=Vector3.new(fRoot.Position.X,fRoot.Position.Y+1.5,fRoot.Position.Z)
+            local rawDir=tPos-camPos
+            if rawDir.Magnitude<0.1 then return end
+            local strength=math.clamp(S.CamLockStrength,1,100)*0.012
+            local newLook=camera.CFrame.LookVector:Lerp(rawDir.Unit,strength)
+            if newLook.Magnitude>0.01 then
+                camera.CFrame=CFrame.lookAt(camPos,camPos+newLook.Unit)
+            end
+            return
+        end
+    end
+
+    -- Auto: buscar el más cercano
+    local bestRoot=nil; local bestDist=math.huge
     for _,p in ipairs(_plrList) do
         if shouldSkipPlayer(p) then continue end
         local char=p.Character; if not char then continue end
         local hum=char:FindFirstChildOfClass("Humanoid")
         local root=char:FindFirstChild("HumanoidRootPart")
         if not hum or hum.Health<=0 or not root then continue end
+        -- Safe FOV check
+        if S.CamLockSafeFov and isSafeZone(char) then continue end
         local dist3D=myRoot and (root.Position-myRoot.Position).Magnitude or math.huge
         if dist3D>S.CamLockRange then continue end
         if S.CamLockWallCheck and myChar then
@@ -2320,13 +2367,11 @@ RunService:BindToRenderStep("x7sCamLock", Enum.RenderPriority.Camera.Value+1, fu
         end
         if dist3D<bestDist then bestDist=dist3D; bestRoot=root end
     end
-
     camLockTarget=bestRoot
     if not bestRoot then return end
-
     local camPos=camera.CFrame.Position
-    local targetPos=Vector3.new(bestRoot.Position.X,bestRoot.Position.Y+1.5,bestRoot.Position.Z)
-    local rawDir=targetPos-camPos
+    local tPos=Vector3.new(bestRoot.Position.X,bestRoot.Position.Y+1.5,bestRoot.Position.Z)
+    local rawDir=tPos-camPos
     if rawDir.Magnitude<0.1 then return end
     local strength=math.clamp(S.CamLockStrength,1,100)*0.012
     local newLook=camera.CFrame.LookVector:Lerp(rawDir.Unit,strength)
@@ -2334,6 +2379,7 @@ RunService:BindToRenderStep("x7sCamLock", Enum.RenderPriority.Camera.Value+1, fu
         camera.CFrame=CFrame.lookAt(camPos,camPos+newLook.Unit)
     end
 end)
+
 
 -- ══════════════════════════════════════════════
 --  KEYBINDS globales
