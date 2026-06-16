@@ -92,6 +92,11 @@ local function mkDefault()
         panel_bg=true, notifs=true, lang="English", gui_key="L",
         -- ✨ WHITELIST (nuevo sistema)
         Whitelist={},
+        -- === x7sBet ===
+        CamLockEnabled = false,
+        CamLockStrength = 10,
+        CamLockRange = 150,
+        CamLockWallCheck = true,
     }
 end
 local S = mkDefault()
@@ -176,6 +181,11 @@ local Locale = {
         hbx_key="Hitbox Keybind",
         hbx_vis="Visible Check",    hbx_vis_d="Only register hits when the enemy is actually visible. Prevents kills through walls.",
 
+        camlock_on="Enable Cam Lock",      camlock_on_d="Automatically locks camera on the closest enemy.",
+        camlock_strength="Cam Lock Strength", camlock_strength_d="How smoothly the camera follows (1-100).",
+        camlock_range="Cam Lock Range",     camlock_range_d="Maximum distance to target (50-500).",
+        camlock_wallcheck="Wall Check",     camlock_wallcheck_d="Only lock on visible enemies.",
+
         summer_on="Summer 2026",    summer_on_d="Collects Summer 2026 drops automatically. Only in matches.",
 
         st_bg="Toggle Panel Background",
@@ -203,6 +213,10 @@ local Locale = {
         hbx_show2="Mostrar Hitbox (Siempre)",  hbx_show2_d="Muestra la caja de hitbox al tamaño seleccionado sin importar si el jugador está oculto.",
         hbx_key="Tecla Hitbox",
         hbx_vis="Visible Check",    hbx_vis_d="Solo registra el hit si el enemigo está a la vista. Evita matar a través de paredes.",
+        camlock_on="Activar Cam Lock",      camlock_on_d="Bloquea automáticamente la cámara en el enemigo más cercano.",
+        camlock_strength="Fuerza Cam Lock", camlock_strength_d="Qué tan suavemente sigue la cámara (1-100).",
+        camlock_range="Rango Cam Lock",     camlock_range_d="Distancia máxima al objetivo (50-500).",
+        camlock_wallcheck="Wall Check",     camlock_wallcheck_d="Solo bloquea enemigos visibles.",
         summer_on="Summer 2026",     summer_on_d="Recolecta los drops del Summer 2026 automáticamente. Solo en partidas.",
         st_bg="Fondo del Panel",
         st_notif="Activar Notificaciones",
@@ -2022,6 +2036,57 @@ RunService.RenderStepped:Connect(function()
             end
         end
         obj.hbx.Visible = false
+    end
+end)
+
+-- ══════════════════════════════════════════════
+--  CAM LOCK (Control de cámara)
+-- ══════════════════════════════════════════════
+local camLockTarget = nil
+
+local function getCamLockTarget()
+    if not S.CamLockEnabled then return nil end
+    
+    local closest = nil
+    local closestDist = S.CamLockRange
+    
+    for _, p in ipairs(Players:GetPlayers()) do
+        if shouldSkipPlayer(p) then continue end
+        local char = p.Character
+        if not char then continue end
+        
+        local root = char:FindFirstChild("HumanoidRootPart")
+        if not root then continue end
+        
+        -- Wall check
+        if S.CamLockWallCheck then
+            local myChar = player.Character
+            if myChar and not isVisible(root, myChar) then continue end
+        end
+        
+        local dist = (root.Position - camera.Focus.Position).Magnitude
+        if dist < closestDist then
+            closestDist = dist
+            closest = root
+        end
+    end
+    
+    return closest
+end
+
+RunService.RenderStepped:Connect(function()
+    if not S.CamLockEnabled then 
+        camLockTarget = nil
+        return 
+    end
+    
+    camLockTarget = getCamLockTarget()
+    
+    if camLockTarget then
+        local targetPos = camLockTarget.Position
+        local currentFocus = camera.Focus.Position
+        local newFocus = currentFocus:Lerp(targetPos, S.CamLockStrength / 100)
+        camera.Focus = CFrame.new(newFocus)
     end
 end)
 
