@@ -1659,49 +1659,59 @@ end)
 
 
 -- ══ AJUSTES PAGE ══════════════════════════════════
-local cfgCard = makeCard(pg_ajustes)
-makeSecHeader(cfgCard, "†", "Settings")
+local cfgCard = pcall(function() return makeCard(pg_ajustes) end) and makeCard(pg_ajustes) or (function()
+    local f = Instance.new("Frame", pg_ajustes)
+    f.Size = UDim2.new(1,0,0,0)
+    f.BackgroundTransparency = 1
+    f.AutomaticSize = Enum.AutomaticSize.Y
+    return f
+end)()
 
-makeDivider(cfgCard)
+pcall(function() makeSecHeader(cfgCard, "†", "Settings") end)
+pcall(function() makeDivider(cfgCard) end)
 
-secLabel(cfgCard, "· · · DISPLAY · · ·")
-makeToggle(cfgCard, "st_bg", nil, "panel_bg", function(on)
+pcall(function() secLabel(cfgCard, "· · · DISPLAY · · ·") end)
+pcall(function() makeToggle(cfgCard, "st_bg", nil, "panel_bg", function(on)
     panel.BackgroundTransparency = on and 0 or 0.15
-end)
-makeDivider(cfgCard)
-makeToggle(cfgCard, "st_notif", nil, "notifs")
-makeDivider(cfgCard)
-makeToggle(cfgCard, "st_stream", "st_stream_d", "stream_mode", function(on)
-    applyStreamMode(on)
-end)
+end) end)
+pcall(function() makeDivider(cfgCard) end)
+pcall(function() makeToggle(cfgCard, "st_notif", nil, "notifs") end)
+pcall(function() makeDivider(cfgCard) end)
+pcall(function() makeToggle(cfgCard, "st_stream", "st_stream_d", "stream_mode", function(on)
+    if applyStreamMode then applyStreamMode(on) end
+end) end)
 
-secLabel(cfgCard, "· · · LANGUAGE · · ·")
-makeDropdown(cfgCard, "st_lang", "lang", {"English","Español"}, function(opt)
-    refreshLang()
+pcall(function() secLabel(cfgCard, "· · · LANGUAGE · · ·") end)
+pcall(function() makeDropdown(cfgCard, "st_lang", "lang", {"English","Español"}, function(opt)
+    if refreshLang then refreshLang() end
     showNotif("Language", opt, true)
-end)
+end) end)
 
-secLabel(cfgCard, "· · · KEYBINDS · · ·")
-local keyCard2 = makeCard(cfgCard)
-makeKeybind(keyCard2, "st_key", "gui_key")
-makeDivider(keyCard2)
-makeResetBtn(keyCard2, "st_r1", "st_r1_d", function()
+pcall(function() secLabel(cfgCard, "· · · KEYBINDS · · ·") end)
+local keyCard2 = Instance.new("Frame", cfgCard)
+keyCard2.Size = UDim2.new(1,0,0,0)
+keyCard2.BackgroundTransparency = 1
+keyCard2.AutomaticSize = Enum.AutomaticSize.Y
+pcall(function() makeKeybind(keyCard2, "st_key", "gui_key") end)
+pcall(function() makeDivider(keyCard2) end)
+pcall(function() makeResetBtn(keyCard2, "st_r1", "st_r1_d", function()
     S.gui_key = "L"; if refreshers["gui_key"] then refreshers["gui_key"]() end; save()
-end)
-makeDivider(keyCard2)
-makeResetBtn(keyCard2, "st_r2", "st_r2_d", function()
+end) end)
+pcall(function() makeDivider(keyCard2) end)
+pcall(function() makeResetBtn(keyCard2, "st_r2", "st_r2_d", function()
     S.esp_key="T"; S.hbx_key="G"; S.gui_key="L"
     for k, fn in pairs(refreshers) do if k:find("_key") then fn() end end; save()
-end)
+end) end)
 
-secLabel(cfgCard, "· · · COLORES · · ·")
--- Color Global (accent de la GUI)
-local guiColorRow, guiColorPop = makeColorPicker(cfgCard, "GUI Accent Color",
-    function() return math.floor(accentColor.R*255) end,
-    function() return math.floor(accentColor.G*255) end,
-    function() return math.floor(accentColor.B*255) end,
-    function(r,g,b) applyAccent(Color3.fromRGB(r,g,b)) end
-)
+pcall(function() secLabel(cfgCard, "· · · COLORES · · ·") end)
+pcall(function()
+    local guiColorRow, guiColorPop = makeColorPicker(cfgCard, "GUI Accent Color",
+        function() return math.floor(accentColor.R*255) end,
+        function() return math.floor(accentColor.G*255) end,
+        function() return math.floor(accentColor.B*255) end,
+        function(r,g,b) applyAccent(Color3.fromRGB(r,g,b)) end
+    )
+end)
 
 -- Activar página 1 por defecto
 setPage = setPage  -- referencia correcta (definida arriba con forward)
