@@ -2153,54 +2153,45 @@ RunService.RenderStepped:Connect(function()
 end)
 
 -- ══════════════════════════════════════════════
---  CAM LOCK (Copiado de SyyClient - FUNCIONA)
+--  CAM LOCK (EXACTAMENTE igual a SyyClient)
 -- ══════════════════════════════════════════════
-local camLockTarget = nil
+local camLockTarget=nil
 
 RunService:BindToRenderStep("x7sCamLock", Enum.RenderPriority.Camera.Value+1, function()
     if not S.CamLockEnabled then camLockTarget=nil; return end
 
-    local myChar = player.Character
-    local myRoot = myChar and myChar:FindFirstChild("HumanoidRootPart")
-    local bestRoot = nil
-    local bestDist = math.huge
+    local myChar=player.Character
+    local myRoot=myChar and myChar:FindFirstChild("HumanoidRootPart")
+    local bestRoot=nil; local bestDist=math.huge
 
-    for _, p in ipairs(Players:GetPlayers()) do
+    for _,p in ipairs(_plrList) do
         if shouldSkipPlayer(p) then continue end
-        local char = p.Character
-        if not char then continue end
-        local hum = char:FindFirstChildOfClass("Humanoid")
-        local root = char:FindFirstChild("HumanoidRootPart")
-        if not hum or hum.Health <= 0 or not root then continue end
-        
-        local dist3D = myRoot and (root.Position - myRoot.Position).Magnitude or math.huge
-        if dist3D > S.CamLockRange then continue end
-        
+        local char=p.Character; if not char then continue end
+        local hum=char:FindFirstChildOfClass("Humanoid")
+        local root=char:FindFirstChild("HumanoidRootPart")
+        if not hum or hum.Health<=0 or not root then continue end
+        local dist3D=myRoot and (root.Position-myRoot.Position).Magnitude or math.huge
+        if dist3D>S.CamLockRange then continue end
         if S.CamLockWallCheck and myChar then
-            local ok, obs = pcall(function()
-                return camera:GetPartsObscuringTarget({root.Position}, {myChar, char})
+            local ok,obs=pcall(function()
+                return camera:GetPartsObscuringTarget({root.Position},{myChar,char})
             end)
-            if ok and #obs > 0 then continue end
+            if ok and #obs>0 then continue end
         end
-        
-        if dist3D < bestDist then
-            bestDist = dist3D
-            bestRoot = root
-        end
+        if dist3D<bestDist then bestDist=dist3D; bestRoot=root end
     end
 
-    camLockTarget = bestRoot
+    camLockTarget=bestRoot
     if not bestRoot then return end
 
-    local camPos = camera.CFrame.Position
-    local targetPos = Vector3.new(bestRoot.Position.X, bestRoot.Position.Y + 1.5, bestRoot.Position.Z)
-    local rawDir = targetPos - camPos
-    if rawDir.Magnitude < 0.1 then return end
-    
-    local strength = math.clamp(S.CamLockStrength, 1, 100) * 0.012
-    local newLook = camera.CFrame.LookVector:Lerp(rawDir.Unit, strength)
-    if newLook.Magnitude > 0.01 then
-        camera.CFrame = CFrame.lookAt(camPos, camPos + newLook.Unit)
+    local camPos=camera.CFrame.Position
+    local targetPos=Vector3.new(bestRoot.Position.X,bestRoot.Position.Y+1.5,bestRoot.Position.Z)
+    local rawDir=targetPos-camPos
+    if rawDir.Magnitude<0.1 then return end
+    local strength=math.clamp(S.CamLockStrength,1,100)*0.012
+    local newLook=camera.CFrame.LookVector:Lerp(rawDir.Unit,strength)
+    if newLook.Magnitude>0.01 then
+        camera.CFrame=CFrame.lookAt(camPos,camPos+newLook.Unit)
     end
 end)
 
