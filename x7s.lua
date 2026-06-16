@@ -573,6 +573,13 @@ local function makeContentPage()
     return p
 end
 
+-- ═══════════════════════════════════════════════════════════
+-- PLAYER LIST (Definida AQUÍ para que esté disponible)
+-- ═══════════════════════════════════════════════════════════
+local _plrList = Players:GetPlayers()
+Players.PlayerAdded:Connect(function()    _plrList = Players:GetPlayers() end)
+Players.PlayerRemoving:Connect(function() task.defer(function() _plrList = Players:GetPlayers() end) end)
+
 -- SVG-like icon labels (usando Unicode para los iconos de nav)
 local NAV_DATA = {
     { icon = "⌂", label = "Inicio" },
@@ -2116,11 +2123,8 @@ applyHitbox = function(p, on)
 end
 
 -- ══════════════════════════════════════════════
---  PLAYER LIST actualizada
+--  PLAYER LIST (ya fue definida arriba)
 -- ══════════════════════════════════════════════
-local _plrList = Players:GetPlayers()
-Players.PlayerAdded:Connect(function()    _plrList = Players:GetPlayers() end)
-Players.PlayerRemoving:Connect(function() task.defer(function() _plrList = Players:GetPlayers() end) end)
 
 -- ══════════════════════════════════════════════
 --  RENDER LOOP
