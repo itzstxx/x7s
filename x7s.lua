@@ -578,7 +578,7 @@ end
 -- SVG-like icon labels (usando Unicode para los iconos de nav)
 local NAV_DATA = {
     { icon = "⌂", label = "Inicio" },
-    { icon = "🕸", label = "Top" },
+    { icon = "🎯", label = "Aim" },
     { icon = "⚙", label = "Ajustes" },
 }
 
@@ -1412,12 +1412,176 @@ makeDivider(camLockCard)
 makeSlider(camLockCard, "camlock_range", "CamLockRange", 50, 500)
 makeDivider(camLockCard)
 makeToggle(camLockCard, "camlock_wallcheck", "camlock_wallcheck_d", "CamLockWallCheck")
+makeDivider(camLockCard)
+
+-- TARGET DROPDOWN
+local targetContainer = Instance.new("Frame", camLockCard)
+targetContainer.Size = UDim2.new(1, 0, 0, 42); targetContainer.BackgroundTransparency = 1
+
+local targetRow = Instance.new("Frame", targetContainer)
+targetRow.Size = UDim2.new(1, 0, 0, 42); targetRow.BackgroundTransparency = 1
+
+local targetLbl = Instance.new("TextLabel", targetRow)
+targetLbl.Size = UDim2.new(1, -120, 0, 16); targetLbl.Position = UDim2.fromOffset(14, 13)
+targetLbl.BackgroundTransparency = 1; targetLbl.Text = "Target"
+targetLbl.TextColor3 = Color3.fromRGB(215,215,215); targetLbl.Font = Enum.Font.GothamMedium
+targetLbl.TextSize = 12; targetLbl.TextXAlignment = Enum.TextXAlignment.Left
+
+local targetValLbl = Instance.new("TextLabel", targetRow)
+targetValLbl.Size = UDim2.fromOffset(90, 16); targetValLbl.Position = UDim2.new(1, -110, 0, 13)
+targetValLbl.BackgroundTransparency = 1; targetValLbl.Text = "None"
+targetValLbl.TextColor3 = Color3.fromRGB(85,85,85); targetValLbl.Font = Enum.Font.Gotham
+targetValLbl.TextSize = 11; targetValLbl.TextXAlignment = Enum.TextXAlignment.Right
+
+local targetArrowLbl = Instance.new("TextLabel", targetRow)
+targetArrowLbl.Size = UDim2.fromOffset(14, 16); targetArrowLbl.Position = UDim2.new(1, -18, 0, 13)
+targetArrowLbl.BackgroundTransparency = 1; targetArrowLbl.Text = "▾"
+targetArrowLbl.TextColor3 = Color3.fromRGB(85,85,85); targetArrowLbl.Font = Enum.Font.GothamBold
+targetArrowLbl.TextSize = 10
+
+-- Target dropdown frame
+local targetOptH = 32
+local targetDropFrame = Instance.new("Frame", targetContainer)
+targetDropFrame.Size = UDim2.new(1, 0, 0, 0); targetDropFrame.Position = UDim2.fromOffset(0, 42)
+targetDropFrame.BackgroundColor3 = Color3.fromRGB(18,14,22); targetDropFrame.BorderSizePixel = 0
+targetDropFrame.ClipsDescendants = true; targetDropFrame.ZIndex = 50; targetDropFrame.Visible = false
+local targetDFS = Instance.new("UIStroke", targetDropFrame)
+targetDFS.Color = Color3.fromRGB(58,58,58); targetDFS.Thickness = 1
+
+local function updateTargetDropdown()
+    for _, ob in ipairs(targetDropFrame:GetChildren()) do
+        if ob:IsA("TextButton") then ob:Destroy() end
+    end
+    
+    local idx = 1
+    for _, p in ipairs(_plrList) do
+        if p == player then continue end
+        if not p.Character then continue end
+        local root = p.Character:FindFirstChild("HumanoidRootPart")
+        if not root then continue end
+        
+        local ob = Instance.new("TextButton", targetDropFrame)
+        ob.Size = UDim2.new(1,0,0,targetOptH); ob.Position = UDim2.fromOffset(0,(idx-1)*targetOptH)
+        ob.BackgroundTransparency = 1; ob.BorderSizePixel = 0
+        ob.Text = p.Name; ob.Font = Enum.Font.GothamMedium; ob.TextSize = 11
+        ob.TextColor3 = Color3.fromRGB(215,215,215)
+        ob.ZIndex = 51; ob.AutoButtonColor = false
+        ob.MouseButton1Click:Connect(function()
+            targetValLbl.Text = p.Name
+            TweenService:Create(targetDropFrame, TIF, {Size=UDim2.new(1,0,0,0)}):Play()
+            task.delay(0.25, function() targetDropFrame.Visible=false end)
+            targetContainer.Size = UDim2.new(1,0,0,42); targetArrowLbl.Text = "▾"
+        end)
+        idx = idx + 1
+    end
+end
+updateTargetDropdown()
+
+local targetOpen = false
+local targetHitArea = Instance.new("TextButton", targetRow)
+targetHitArea.Size = UDim2.new(1,0,1,0); targetHitArea.BackgroundTransparency=1; targetHitArea.Text=""; targetHitArea.ZIndex=5
+targetHitArea.MouseButton1Click:Connect(function()
+    targetOpen = not targetOpen
+    updateTargetDropdown()
+    if targetOpen then
+        targetDropFrame.Visible=true; targetDropFrame.Size=UDim2.new(1,0,0,0)
+        TweenService:Create(targetDropFrame, TIF, {Size=UDim2.new(1,0,0,math.min(#_plrList*targetOptH, 200))}):Play()
+        targetContainer.Size=UDim2.new(1,0,0,42+math.min(#_plrList*targetOptH, 200)); targetArrowLbl.Text="▴"
+    else
+        TweenService:Create(targetDropFrame, TIF, {Size=UDim2.new(1,0,0,0)}):Play()
+        task.delay(0.25, function() targetDropFrame.Visible=false end)
+        targetContainer.Size=UDim2.new(1,0,0,42); targetArrowLbl.Text="▾"
+    end
+end)
 
 -- ══ WHITELIST ═════════════════════════════════════════════════
 local whitelistCard = makeCard(pg_aim)
-makeSecHeader(whitelistCard, "✓", "Whitelist")
+makeSecHeader(whitelistCard, "✓", "Whitelist Manager")
 
--- Mostrar lista de jugadores en whitelist
+-- Botón de refresh
+local refreshRow = Instance.new("Frame", whitelistCard)
+refreshRow.Size = UDim2.new(1, 0, 0, 36); refreshRow.BackgroundTransparency = 1
+
+local refreshBtn = Instance.new("TextButton", refreshRow)
+refreshBtn.Size = UDim2.fromOffset(28, 28); refreshBtn.Position = UDim2.new(1, -42, 0.5, -14)
+refreshBtn.BackgroundColor3 = accentColor; refreshBtn.BorderSizePixel = 0
+refreshBtn.Text = "↻"; refreshBtn.TextColor3 = Color3.fromRGB(255,255,255)
+refreshBtn.Font = Enum.Font.GothamBold; refreshBtn.TextSize = 14; refreshBtn.AutoButtonColor = false
+Instance.new("UICorner", refreshBtn).CornerRadius = UDim.new(0,4)
+
+local refreshLbl = Instance.new("TextLabel", refreshRow)
+refreshLbl.Size = UDim2.new(1, -50, 1, 0); refreshLbl.Position = UDim2.fromOffset(14, 0)
+refreshLbl.BackgroundTransparency = 1; refreshLbl.Text = "Add from server"
+refreshLbl.TextColor3 = Color3.fromRGB(215,215,215); refreshLbl.Font = Enum.Font.GothamMedium
+refreshLbl.TextSize = 12; refreshLbl.TextXAlignment = Enum.TextXAlignment.Left
+
+-- Dropdown de jugadores en servidor
+local playerOptH = 28
+local playerDropFrame = Instance.new("Frame", whitelistCard)
+playerDropFrame.Size = UDim2.new(1, 0, 0, 0)
+playerDropFrame.BackgroundColor3 = Color3.fromRGB(14,10,18); playerDropFrame.BorderSizePixel = 0
+playerDropFrame.ClipsDescendants = true; playerDropFrame.ZIndex = 49; playerDropFrame.Visible = false
+local playerDFS = Instance.new("UIStroke", playerDropFrame)
+playerDFS.Color = Color3.fromRGB(58,58,58); playerDFS.Thickness = 1
+
+local function updateServerPlayerDropdown()
+    for _, c in ipairs(playerDropFrame:GetChildren()) do
+        if c:IsA("TextButton") then c:Destroy() end
+    end
+    
+    local idx = 1
+    for _, p in ipairs(_plrList) do
+        if p == player then continue end
+        if not p.Character then continue end
+        local alreadyInWL = false
+        for _, wlName in ipairs(S.Whitelist) do
+            if wlName:lower() == p.Name:lower() then
+                alreadyInWL = true
+                break
+            end
+        end
+        
+        local ob = Instance.new("TextButton", playerDropFrame)
+        ob.Size = UDim2.new(1,0,0,playerOptH); ob.Position = UDim2.fromOffset(0,(idx-1)*playerOptH)
+        ob.BackgroundColor3 = alreadyInWL and Color3.fromRGB(26,20,32) or Color3.fromRGB(18,14,22)
+        ob.BorderSizePixel = 0
+        ob.Text = p.Name .. (alreadyInWL and " ✓" or "")
+        ob.Font = Enum.Font.GothamMedium; ob.TextSize = 11
+        ob.TextColor3 = alreadyInWL and Color3.fromRGB(100,180,100) or Color3.fromRGB(215,215,215)
+        ob.ZIndex = 50; ob.AutoButtonColor = false
+        
+        if not alreadyInWL then
+            ob.MouseButton1Click:Connect(function()
+                addWhitelist(p.Name)
+                updateServerPlayerDropdown()
+                updateWhitelistDisplay()
+                showNotif("✝  Whitelist", "Added: "..p.Name, true)
+            end)
+        end
+        
+        idx = idx + 1
+    end
+end
+
+local playerDropOpen = false
+local refreshHitArea = Instance.new("TextButton", refreshRow)
+refreshHitArea.Size = UDim2.new(1,0,1,0); refreshHitArea.BackgroundTransparency=1; refreshHitArea.Text=""; refreshHitArea.ZIndex=5
+refreshHitArea.MouseButton1Click:Connect(function()
+    playerDropOpen = not playerDropOpen
+    updateServerPlayerDropdown()
+    if playerDropOpen then
+        playerDropFrame.Visible=true; playerDropFrame.Size=UDim2.new(1,0,0,0)
+        local dropH = math.min((#_plrList-1)*playerOptH, 200)
+        TweenService:Create(playerDropFrame, TIF, {Size=UDim2.new(1,0,0,dropH)}):Play()
+        refreshBtn.Text = "▴"
+    else
+        TweenService:Create(playerDropFrame, TIF, {Size=UDim2.new(1,0,0,0)}):Play()
+        task.delay(0.25, function() playerDropFrame.Visible=false end)
+        refreshBtn.Text = "↻"
+    end
+end)
+
+-- Lista de whitelisteados actuales
 local wlListContainer = Instance.new("Frame", whitelistCard)
 wlListContainer.Size = UDim2.new(1, 0, 0, 150); wlListContainer.BackgroundTransparency = 1
 wlListContainer.BorderSizePixel = 0
@@ -1462,45 +1626,21 @@ local function updateWhitelistDisplay()
         removeBtn.MouseButton1Click:Connect(function()
             removeWhitelist(name)
             updateWhitelistDisplay()
+            updateServerPlayerDropdown()
             showNotif("✝  Whitelist", "Removed: "..name, true)
         end)
     end
 end
 updateWhitelistDisplay()
 
--- Input para añadir jugador
-local addInputRow = Instance.new("Frame", whitelistCard)
-addInputRow.Size = UDim2.new(1, 0, 0, 38); addInputRow.BackgroundTransparency = 1
-
-local inputBox = Instance.new("TextBox", addInputRow)
-inputBox.Size = UDim2.new(1, -56, 1, 0); inputBox.Position = UDim2.fromOffset(8, 0)
-inputBox.BackgroundColor3 = Color3.fromRGB(18,14,24); inputBox.BorderSizePixel = 0
-inputBox.PlaceholderText = "Player name..."; inputBox.Text = ""
-inputBox.TextColor3 = Color3.fromRGB(215,215,215); inputBox.PlaceholderColor3 = Color3.fromRGB(85,85,85)
-inputBox.Font = Enum.Font.GothamMedium; inputBox.TextSize = 11
-local inputStroke = Instance.new("UIStroke", inputBox)
-inputStroke.Color = Color3.fromRGB(58,58,58); inputStroke.Thickness = 1
-Instance.new("UICorner", inputBox).CornerRadius = UDim.new(0,4)
-
-local addBtn = Instance.new("TextButton", addInputRow)
-addBtn.Size = UDim2.fromOffset(40, 28); addBtn.Position = UDim2.new(1, -44, 0.5, -14)
-addBtn.BackgroundColor3 = accentColor; addBtn.BorderSizePixel = 0
-addBtn.Text = "+"; addBtn.TextColor3 = Color3.fromRGB(255,255,255)
-addBtn.Font = Enum.Font.GothamBold; addBtn.TextSize = 14; addBtn.AutoButtonColor = false
-Instance.new("UICorner", addBtn).CornerRadius = UDim.new(0,4)
-
-addBtn.MouseButton1Click:Connect(function()
-    local playerName = inputBox.Text:match("^%s*(.-)%s*$")  -- trim
-    if playerName ~= "" then
-        if addWhitelist(playerName) then
-            inputBox.Text = ""
-            updateWhitelistDisplay()
-            showNotif("✝  Whitelist", "Added: "..playerName, true)
-        else
-            showNotif("✝  Whitelist", "Already exists or invalid", false)
-        end
-    end
+-- Refresh automático cuando un jugador se une
+Players.PlayerAdded:Connect(function()
+    task.wait(0.5)
+    updateServerPlayerDropdown()
 end)
+
+-- ══ AJUSTES PAGE ══════════════════════════════════════════════
+
 -- ══ AJUSTES PAGE ══════════════════════════════════
 local cfgCard = makeCard(pg_ajustes)
 makeSecHeader(cfgCard, "†", "Settings")
