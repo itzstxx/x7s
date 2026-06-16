@@ -2197,9 +2197,13 @@ RunService.RenderStepped:Connect(function()
     
     if camLockTarget then
         local targetPos = camLockTarget.Position
-        local currentFocus = camera.Focus.Position
-        local newFocus = currentFocus:Lerp(targetPos, S.CamLockStrength / 100)
-        camera.Focus = CFrame.new(newFocus)
+        local currentPos = camera.CFrame.Position
+        local strength = math.clamp(S.CamLockStrength / 100, 0.01, 1)
+        local newPos = currentPos:Lerp(targetPos, strength)
+        
+        -- Mantener la rotación actual pero cambiar la posición
+        local currentLook = camera.CFrame.LookVector
+        camera.CFrame = CFrame.new(newPos, newPos + currentLook)
     end
 end)
 
