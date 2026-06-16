@@ -97,11 +97,13 @@ local function mkDefault()
         CamLockStrength = 10,
         CamLockRange = 150,
         CamLockWallCheck = true,
-        -- === x7sBet ===
-        CamLockEnabled = false,
-        CamLockStrength = 10,
-        CamLockRange = 150,
-        CamLockWallCheck = true,
+        -- === TARGET ===
+        TargetPart = "Random",
+        -- === EXTRAS ===
+        InfStamina   = false,
+        EspHealthBar = false,
+        EspDistance  = false,
+        ItemInHand   = false,
     }
 end
 local S = mkDefault()
@@ -193,6 +195,13 @@ local Locale = {
         
         whitelist_title="Whitelist Manager", whitelist_add="Add Player", whitelist_remove="Remove",
 
+        target_part="Target Part",
+        extras_title="Extras",
+        ext_inf_stamina="Inf Stamina",       ext_inf_stamina_d="Keeps your stamina always full.",
+        ext_health_bar="Health Bar",          ext_health_bar_d="Draws a health bar next to each enemy.",
+        ext_distance="Distance",              ext_distance_d="Shows the distance to each enemy in meters.",
+        ext_item_hand="Item in Hand",         ext_item_hand_d="Shows what item the enemy is holding.",
+
         summer_on="Summer 2026",    summer_on_d="Collects Summer 2026 drops automatically. Only in matches.",
 
         st_bg="Toggle Panel Background",
@@ -226,6 +235,12 @@ local Locale = {
         camlock_wallcheck="Wall Check",     camlock_wallcheck_d="Solo bloquea enemigos visibles.",
         
         whitelist_title="Gestor de Whitelist", whitelist_add="Añadir Jugador", whitelist_remove="Eliminar",
+        target_part="Parte Objetivo",
+        extras_title="Extras",
+        ext_inf_stamina="Inf Stamina",       ext_inf_stamina_d="Mantiene tu stamina siempre llena.",
+        ext_health_bar="Barra de Salud",      ext_health_bar_d="Dibuja una barra de vida junto a cada enemigo.",
+        ext_distance="Distancia",             ext_distance_d="Muestra la distancia a cada enemigo en metros.",
+        ext_item_hand="Ítem en la Mano",      ext_item_hand_d="Muestra qué ítem sostiene el enemigo.",
         summer_on="Summer 2026",     summer_on_d="Recolecta los drops del Summer 2026 automáticamente. Solo en partidas.",
         st_bg="Fondo del Panel",
         st_notif="Activar Notificaciones",
@@ -579,6 +594,7 @@ end
 local NAV_DATA = {
     { icon = "⌂", label = "Inicio" },
     { icon = "🕸", label = "Aim" },
+    { icon = "✦", label = "Extras" },
     { icon = "⚙", label = "Ajustes" },
 }
 
@@ -1232,10 +1248,11 @@ local function makeColorPicker(parent, label, getR, getG, getB, setRGB)
     return row, popup
 end
 
--- Páginas: 1 = Inicio, 2 = Aim, 3 = Ajustes
+-- Páginas: 1 = Inicio, 2 = Aim, 3 = Extras, 4 = Ajustes
 local pg_inicio   = pages[1]
 local pg_aim      = pages[2]
-local pg_ajustes  = pages[3]
+local pg_extras   = pages[3]
+local pg_ajustes  = pages[4]
 
 -- ══ INICIO PAGE ══════════════════════════════════
 
@@ -1413,94 +1430,389 @@ makeSlider(camLockCard, "camlock_range", "CamLockRange", 50, 500)
 makeDivider(camLockCard)
 makeToggle(camLockCard, "camlock_wallcheck", "camlock_wallcheck_d", "CamLockWallCheck")
 
--- ══ WHITELIST ═════════════════════════════════════════════════
+-- ══ TARGET (igual a SyyClient - dropdown desplegable) ═════════
+local targetCard = makeCard(pg_aim)
+makeSecHeader(targetCard, "⊕", "Target")
+makeDivider(targetCard)
+makeDropdown(targetCard, "target_part", "TargetPart", {"Head","UpperTorso","LowerTorso","Pierna","Pecho","Combo","Random"})
+
+-- ══ WHITELIST (igual a SyyClient - dropdown con lista del servidor) ══
 local whitelistCard = makeCard(pg_aim)
 makeSecHeader(whitelistCard, "✓", "Whitelist")
 
--- Mostrar lista de jugadores en whitelist
-local wlListContainer = Instance.new("Frame", whitelistCard)
-wlListContainer.Size = UDim2.new(1, 0, 0, 150); wlListContainer.BackgroundTransparency = 1
-wlListContainer.BorderSizePixel = 0
-local wlScroll = Instance.new("ScrollingFrame", wlListContainer)
-wlScroll.Size = UDim2.new(1, 0, 1, 0); wlScroll.BackgroundColor3 = Color3.fromRGB(10,8,14)
-wlScroll.BorderSizePixel = 0; wlScroll.ScrollBarThickness = 2
-wlScroll.ScrollBarImageColor3 = accentColor
-wlScroll.CanvasSize = UDim2.new(0, 0, 0, 0); wlScroll.AutomaticCanvasSize = Enum.AutomaticSize.Y
-local wlLayout = Instance.new("UIListLayout", wlScroll)
-wlLayout.SortOrder = Enum.SortOrder.LayoutOrder; wlLayout.Padding = UDim.new(0, 4)
-local wlPad = Instance.new("UIPadding", wlScroll)
-wlPad.PaddingTop = UDim.new(0,6); wlPad.PaddingLeft = UDim.new(0,8)
-wlPad.PaddingRight = UDim.new(0,8); wlPad.PaddingBottom = UDim.new(0,6)
+do
+    -- ── Fila "Jugadores en servidor" + botón Refresh ──────────
+    local WL_ENTRY_H = 28
+    local headerRow = Instance.new("Frame", whitelistCard)
+    headerRow.Size = UDim2.new(1,0,0,WL_ENTRY_H); headerRow.BackgroundTransparency = 1
 
-local function updateWhitelistDisplay()
-    for _, c in ipairs(wlScroll:GetChildren()) do
-        if c:IsA("Frame") and c.Name ~= "UIListLayout" and c.Name ~= "UIPadding" then
-            c:Destroy()
+    local hdrLbl = Instance.new("TextLabel", headerRow)
+    hdrLbl.Size = UDim2.new(1,-80,1,0); hdrLbl.Position = UDim2.fromOffset(0,0)
+    hdrLbl.BackgroundTransparency=1; hdrLbl.Text="Jugadores en servidor"
+    hdrLbl.TextColor3=Color3.fromRGB(102,92,120); hdrLbl.Font=Enum.Font.GothamMedium
+    hdrLbl.TextSize=11; hdrLbl.TextXAlignment=Enum.TextXAlignment.Left
+
+    local refreshBtn = Instance.new("TextButton", headerRow)
+    refreshBtn.Size = UDim2.fromOffset(68,22); refreshBtn.Position = UDim2.new(1,-72,0.5,-11)
+    refreshBtn.BackgroundColor3 = Color3.fromRGB(18,14,24); refreshBtn.BorderSizePixel=0
+    refreshBtn.Text="🔄 Refresh"; refreshBtn.TextColor3=accentColor
+    refreshBtn.Font=Enum.Font.GothamBold; refreshBtn.TextSize=9; refreshBtn.AutoButtonColor=false
+    local rfStroke=Instance.new("UIStroke",refreshBtn); rfStroke.Color=accentColor; rfStroke.Thickness=1
+
+    -- ── Lista desplegable de jugadores del servidor ──────────
+    local serverOpen = false
+    local serverContainer = Instance.new("Frame", whitelistCard)
+    serverContainer.Size = UDim2.new(1,0,0,0); serverContainer.BackgroundTransparency=1
+    serverContainer.BorderSizePixel=0; serverContainer.ClipsDescendants=false
+
+    local serverDropFrame = Instance.new("Frame", serverContainer)
+    serverDropFrame.Size = UDim2.new(1,0,0,0); serverDropFrame.BackgroundColor3=Color3.fromRGB(14,10,20)
+    serverDropFrame.BorderSizePixel=0; serverDropFrame.ClipsDescendants=true; serverDropFrame.ZIndex=12
+    serverDropFrame.Visible=false
+    local sdfStroke=Instance.new("UIStroke",serverDropFrame); sdfStroke.Color=Color3.fromRGB(58,50,80); sdfStroke.Thickness=1
+    local serverListFrame = Instance.new("Frame", serverDropFrame)
+    serverListFrame.Size = UDim2.new(1,0,0,0); serverListFrame.BackgroundTransparency=1
+    serverListFrame.AutomaticSize=Enum.AutomaticSize.Y
+    local slLay=Instance.new("UIListLayout",serverListFrame); slLay.SortOrder=Enum.SortOrder.LayoutOrder
+    slLay.Padding=UDim.new(0,2)
+    local slPad=Instance.new("UIPadding",serverListFrame)
+    slPad.PaddingTop=UDim.new(0,4); slPad.PaddingBottom=UDim.new(0,4)
+    slPad.PaddingLeft=UDim.new(0,4); slPad.PaddingRight=UDim.new(0,4)
+
+    -- Header dropdown toggle button (arrow)
+    local arrowLbl = Instance.new("TextLabel", headerRow)
+    arrowLbl.Size=UDim2.fromOffset(14,WL_ENTRY_H); arrowLbl.Position=UDim2.new(1,-16,0,0)
+    arrowLbl.BackgroundTransparency=1; arrowLbl.Text="▾"
+    arrowLbl.TextColor3=accentColor; arrowLbl.Font=Enum.Font.GothamBold; arrowLbl.TextSize=10
+
+    -- ── Lista en whitelist (guardada) ──────────────────────────
+    local wlSecLbl = Instance.new("TextLabel", whitelistCard)
+    wlSecLbl.Size = UDim2.new(1,0,0,16); wlSecLbl.BackgroundTransparency=1
+    wlSecLbl.Text="— En Whitelist —"; wlSecLbl.TextColor3=accentColor
+    wlSecLbl.Font=Enum.Font.GothamBlack; wlSecLbl.TextSize=9
+    wlSecLbl.TextXAlignment=Enum.TextXAlignment.Left
+
+    local wlFrame = Instance.new("Frame", whitelistCard)
+    wlFrame.Size = UDim2.new(1,0,0,0); wlFrame.BackgroundTransparency=1
+    wlFrame.AutomaticSize=Enum.AutomaticSize.Y
+    local wlLay=Instance.new("UIListLayout",wlFrame); wlLay.SortOrder=Enum.SortOrder.LayoutOrder
+    wlLay.Padding=UDim.new(0,2)
+
+    -- Input para añadir manualmente
+    local addInputRow = Instance.new("Frame", whitelistCard)
+    addInputRow.Size = UDim2.new(1,0,0,34); addInputRow.BackgroundTransparency=1
+
+    local inputBox = Instance.new("TextBox", addInputRow)
+    inputBox.Size=UDim2.new(1,-50,1,-6); inputBox.Position=UDim2.fromOffset(0,3)
+    inputBox.BackgroundColor3=Color3.fromRGB(18,14,24); inputBox.BorderSizePixel=0
+    inputBox.PlaceholderText="Player name..."; inputBox.Text=""
+    inputBox.TextColor3=Color3.fromRGB(215,215,215); inputBox.PlaceholderColor3=Color3.fromRGB(85,85,85)
+    inputBox.Font=Enum.Font.GothamMedium; inputBox.TextSize=11
+    local inputStroke=Instance.new("UIStroke",inputBox); inputStroke.Color=Color3.fromRGB(58,58,58); inputStroke.Thickness=1
+    Instance.new("UICorner",inputBox).CornerRadius=UDim.new(0,4)
+
+    local addBtn = Instance.new("TextButton", addInputRow)
+    addBtn.Size=UDim2.fromOffset(40,26); addBtn.Position=UDim2.new(1,-44,0.5,-13)
+    addBtn.BackgroundColor3=accentColor; addBtn.BorderSizePixel=0
+    addBtn.Text="+"; addBtn.TextColor3=Color3.fromRGB(255,255,255)
+    addBtn.Font=Enum.Font.GothamBold; addBtn.TextSize=16; addBtn.AutoButtonColor=false
+    Instance.new("UICorner",addBtn).CornerRadius=UDim.new(0,4)
+
+    -- Forward declarations
+    local rebuildWL, rebuildServerList
+
+    rebuildWL = function()
+        for _,c in ipairs(wlFrame:GetChildren()) do if c:IsA("Frame") then c:Destroy() end end
+        for _, name in ipairs(S.Whitelist) do
+            local e = Instance.new("Frame", wlFrame)
+            e.Size=UDim2.new(1,0,0,WL_ENTRY_H); e.BackgroundColor3=Color3.fromRGB(14,10,20)
+            e.BorderSizePixel=0
+            local eStroke=Instance.new("UIStroke",e); eStroke.Color=Color3.fromRGB(58,50,80); eStroke.Thickness=1
+            local nl=Instance.new("TextLabel",e)
+            nl.Size=UDim2.new(1,-38,1,0); nl.Position=UDim2.fromOffset(6,0)
+            nl.BackgroundTransparency=1; nl.Text="✓ "..name
+            nl.TextColor3=accentColor; nl.Font=Enum.Font.GothamMedium
+            nl.TextSize=11; nl.TextXAlignment=Enum.TextXAlignment.Left
+            local db=Instance.new("TextButton",e)
+            db.Size=UDim2.fromOffset(22,20); db.Position=UDim2.new(1,-26,0.5,-10)
+            db.BackgroundColor3=Color3.fromRGB(40,8,8); db.BorderSizePixel=0
+            db.Text="✕"; db.TextColor3=Color3.fromRGB(255,80,80)
+            db.Font=Enum.Font.GothamBold; db.TextSize=11; db.AutoButtonColor=false
+            local dbStroke=Instance.new("UIStroke",db); dbStroke.Color=Color3.fromRGB(100,20,20); dbStroke.Thickness=1
+            db.MouseButton1Click:Connect(function()
+                removeWhitelist(name); rebuildWL(); rebuildServerList()
+                showNotif("✝  Whitelist", "Removed: "..name, false)
+            end)
         end
     end
-    
-    for _, name in ipairs(S.Whitelist) do
-        local wlItem = Instance.new("Frame", wlScroll)
-        wlItem.Size = UDim2.new(1, 0, 0, 28); wlItem.BackgroundColor3 = Color3.fromRGB(16,12,22)
-        wlItem.BorderSizePixel = 0
-        local wlStroke = Instance.new("UIStroke", wlItem)
-        wlStroke.Color = Color3.fromRGB(58,58,58); wlStroke.Thickness = 1
-        
-        local nameLbl = Instance.new("TextLabel", wlItem)
-        nameLbl.Size = UDim2.new(1, -38, 1, 0); nameLbl.Position = UDim2.fromOffset(8, 0)
-        nameLbl.BackgroundTransparency = 1; nameLbl.Text = name
-        nameLbl.TextColor3 = Color3.fromRGB(215,215,215); nameLbl.Font = Enum.Font.GothamMedium
-        nameLbl.TextSize = 11; nameLbl.TextXAlignment = Enum.TextXAlignment.Left
-        
-        local removeBtn = Instance.new("TextButton", wlItem)
-        removeBtn.Size = UDim2.fromOffset(24, 24); removeBtn.Position = UDim2.new(1, -28, 0.5, -12)
-        removeBtn.BackgroundColor3 = Color3.fromRGB(220,80,80); removeBtn.BorderSizePixel = 0
-        removeBtn.Text = "✕"; removeBtn.TextColor3 = Color3.fromRGB(255,255,255)
-        removeBtn.Font = Enum.Font.GothamBold; removeBtn.TextSize = 12; removeBtn.AutoButtonColor = false
-        Instance.new("UICorner", removeBtn).CornerRadius = UDim.new(0,4)
-        
-        removeBtn.MouseButton1Click:Connect(function()
-            removeWhitelist(name)
-            updateWhitelistDisplay()
-            showNotif("✝  Whitelist", "Removed: "..name, true)
+
+    rebuildServerList = function()
+        for _,c in ipairs(serverListFrame:GetChildren()) do if c:IsA("Frame") then c:Destroy() end end
+        local plrCount = 0
+        for _,p in ipairs(Players:GetPlayers()) do
+            if p == player then continue end
+            plrCount = plrCount + 1
+            local e=Instance.new("Frame",serverListFrame)
+            e.Size=UDim2.new(1,0,0,WL_ENTRY_H); e.BackgroundColor3=Color3.fromRGB(10,8,14)
+            e.BorderSizePixel=0
+            local eStroke=Instance.new("UIStroke",e); eStroke.Color=Color3.fromRGB(38,30,54); eStroke.Thickness=1
+            local namLbl=Instance.new("TextLabel",e)
+            namLbl.Size=UDim2.new(1,-80,1,0); namLbl.Position=UDim2.fromOffset(6,0)
+            namLbl.BackgroundTransparency=1; namLbl.Text=p.Name
+            namLbl.TextColor3=Color3.fromRGB(215,215,215); namLbl.Font=Enum.Font.GothamMedium
+            namLbl.TextSize=11; namLbl.TextXAlignment=Enum.TextXAlignment.Left
+            local togBtn=Instance.new("TextButton",e)
+            togBtn.Size=UDim2.fromOffset(70,20); togBtn.Position=UDim2.new(1,-74,0.5,-10)
+            togBtn.BorderSizePixel=0; togBtn.AutoButtonColor=false
+            togBtn.Font=Enum.Font.GothamBold; togBtn.TextSize=9
+            local function refreshTogBtn()
+                if isWhitelisted(p) then
+                    togBtn.BackgroundColor3=Color3.fromRGB(40,8,8)
+                    togBtn.TextColor3=Color3.fromRGB(255,80,80); togBtn.Text="✕ Quitar"
+                    local ts=togBtn:FindFirstChildOfClass("UIStroke")
+                    if ts then ts.Color=Color3.fromRGB(100,20,20) else
+                        local ns=Instance.new("UIStroke",togBtn); ns.Color=Color3.fromRGB(100,20,20); ns.Thickness=1 end
+                else
+                    togBtn.BackgroundColor3=Color3.fromRGB(18,14,24)
+                    togBtn.TextColor3=accentColor; togBtn.Text="+ Añadir"
+                    local ts=togBtn:FindFirstChildOfClass("UIStroke")
+                    if ts then ts.Color=accentColor else
+                        local ns=Instance.new("UIStroke",togBtn); ns.Color=accentColor; ns.Thickness=1 end
+                end
+            end
+            refreshTogBtn()
+            togBtn.MouseButton1Click:Connect(function()
+                if isWhitelisted(p) then removeWhitelist(p.Name) else addWhitelist(p.Name) end
+                refreshTogBtn(); rebuildWL()
+                showNotif("✝  Whitelist", isWhitelisted(p) and ("Added: "..p.Name) or ("Removed: "..p.Name), isWhitelisted(p))
+            end)
+        end
+        -- Actualizar altura del dropdown
+        local totalH = plrCount * (WL_ENTRY_H + 2) + 8
+        serverDropFrame.Size = UDim2.new(1,0,0,0)
+        if serverOpen then
+            TweenService:Create(serverDropFrame, TIF, {Size=UDim2.new(1,0,0,totalH)}):Play()
+            serverContainer.Size = UDim2.new(1,0,0,totalH)
+        end
+    end
+
+    -- Toggle dropdown del servidor
+    local function toggleServerList()
+        serverOpen = not serverOpen
+        if serverOpen then
+            rebuildServerList()
+            local plrCount = 0
+            for _,p in ipairs(Players:GetPlayers()) do if p~=player then plrCount=plrCount+1 end end
+            local totalH = plrCount * (WL_ENTRY_H + 2) + 8
+            serverDropFrame.Visible = true; serverDropFrame.Size=UDim2.new(1,0,0,0)
+            TweenService:Create(serverDropFrame, TIF, {Size=UDim2.new(1,0,0,totalH)}):Play()
+            serverContainer.Size = UDim2.new(1,0,0,totalH)
+            arrowLbl.Text = "▴"
+        else
+            TweenService:Create(serverDropFrame, TIF, {Size=UDim2.new(1,0,0,0)}):Play()
+            task.delay(0.25, function() serverDropFrame.Visible=false end)
+            serverContainer.Size = UDim2.new(1,0,0,0)
+            arrowLbl.Text = "▾"
+        end
+    end
+
+    local hitArea = Instance.new("TextButton", headerRow)
+    hitArea.Size=UDim2.new(1,-72,1,0); hitArea.BackgroundTransparency=1; hitArea.Text=""; hitArea.ZIndex=5
+    hitArea.MouseButton1Click:Connect(toggleServerList)
+    arrowLbl.MouseButton1Click:Connect(toggleServerList)
+
+    addBtn.MouseButton1Click:Connect(function()
+        local playerName = inputBox.Text:match("^%s*(.-)%s*$")
+        if playerName ~= "" then
+            if addWhitelist(playerName) then
+                inputBox.Text = ""; rebuildWL(); rebuildServerList()
+                showNotif("✝  Whitelist", "Added: "..playerName, true)
+            else
+                showNotif("✝  Whitelist", "Already exists or invalid", false)
+            end
+        end
+    end)
+
+    rebuildServerList(); rebuildWL()
+
+    refreshBtn.MouseButton1Click:Connect(function()
+        rebuildServerList()
+        refreshBtn.Text="✅"; task.delay(0.8, function() refreshBtn.Text="🔄 Refresh" end)
+    end)
+    Players.PlayerAdded:Connect(function() rebuildServerList() end)
+    Players.PlayerRemoving:Connect(function() task.wait(0.05); rebuildServerList() end)
+end
+-- ══ EXTRAS PAGE ═══════════════════════════════════════════════
+-- (Inf Stamina, Item en la Mano, Health Bar, Distancia — copiado de SyyClient)
+-- ── INF STAMINA (lógica completa de SyyClient) ────────────────
+local extrasCard = makeCard(pg_extras)
+makeSecHeader(extrasCard, "✦", "Extras")
+makeDivider(extrasCard)
+
+do
+    -- Inf Stamina
+    local staminaConns = {}
+    local staminaWatched = {}
+    local staminaKeys = {"stamina","sprint","energy","endur","breath"}
+    local staminaLoop = false
+
+    local function isStaminaName(name)
+        name = tostring(name or ""):lower()
+        for _, key in ipairs(staminaKeys) do
+            if name:find(key,1,true) then return true end
+        end
+        return false
+    end
+    local function hasStaminaContext(obj)
+        local cur = obj
+        for _ = 1, 4 do
+            if not cur or typeof(cur)~="Instance" then break end
+            if isStaminaName(cur.Name) then return true end
+            cur = cur.Parent
+        end
+        return false
+    end
+    local function isStaminaValue(obj)
+        return obj and typeof(obj)=="Instance"
+            and (obj:IsA("NumberValue") or obj:IsA("IntValue") or obj:IsA("DoubleConstrainedValue"))
+            and hasStaminaContext(obj)
+    end
+    local function staminaMax(stVal)
+        if stVal:IsA("DoubleConstrainedValue") then return stVal.MaxValue end
+        return stVal:GetAttribute("MaxStamina") or stVal:GetAttribute("StaminaMax")
+            or stVal:GetAttribute("MaxSprint") or stVal:GetAttribute("SprintMax")
+            or stVal:GetAttribute("MaxEnergy") or stVal:GetAttribute("EnergyMax")
+            or stVal:GetAttribute("Max") or 100
+    end
+    local function keepStaminaFull(stVal)
+        if not isStaminaValue(stVal) then return end
+        pcall(function() stVal.Value = staminaMax(stVal) end)
+    end
+    local function watchStaminaValue(stVal)
+        if not isStaminaValue(stVal) or staminaWatched[stVal] then return end
+        staminaWatched[stVal]=true
+        keepStaminaFull(stVal)
+        table.insert(staminaConns, stVal.Changed:Connect(function() keepStaminaFull(stVal) end))
+    end
+    local function keepStaminaAttributes(obj)
+        if not obj or typeof(obj)~="Instance" then return end
+        pcall(function()
+            for attr, val in pairs(obj:GetAttributes()) do
+                local attrLower=tostring(attr):lower()
+                if type(val)=="number" and (isStaminaName(attr) or (hasStaminaContext(obj) and attrLower=="value"))
+                and not attrLower:find("max",1,true) then
+                    local maxVal=obj:GetAttribute("Max"..attr) or obj:GetAttribute(attr.."Max")
+                        or obj:GetAttribute("MaxStamina") or obj:GetAttribute("StaminaMax") or 100
+                    obj:SetAttribute(attr, maxVal)
+                end
+            end
         end)
     end
-end
-updateWhitelistDisplay()
-
--- Input para añadir jugador
-local addInputRow = Instance.new("Frame", whitelistCard)
-addInputRow.Size = UDim2.new(1, 0, 0, 38); addInputRow.BackgroundTransparency = 1
-
-local inputBox = Instance.new("TextBox", addInputRow)
-inputBox.Size = UDim2.new(1, -56, 1, 0); inputBox.Position = UDim2.fromOffset(8, 0)
-inputBox.BackgroundColor3 = Color3.fromRGB(18,14,24); inputBox.BorderSizePixel = 0
-inputBox.PlaceholderText = "Player name..."; inputBox.Text = ""
-inputBox.TextColor3 = Color3.fromRGB(215,215,215); inputBox.PlaceholderColor3 = Color3.fromRGB(85,85,85)
-inputBox.Font = Enum.Font.GothamMedium; inputBox.TextSize = 11
-local inputStroke = Instance.new("UIStroke", inputBox)
-inputStroke.Color = Color3.fromRGB(58,58,58); inputStroke.Thickness = 1
-Instance.new("UICorner", inputBox).CornerRadius = UDim.new(0,4)
-
-local addBtn = Instance.new("TextButton", addInputRow)
-addBtn.Size = UDim2.fromOffset(40, 28); addBtn.Position = UDim2.new(1, -44, 0.5, -14)
-addBtn.BackgroundColor3 = accentColor; addBtn.BorderSizePixel = 0
-addBtn.Text = "+"; addBtn.TextColor3 = Color3.fromRGB(255,255,255)
-addBtn.Font = Enum.Font.GothamBold; addBtn.TextSize = 14; addBtn.AutoButtonColor = false
-Instance.new("UICorner", addBtn).CornerRadius = UDim.new(0,4)
-
-addBtn.MouseButton1Click:Connect(function()
-    local playerName = inputBox.Text:match("^%s*(.-)%s*$")  -- trim
-    if playerName ~= "" then
-        if addWhitelist(playerName) then
-            inputBox.Text = ""
-            updateWhitelistDisplay()
-            showNotif("✝  Whitelist", "Added: "..playerName, true)
-        else
-            showNotif("✝  Whitelist", "Already exists or invalid", false)
+    local function watchStaminaAttributes(obj)
+        if not obj or typeof(obj)~="Instance" then return end
+        keepStaminaAttributes(obj)
+        pcall(function()
+            for attr, val in pairs(obj:GetAttributes()) do
+                local attrLower=tostring(attr):lower()
+                if type(val)=="number" and (isStaminaName(attr) or (hasStaminaContext(obj) and attrLower=="value"))
+                and not attrLower:find("max",1,true) then
+                    table.insert(staminaConns, obj:GetAttributeChangedSignal(attr):Connect(function()
+                        keepStaminaAttributes(obj)
+                    end))
+                end
+            end
+        end)
+    end
+    local function scanStamina(container)
+        if not container then return end
+        watchStaminaValue(container); watchStaminaAttributes(container)
+        pcall(function()
+            for _, desc in ipairs(container:GetDescendants()) do
+                watchStaminaValue(desc)
+                if desc:IsA("Humanoid") or isStaminaName(desc.Name) then watchStaminaAttributes(desc) end
+            end
+        end)
+    end
+    local function watchStaminaContainer(container)
+        if not container then return end
+        scanStamina(container)
+        table.insert(staminaConns, container.DescendantAdded:Connect(function(desc)
+            watchStaminaValue(desc)
+            if desc:IsA("Humanoid") or isStaminaName(desc.Name) then watchStaminaAttributes(desc) end
+        end))
+    end
+    local staminaMetaHooked=false
+    local function installStaminaMetaHook()
+        if staminaMetaHooked then return end; staminaMetaHooked=true
+        pcall(function()
+            if not hookmetamethod then return end
+            local oldNewIndex
+            oldNewIndex=hookmetamethod(game,"__newindex",function(self,key,value)
+                if S.InfStamina and key=="Value" and type(value)=="number" and isStaminaValue(self) then
+                    local maxVal=staminaMax(self)
+                    if value<maxVal then return oldNewIndex(self,key,maxVal) end
+                end
+                return oldNewIndex(self,key,value)
+            end)
+        end)
+    end
+    local function disconnectStamina()
+        staminaLoop=false
+        for _,c in ipairs(staminaConns) do pcall(function() c:Disconnect() end) end
+        staminaConns={}; staminaWatched={}
+    end
+    local function hookStamina(char)
+        if not char then return end
+        installStaminaMetaHook(); staminaLoop=true
+        watchStaminaContainer(char); watchStaminaContainer(player)
+        task.spawn(function()
+            while staminaLoop and S.InfStamina do
+                pcall(function()
+                    local c2=player.Character; if not c2 then return end
+                    if game.PlaceId==455366377 then watchStaminaValue(c2:FindFirstChild("Stamina",true)) end
+                    for stVal in pairs(staminaWatched) do keepStaminaFull(stVal) end
+                    local hum=c2:FindFirstChildOfClass("Humanoid")
+                    if hum then keepStaminaAttributes(hum) end
+                    keepStaminaAttributes(c2)
+                end)
+                task.wait(0.05)
+            end
+        end)
+        if game.PlaceId==455366377 then
+            local stVal=char:WaitForChild("Stamina",4)
+            watchStaminaValue(stVal)
+            table.insert(staminaConns, char.ChildAdded:Connect(function(child)
+                if child.Name=="Stamina" then watchStaminaValue(child) end
+            end))
         end
     end
-end)
+
+    makeToggle(extrasCard, "ext_inf_stamina", "ext_inf_stamina_d", "InfStamina", function(on)
+        if on then hookStamina(player.Character)
+        else disconnectStamina() end
+    end)
+    player.CharacterAdded:Connect(function(char)
+        if not S.InfStamina then return end
+        disconnectStamina(); task.wait(0.5); hookStamina(char)
+    end)
+    task.defer(function()
+        if S.InfStamina then hookStamina(player.Character or player.CharacterAdded:Wait()) end
+    end)
+end
+
+makeDivider(extrasCard)
+
+-- Health Bar Drawing
+makeToggle(extrasCard, "ext_health_bar", "ext_health_bar_d", "EspHealthBar")
+makeDivider(extrasCard)
+
+-- Distance Drawing
+makeToggle(extrasCard, "ext_distance",  "ext_distance_d",  "EspDistance")
+makeDivider(extrasCard)
+
+-- Item in Hand Drawing
+makeToggle(extrasCard, "ext_item_hand", "ext_item_hand_d", "ItemInHand")
+
 -- ══ AJUSTES PAGE ══════════════════════════════════
 local cfgCard = makeCard(pg_ajustes)
 makeSecHeader(cfgCard, "†", "Settings")
@@ -1558,7 +1870,7 @@ for _, ch in ipairs(navBtns[1]:GetChildren()) do
 end
 
 -- Expose tabPages alias para compatibilidad con keybinds toggle
-local tabPages = {pages[1], pages[2], pages[2], pages[3]}  -- dummy, no se usa con tabs
+local tabPages = {pages[1], pages[2], pages[3], pages[4]}  -- dummy, no se usa con tabs
 
 -- ══════════════════════════════════════════════
 --  DRAG — mover panel (por el header)
@@ -1764,6 +2076,16 @@ local function createSelectionBox3D_always(char)
     return sb
 end
 
+local function newFilledRect()
+    if not HAS_DRAWING then return newDrawingFallback() end
+    local r = Drawing.new("Square"); r.Visible=false; r.Filled=true; r.Thickness=1; return r
+end
+local function newSmallText(sz)
+    if not HAS_DRAWING then return newDrawingFallback() end
+    local t = Drawing.new("Text"); t.Visible=false; t.Size=sz or 11; t.Outline=true
+    t.OutlineColor=Color3.fromRGB(0,0,0); return t
+end
+
 local function createEspObj(p)
     if p == player then return end
     -- SelectionBox 3D real para Show Hitbox
@@ -1783,6 +2105,11 @@ local function createEspObj(p)
         hbx    = newBox(),
         selBox = selBox3D,   -- SelectionBox 3D Instance (puede ser nil si sin Drawing)
         selBox2 = selBox3D2, -- SelectionBox independiente (siempre visible)
+        -- EXTRAS: Health Bar, Distance, Item in Hand
+        healthBg  = newFilledRect(),
+        healthBar = newFilledRect(),
+        distTag   = newSmallText(11),
+        itemTag   = newSmallText(11),
     }
     if p.Character then
         espObjects[p].billboard     = createAvatarBillboard(p, p.Character)
@@ -1825,6 +2152,11 @@ local function removeEspObj(p)
         pcall(function() obj.selBox2:Destroy() end)
     end
     obj.box:Remove(); obj.name:Remove(); obj.line:Remove(); obj.hbx:Remove()
+    -- EXTRAS drawings
+    if obj.healthBg  and obj.healthBg.Remove  then pcall(function() obj.healthBg:Remove()  end) end
+    if obj.healthBar and obj.healthBar.Remove  then pcall(function() obj.healthBar:Remove() end) end
+    if obj.distTag   and obj.distTag.Remove    then pcall(function() obj.distTag:Remove()   end) end
+    if obj.itemTag   and obj.itemTag.Remove    then pcall(function() obj.itemTag:Remove()   end) end
     espObjects[p] = nil
 end
 for _, p in ipairs(Players:GetPlayers()) do createEspObj(p) end
@@ -1858,6 +2190,11 @@ applyStreamMode = function(on)
                 if obj.nameBillboard then obj.nameBillboard.Enabled = false end
                 obj.line.Visible = false; obj.hbx.Visible = false
                 if obj.selBox then obj.selBox.Visible = false end
+                -- EXTRAS
+                if obj.healthBg  then obj.healthBg.Visible  = false end
+                if obj.healthBar then obj.healthBar.Visible = false end
+                if obj.distTag   then obj.distTag.Visible   = false end
+                if obj.itemTag   then obj.itemTag.Visible   = false end
             end
         end
     else
@@ -2011,6 +2348,10 @@ RunService.RenderStepped:Connect(function()
             obj.hbx.Visible = false
             if obj.selBox then obj.selBox.Visible = false end
             if obj.selBox2 then obj.selBox2.Visible = false end
+            if obj.healthBg  then obj.healthBg.Visible  = false end
+            if obj.healthBar then obj.healthBar.Visible = false end
+            if obj.distTag   then obj.distTag.Visible   = false end
+            if obj.itemTag   then obj.itemTag.Visible   = false end
             continue
         end
         
@@ -2022,6 +2363,11 @@ RunService.RenderStepped:Connect(function()
             obj.line.Visible = false
             obj.hbx.Visible  = false
             if obj.selBox then obj.selBox.Visible = false end
+            -- EXTRAS
+            if obj.healthBg  then obj.healthBg.Visible  = false end
+            if obj.healthBar then obj.healthBar.Visible = false end
+            if obj.distTag   then obj.distTag.Visible   = false end
+            if obj.itemTag   then obj.itemTag.Visible   = false end
         end
         if not char then allOff(); continue end
         local root = char:FindFirstChild("HumanoidRootPart")
@@ -2148,6 +2494,75 @@ RunService.RenderStepped:Connect(function()
                 obj.selBox2.Visible = false
             end
         end
+
+        -- ▸ EXTRAS: Health Bar (Drawing) — igual a SyyClient
+        local myRoot2 = myChar and myChar:FindFirstChild("HumanoidRootPart")
+        local dist3D  = myRoot2 and (root.Position - myRoot2.Position).Magnitude or 0
+        local headPart2 = char:FindFirstChild("Head")
+        local footPart  = char:FindFirstChild("LeftFoot") or root
+
+        if onS and headPart2 and footPart and HAS_DRAWING then
+            local topSP  = Vector2.new(camera:WorldToViewportPoint(headPart2.Position + Vector3.new(0,0.6,0)).X,
+                                       camera:WorldToViewportPoint(headPart2.Position + Vector3.new(0,0.6,0)).Y)
+            local botSP  = Vector2.new(camera:WorldToViewportPoint(footPart.Position  - Vector3.new(0,0.2,0)).X,
+                                       camera:WorldToViewportPoint(footPart.Position  - Vector3.new(0,0.2,0)).Y)
+            local boxH   = math.abs(botSP.Y - topSP.Y)
+            local boxW   = boxH * 0.45
+
+            -- Health Bar
+            local hp = hum.Health / math.max(hum.MaxHealth, 1)
+            if S.EspHealthBar and S.esp_on then
+                local bx = sp2.X - boxW * 0.5 - 7
+                obj.healthBg.Visible   = true
+                obj.healthBg.Position  = Vector2.new(bx, topSP.Y)
+                obj.healthBg.Size      = Vector2.new(4, boxH)
+                obj.healthBg.Color     = Color3.fromRGB(20, 20, 20)
+                local barH = boxH * hp
+                local r = hp < 0.5 and 255 or math.floor(255*(1-hp)*2)
+                local g = hp > 0.5 and 255 or math.floor(255*hp*2)
+                obj.healthBar.Visible  = true
+                obj.healthBar.Position = Vector2.new(bx, topSP.Y + boxH - barH)
+                obj.healthBar.Size     = Vector2.new(4, barH)
+                obj.healthBar.Color    = Color3.fromRGB(r, g, 0)
+            else
+                obj.healthBg.Visible  = false
+                obj.healthBar.Visible = false
+            end
+
+            -- Distance
+            if S.EspDistance and S.esp_on then
+                obj.distTag.Visible   = true
+                obj.distTag.Text      = math.floor(dist3D) .. "m"
+                obj.distTag.Position  = Vector2.new(sp2.X - boxW * 0.5, botSP.Y + 2)
+                obj.distTag.Color     = Color3.fromRGB(70, 160, 210)
+            else
+                obj.distTag.Visible = false
+            end
+
+            -- Item in Hand
+            if S.ItemInHand and S.esp_on then
+                local iname = nil
+                for _, v in ipairs(char:GetChildren()) do
+                    if v:IsA("Tool") then iname = v.Name; break end
+                end
+                if iname then
+                    obj.itemTag.Visible   = true
+                    obj.itemTag.Text      = "[" .. iname .. "]"
+                    obj.itemTag.Position  = Vector2.new(sp2.X, topSP.Y - 16)
+                    obj.itemTag.Color     = Color3.fromRGB(255, 215, 0)
+                else
+                    obj.itemTag.Visible = false
+                end
+            else
+                obj.itemTag.Visible = false
+            end
+        else
+            if obj.healthBg  then obj.healthBg.Visible  = false end
+            if obj.healthBar then obj.healthBar.Visible = false end
+            if obj.distTag   then obj.distTag.Visible   = false end
+            if obj.itemTag   then obj.itemTag.Visible   = false end
+        end
+
         obj.hbx.Visible = false
     end
 end)
