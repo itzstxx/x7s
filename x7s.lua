@@ -1405,15 +1405,16 @@ makeToggle(cfgCard, "st_stream", "st_stream_d", "stream_mode", function(on)
     applyStreamMode(on)
 end)
 
+makeDivider(cfgCard)
 secLabel(cfgCard, "· · · CAM LOCK · · ·")
 makeToggle(cfgCard, "camlock_on", "camlock_on_d", "CamLockEnabled", function(on)
     showNotif("✝  Cam Lock", on and L("n_on") or L("n_off"), on)
 end)
-makeSlider(cfgCard, "camlock_strength", "CamLockStrength", 1, 100, 1, function(val)
-    S.CamLockStrength = val; save()
+makeSlider(cfgCard, "camlock_strength", "CamLockStrength", 1, 100, function(val)
+    -- El slider ya guarda automáticamente
 end)
-makeSlider(cfgCard, "camlock_range", "CamLockRange", 50, 500, 10, function(val)
-    S.CamLockRange = val; save()
+makeSlider(cfgCard, "camlock_range", "CamLockRange", 50, 500, function(val)
+    -- El slider ya guarda automáticamente
 end)
 makeToggle(cfgCard, "camlock_wallcheck", "camlock_wallcheck_d", "CamLockWallCheck")
 
