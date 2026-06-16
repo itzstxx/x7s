@@ -94,12 +94,7 @@ local function mkDefault()
         Whitelist={},
         -- === CAM LOCK ===
         CamLockEnabled=false, CamLockStrength=10, CamLockRange=150,
-        CamLockWallCheck=true, CamLockSafeFov=true,
-        -- === x7sBet ===
-        CamLockEnabled = false,
-        CamLockStrength = 10,
-        CamLockRange = 150,
-        CamLockWallCheck = true,
+        CamLockWallCheck=true, CamLockSafeFov=true, camlock_key="C",
     }
 end
 local S = mkDefault()
@@ -185,6 +180,7 @@ local Locale = {
         hbx_vis="Visible Check",    hbx_vis_d="Only register hits when the enemy is actually visible. Prevents kills through walls.",
 
         camlock_on="Enable Cam Lock",    camlock_on_d="Automatically locks camera on the closest enemy.",
+        camlock_key="Cam Lock Keybind",
         camlock_strength="Cam Lock Strength",
         camlock_range="Cam Lock Range",
         camlock_wallcheck="Wall Check",   camlock_wallcheck_d="Only lock on visible enemies.",
@@ -219,6 +215,7 @@ local Locale = {
         hbx_vis="Visible Check",    hbx_vis_d="Solo registra el hit si el enemigo está a la vista. Evita matar a través de paredes.",
 
         camlock_on="Activar Cam Lock",    camlock_on_d="Bloquea la cámara automáticamente en el enemigo más cercano.",
+        camlock_key="Tecla Cam Lock",
         camlock_strength="Fuerza Cam Lock",
         camlock_range="Rango Cam Lock",
         camlock_wallcheck="Wall Check",   camlock_wallcheck_d="Solo bloquea enemigos visibles.",
@@ -1412,6 +1409,8 @@ makeToggle(camLockCard, "camlock_on", "camlock_on_d", "CamLockEnabled", function
     showNotif("✝  Cam Lock", on and L("n_on") or L("n_off"), on)
 end)
 makeDivider(camLockCard)
+makeKeybind(camLockCard, "camlock_key", "camlock_key")
+makeDivider(camLockCard)
 makeSlider(camLockCard, "camlock_strength", "CamLockStrength", 1, 100)
 makeDivider(camLockCard)
 makeSlider(camLockCard, "camlock_range", "CamLockRange", 50, 500)
@@ -1478,9 +1477,10 @@ do
         end)
 
         local idx = 1
-        for _, p in ipairs(_plrList) do
-            if p == player then continue end
+        for _, p in ipairs(Players:GetPlayers()) do
+            if p.UserId == player.UserId then continue end
             if not p.Character then continue end
+            if not p.Name or p.Name == "" then continue end
             local ob = Instance.new("TextButton", tgtDrop)
             ob.Size = UDim2.new(1,0,0,30); ob.Position = UDim2.fromOffset(0, 30 + (idx-1)*30)
             ob.BackgroundTransparency = 1; ob.Text = "  "..p.Name
@@ -1609,8 +1609,9 @@ local function rebuildSrvDrop()
         if c:IsA("TextButton") then c:Destroy() end
     end
     local idx=0
-    for _, p in ipairs(_plrList) do
-        if p==player then continue end
+    for _, p in ipairs(Players:GetPlayers()) do
+        if p.UserId==player.UserId then continue end
+        if not p.Name or p.Name=="" then continue end
         local inWL=wlSet[p.Name:lower()]==true
         local ob = Instance.new("TextButton", srvDrop)
         ob.Size=UDim2.new(1,0,0,srvOptH); ob.Position=UDim2.fromOffset(0,idx*srvOptH)
@@ -1659,13 +1660,7 @@ end)
 
 
 -- ══ AJUSTES PAGE ══════════════════════════════════
-local cfgCard = pcall(function() return makeCard(pg_ajustes) end) and makeCard(pg_ajustes) or (function()
-    local f = Instance.new("Frame", pg_ajustes)
-    f.Size = UDim2.new(1,0,0,0)
-    f.BackgroundTransparency = 1
-    f.AutomaticSize = Enum.AutomaticSize.Y
-    return f
-end)()
+local cfgCard = makeCard(pg_ajustes)
 
 pcall(function() makeSecHeader(cfgCard, "†", "Settings") end)
 pcall(function() makeDivider(cfgCard) end)
@@ -1699,7 +1694,7 @@ pcall(function() makeResetBtn(keyCard2, "st_r1", "st_r1_d", function()
 end) end)
 pcall(function() makeDivider(keyCard2) end)
 pcall(function() makeResetBtn(keyCard2, "st_r2", "st_r2_d", function()
-    S.esp_key="T"; S.hbx_key="G"; S.gui_key="L"
+    S.esp_key="T"; S.hbx_key="G"; S.gui_key="L"; S.camlock_key="C"
     for k, fn in pairs(refreshers) do if k:find("_key") then fn() end end; save()
 end) end)
 
@@ -2156,8 +2151,8 @@ RunService.RenderStepped:Connect(function()
     -- La lógica de "activar si hbx_on, desactivar si no" se gestiona por los keybinds y toggles
     -- Aquí solo nos aseguramos de que jugadores nuevos tengan hitbox si está activo
     if _frame % 30 == 0 and S.hbx_on then
-        for _, p in ipairs(_plrList) do
-            if p ~= player and p.Character and not _hbxOriginals[p] then
+        for _, p in ipairs(Players:GetPlayers()) do
+            if p.UserId ~= player.UserId and p.Character and not _hbxOriginals[p] then
                 applyHitbox(p, true)
             end
         end
@@ -2471,6 +2466,14 @@ UserInputService.InputBegan:Connect(function(inp, proc)
             end
         end
         showNotif("✝  Hitbox", S.hbx_on and L("n_on") or L("n_off"), S.hbx_on)
+        return
+    end
+
+    -- Toggle Cam Lock
+    if kn == S.camlock_key then
+        S.CamLockEnabled = not S.CamLockEnabled; save()
+        if refreshers["CamLockEnabled"] then refreshers["CamLockEnabled"]() end
+        showNotif("✝  Cam Lock", S.CamLockEnabled and L("n_on") or L("n_off"), S.CamLockEnabled)
         return
     end
 
