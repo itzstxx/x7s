@@ -97,9 +97,10 @@ local function mkDefault()
         CamLockStrength = 10,
         CamLockRange = 150,
         CamLockWallCheck = true,
+        CamLockSafeZone = true,
         -- === TARGET ===
         TargetPart = "Random",
-         
+        -- === EXTRAS ===
         InfStamina   = false,
         EspHealthBar = false,
         EspDistance  = false,
@@ -192,6 +193,7 @@ local Locale = {
         camlock_strength="Cam Lock Strength", camlock_strength_d="How smoothly the camera follows (1-100).",
         camlock_range="Cam Lock Range",     camlock_range_d="Maximum distance to target (50-500).",
         camlock_wallcheck="Wall Check",     camlock_wallcheck_d="Only lock on visible enemies.",
+        camlock_safezone="Safe Zone",       camlock_safezone_d="Don't lock on players inside a safe zone.",
         
         whitelist_title="Whitelist Manager", whitelist_add="Add Player", whitelist_remove="Remove",
 
@@ -233,6 +235,7 @@ local Locale = {
         camlock_strength="Fuerza Cam Lock", camlock_strength_d="Qué tan suavemente sigue la cámara (1-100).",
         camlock_range="Rango Cam Lock",     camlock_range_d="Distancia máxima al objetivo (50-500).",
         camlock_wallcheck="Wall Check",     camlock_wallcheck_d="Solo bloquea enemigos visibles.",
+        camlock_safezone="Safe Zone",       camlock_safezone_d="No bloquea a jugadores dentro de una zona segura.",
         
         whitelist_title="Gestor de Whitelist", whitelist_add="Añadir Jugador", whitelist_remove="Eliminar",
         target_part="Parte Objetivo",
@@ -1433,6 +1436,8 @@ makeDivider(camLockCard)
 makeSlider(camLockCard, "camlock_range", "CamLockRange", 50, 500)
 makeDivider(camLockCard)
 makeToggle(camLockCard, "camlock_wallcheck", "camlock_wallcheck_d", "CamLockWallCheck")
+makeDivider(camLockCard)
+makeToggle(camLockCard, "camlock_safezone", "camlock_safezone_d", "CamLockSafeZone")
 
 -- ══ TARGET (igual a SyyClient - dropdown desplegable) ═════════
 local targetCard = makeCard(pg_aim)
@@ -2562,6 +2567,7 @@ RunService:BindToRenderStep("x7sCamLock", Enum.RenderPriority.Camera.Value+1, fu
         local hum=char:FindFirstChildOfClass("Humanoid")
         local root=char:FindFirstChild("HumanoidRootPart")
         if not hum or hum.Health<=0 or not root then continue end
+        if S.CamLockSafeZone and char:FindFirstChild("SafeZoneShield") then continue end
         local dist3D=myRoot and (root.Position-myRoot.Position).Magnitude or math.huge
         if dist3D>S.CamLockRange then continue end
         if S.CamLockWallCheck and myChar then
