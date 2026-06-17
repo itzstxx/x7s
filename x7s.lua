@@ -99,7 +99,7 @@ local function mkDefault()
         CamLockWallCheck = true,
         -- === TARGET ===
         TargetPart = "Random",
-        -- === EXTRAS ===
+         
         InfStamina   = false,
         EspHealthBar = false,
         EspDistance  = false,
