@@ -616,7 +616,17 @@ end
 
 -- SVG-like icon labels (usando Unicode para los iconos de nav)
 local MM2_GAME_ID = 142823291
+-- Detectar MM2 por ID o por presencia de sus objetos característicos
 local isMM2 = (game.GameId == MM2_GAME_ID)
+    or pcall(function() return game:GetService("ReplicatedStorage"):WaitForChild("Remotes", 2):WaitForChild("Gameplay", 2) end) and game:GetService("ReplicatedStorage"):FindFirstChild("Remotes") ~= nil and game:GetService("ReplicatedStorage").Remotes:FindFirstChild("Gameplay") ~= nil
+-- Simplificado: detectar por ID O por Remotes/Gameplay (estructura única de MM2)
+if not isMM2 then
+    local rs = game:GetService("ReplicatedStorage")
+    local rem = rs:FindFirstChild("Remotes")
+    if rem and rem:FindFirstChild("Gameplay") then
+        isMM2 = true
+    end
+end
 
 local NAV_DATA = {
     { icon = "*", label = "Inicio" },
