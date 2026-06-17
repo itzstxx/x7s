@@ -584,7 +584,7 @@ makeSBChain(sidebar, 88)
 
 -- Nav buttons (paginas)
 local navArea = Instance.new("Frame", sidebar)
-navArea.Size = UDim2.new(1, -16, 0, 200); navArea.Position = UDim2.fromOffset(8, 100)
+navArea.Size = UDim2.new(1, -16, 0, 300); navArea.Position = UDim2.fromOffset(8, 100)
 navArea.BackgroundTransparency = 1; navArea.BorderSizePixel = 0
 local navLayout = Instance.new("UIListLayout", navArea)
 navLayout.SortOrder = Enum.SortOrder.LayoutOrder; navLayout.Padding = UDim.new(0, 3)
@@ -616,7 +616,6 @@ end
 
 -- SVG-like icon labels (usando Unicode para los iconos de nav)
 local isMM2 = true
-end
 
 local NAV_DATA = {
     { icon = "*", label = "Inicio" },
