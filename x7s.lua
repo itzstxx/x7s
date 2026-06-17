@@ -47,7 +47,7 @@ if MaintenanceEnabled then
     _sm.Font=Enum.Font.GothamBold; _sm.TextSize=20; _sm.TextXAlignment=Enum.TextXAlignment.Left
     local _cb=Instance.new("TextButton",_m); _cb.Size=UDim2.fromOffset(30,30)
     _cb.Position=UDim2.new(1,-40,0,10); _cb.BackgroundColor3=Color3.fromRGB(30,22,42)
-    _cb.BorderSizePixel=0; _cb.Text="✕"; _cb.TextColor3=Color3.fromRGB(200,170,220)
+    _cb.BorderSizePixel=0; _cb.Text="x"; _cb.TextColor3=Color3.fromRGB(200,170,220)
     _cb.Font=Enum.Font.GothamBold; _cb.TextSize=13
     Instance.new("UICorner",_cb).CornerRadius=UDim.new(1,0)
     _cb.MouseButton1Click:Connect(function()
@@ -97,11 +97,13 @@ local function mkDefault()
         CamLockStrength = 10,
         CamLockRange = 150,
         CamLockWallCheck = true,
-        -- === x7sBet ===
-        CamLockEnabled = false,
-        CamLockStrength = 10,
-        CamLockRange = 150,
-        CamLockWallCheck = true,
+        -- === TARGET ===
+        TargetPart = "Random",
+        -- === EXTRAS ===
+        InfStamina   = false,
+        EspHealthBar = false,
+        EspDistance  = false,
+        ItemInHand   = false,
     }
 end
 local S = mkDefault()
@@ -193,6 +195,13 @@ local Locale = {
         
         whitelist_title="Whitelist Manager", whitelist_add="Add Player", whitelist_remove="Remove",
 
+        target_part="Target Part",
+        extras_title="Extras",
+        ext_inf_stamina="Inf Stamina",       ext_inf_stamina_d="Keeps your stamina always full.",
+        ext_health_bar="Health Bar",          ext_health_bar_d="Draws a health bar next to each enemy.",
+        ext_distance="Distance",              ext_distance_d="Shows the distance to each enemy in meters.",
+        ext_item_hand="Item in Hand",         ext_item_hand_d="Shows what item the enemy is holding.",
+
         summer_on="Summer 2026",    summer_on_d="Collects Summer 2026 drops automatically. Only in matches.",
 
         st_bg="Toggle Panel Background",
@@ -226,6 +235,12 @@ local Locale = {
         camlock_wallcheck="Wall Check",     camlock_wallcheck_d="Solo bloquea enemigos visibles.",
         
         whitelist_title="Gestor de Whitelist", whitelist_add="Añadir Jugador", whitelist_remove="Eliminar",
+        target_part="Parte Objetivo",
+        extras_title="Extras",
+        ext_inf_stamina="Inf Stamina",       ext_inf_stamina_d="Mantiene tu stamina siempre llena.",
+        ext_health_bar="Barra de Salud",      ext_health_bar_d="Dibuja una barra de vida junto a cada enemigo.",
+        ext_distance="Distancia",             ext_distance_d="Muestra la distancia a cada enemigo en metros.",
+        ext_item_hand="Ítem en la Mano",      ext_item_hand_d="Muestra qué ítem sostiene el enemigo.",
         summer_on="Summer 2026",     summer_on_d="Recolecta los drops del Summer 2026 automáticamente. Solo en partidas.",
         st_bg="Fondo del Panel",
         st_notif="Activar Notificaciones",
@@ -443,7 +458,7 @@ headerBorder.BackgroundColor3 = Color3.fromRGB(42,42,42); headerBorder.BorderSiz
 local titleLbl = Instance.new("TextLabel", header)
 titleLbl.Size = UDim2.new(0.5, 0, 1, 0); titleLbl.Position = UDim2.fromOffset(16, 0)
 titleLbl.BackgroundTransparency = 1; titleLbl.Text = "† interfaz oscura v.XIII †"
-titleLbl.TextColor3 = Color3.fromRGB(58, 58, 58); titleLbl.Font = Enum.Font.Gotham
+titleLbl.TextColor3 = Color3.fromRGB(58, 58, 58); titleLbl.Font = Enum.Font.GothamBold
 titleLbl.TextSize = 9; titleLbl.TextXAlignment = Enum.TextXAlignment.Left
 titleLbl.TextScaled = false
 
@@ -466,7 +481,7 @@ guiKeyLbl.TextSize = 8; guiKeyLbl.TextXAlignment = Enum.TextXAlignment.Left
 local closeBtn = Instance.new("TextButton", header)
 closeBtn.Size = UDim2.fromOffset(22, 22); closeBtn.Position = UDim2.new(1, -30, 0.5, -11)
 closeBtn.BackgroundColor3 = Color3.fromRGB(26, 10, 26)
-closeBtn.BorderSizePixel = 0; closeBtn.Text = "✕"
+closeBtn.BorderSizePixel = 0; closeBtn.Text = "x"
 closeBtn.TextColor3 = Color3.fromRGB(102, 102, 102)
 closeBtn.Font = Enum.Font.GothamBold; closeBtn.TextSize = 11; closeBtn.AutoButtonColor = false
 local closeStroke = Instance.new("UIStroke", closeBtn)
@@ -577,9 +592,10 @@ end
 
 -- SVG-like icon labels (usando Unicode para los iconos de nav)
 local NAV_DATA = {
-    { icon = "⌂", label = "Inicio" },
-    { icon = "🎯", label = "Aim" },
-    { icon = "⚙", label = "Ajustes" },
+    { icon = "*", label = "Inicio" },
+    { icon = "o", label = "Aim" },
+    { icon = "+", label = "Extras" },
+    { icon = "#", label = "Ajustes" },
 }
 
 local function setPage(idx)
@@ -1051,7 +1067,7 @@ local function makeResetBtn(parent, titleKey, descKey, cb)
     rBtn.Size = UDim2.fromOffset(28, 28)
     rBtn.Position = UDim2.new(1, -42, 0.5, -14)
     rBtn.BackgroundColor3 = Color3.fromRGB(30,30,30); rBtn.BorderSizePixel = 0
-    rBtn.Text = "↺"; rBtn.TextColor3 = accentColor
+    rBtn.Text = "R"; rBtn.TextColor3 = accentColor
     rBtn.Font = Enum.Font.GothamBold; rBtn.TextSize = 16; rBtn.AutoButtonColor = false
     local rbs = Instance.new("UIStroke", rBtn); rbs.Color = Color3.fromRGB(58,58,58); rbs.Thickness = 1
     rBtn.MouseEnter:Connect(function() rbs.Color = accentColor end)
@@ -1088,7 +1104,7 @@ local function makeDropdown(parent, titleKey, stateKey, options, cb)
 
     local arrowLbl = Instance.new("TextLabel", row)
     arrowLbl.Size = UDim2.fromOffset(14, 16); arrowLbl.Position = UDim2.new(1, -18, 0, 13)
-    arrowLbl.BackgroundTransparency = 1; arrowLbl.Text = "▾"
+    arrowLbl.BackgroundTransparency = 1; arrowLbl.Text = "v"
     arrowLbl.TextColor3 = Color3.fromRGB(85,85,85); arrowLbl.Font = Enum.Font.GothamBold; arrowLbl.TextSize = 10
 
     local optH = 32
@@ -1112,7 +1128,7 @@ local function makeDropdown(parent, titleKey, stateKey, options, cb)
             end
             TweenService:Create(dropFrame, TIF, {Size=UDim2.new(1,0,0,0)}):Play()
             task.delay(0.25, function() dropFrame.Visible=false end)
-            container.Size = UDim2.new(1,0,0,42); arrowLbl.Text = "▾"
+            container.Size = UDim2.new(1,0,0,42); arrowLbl.Text = "v"
             save(); if cb then cb(opt) end
         end)
     end
@@ -1125,11 +1141,11 @@ local function makeDropdown(parent, titleKey, stateKey, options, cb)
         if open then
             dropFrame.Visible=true; dropFrame.Size=UDim2.new(1,0,0,0)
             TweenService:Create(dropFrame, TIF, {Size=UDim2.new(1,0,0,#options*optH)}):Play()
-            container.Size=UDim2.new(1,0,0,42+#options*optH); arrowLbl.Text="▴"
+            container.Size=UDim2.new(1,0,0,42+#options*optH); arrowLbl.Text="^"
         else
             TweenService:Create(dropFrame, TIF, {Size=UDim2.new(1,0,0,0)}):Play()
             task.delay(0.25, function() dropFrame.Visible=false end)
-            container.Size=UDim2.new(1,0,0,42); arrowLbl.Text="▾"
+            container.Size=UDim2.new(1,0,0,42); arrowLbl.Text="v"
         end
     end)
     return container
@@ -1232,10 +1248,11 @@ local function makeColorPicker(parent, label, getR, getG, getB, setRGB)
     return row, popup
 end
 
--- Páginas: 1 = Inicio, 2 = Aim, 3 = Ajustes
+-- Páginas: 1 = Inicio, 2 = Aim, 3 = Extras, 4 = Ajustes
 local pg_inicio   = pages[1]
 local pg_aim      = pages[2]
-local pg_ajustes  = pages[3]
+local pg_extras   = pages[3]
+local pg_ajustes  = pages[4]
 
 -- ══ INICIO PAGE ══════════════════════════════════
 
@@ -1297,6 +1314,10 @@ statusLbl.Size=UDim2.fromOffset(40,10); statusLbl.Position=UDim2.new(1,-50,0,0)
 statusLbl.BackgroundTransparency=1; statusLbl.Text="ONLINE"
 statusLbl.TextColor3=Color3.fromRGB(42,42,42); statusLbl.Font=Enum.Font.GothamBold
 statusLbl.TextSize=7; statusLbl.TextXAlignment=Enum.TextXAlignment.Right
+
+-- BUGFIX: espObjects se declara aquí (antes era local más abajo, lo que hacía
+-- que estos toggles vieran una variable global distinta y nunca la encontraran).
+local espObjects = {}
 
 -- ── ESP + HBX en una sola columna funcional ───────
 local espCard = makeCard(pg_inicio)
@@ -1396,13 +1417,13 @@ makeKeybind(hbxCard, "hbx_key", "hbx_key")
 
 -- ══ SUMMER 2026 ═══════════════════════════════════
 local summerCard = makeCard(pg_inicio)
-makeSecHeader(summerCard, "☀", "Summer 2026")
+makeSecHeader(summerCard, "*", "Summer 2026")
 makeToggle(summerCard, "summer_on", "summer_on_d", "summer_on")
 
 
 -- ══ AIM PAGE ═══════════════════════════════════════════════════
 local camLockCard = makeCard(pg_aim)
-makeSecHeader(camLockCard, "🎯", "Cam Lock")
+makeSecHeader(camLockCard, "x", "Cam Lock")
 makeToggle(camLockCard, "camlock_on", "camlock_on_d", "CamLockEnabled", function(on)
     showNotif("✝  Cam Lock", on and L("n_on") or L("n_off"), on)
 end)
@@ -1412,234 +1433,356 @@ makeDivider(camLockCard)
 makeSlider(camLockCard, "camlock_range", "CamLockRange", 50, 500)
 makeDivider(camLockCard)
 makeToggle(camLockCard, "camlock_wallcheck", "camlock_wallcheck_d", "CamLockWallCheck")
-makeDivider(camLockCard)
 
--- TARGET DROPDOWN
-local targetContainer = Instance.new("Frame", camLockCard)
-targetContainer.Size = UDim2.new(1, 0, 0, 42); targetContainer.BackgroundTransparency = 1
+-- ══ TARGET (igual a SyyClient - dropdown desplegable) ═════════
+local targetCard = makeCard(pg_aim)
+makeSecHeader(targetCard, "+", "Target")
+makeDivider(targetCard)
+makeDropdown(targetCard, "target_part", "TargetPart", {"Head","UpperTorso","LowerTorso","Pierna","Pecho","Combo","Random"})
 
-local targetRow = Instance.new("Frame", targetContainer)
-targetRow.Size = UDim2.new(1, 0, 0, 42); targetRow.BackgroundTransparency = 1
-
-local targetLbl = Instance.new("TextLabel", targetRow)
-targetLbl.Size = UDim2.new(1, -120, 0, 16); targetLbl.Position = UDim2.fromOffset(14, 13)
-targetLbl.BackgroundTransparency = 1; targetLbl.Text = "Target"
-targetLbl.TextColor3 = Color3.fromRGB(215,215,215); targetLbl.Font = Enum.Font.GothamMedium
-targetLbl.TextSize = 12; targetLbl.TextXAlignment = Enum.TextXAlignment.Left
-
-local targetValLbl = Instance.new("TextLabel", targetRow)
-targetValLbl.Size = UDim2.fromOffset(90, 16); targetValLbl.Position = UDim2.new(1, -110, 0, 13)
-targetValLbl.BackgroundTransparency = 1; targetValLbl.Text = "None"
-targetValLbl.TextColor3 = Color3.fromRGB(85,85,85); targetValLbl.Font = Enum.Font.Gotham
-targetValLbl.TextSize = 11; targetValLbl.TextXAlignment = Enum.TextXAlignment.Right
-
-local targetArrowLbl = Instance.new("TextLabel", targetRow)
-targetArrowLbl.Size = UDim2.fromOffset(14, 16); targetArrowLbl.Position = UDim2.new(1, -18, 0, 13)
-targetArrowLbl.BackgroundTransparency = 1; targetArrowLbl.Text = "▾"
-targetArrowLbl.TextColor3 = Color3.fromRGB(85,85,85); targetArrowLbl.Font = Enum.Font.GothamBold
-targetArrowLbl.TextSize = 10
-
--- Target dropdown frame
-local targetOptH = 32
-local targetDropFrame = Instance.new("Frame", targetContainer)
-targetDropFrame.Size = UDim2.new(1, 0, 0, 0); targetDropFrame.Position = UDim2.fromOffset(0, 42)
-targetDropFrame.BackgroundColor3 = Color3.fromRGB(18,14,22); targetDropFrame.BorderSizePixel = 0
-targetDropFrame.ClipsDescendants = true; targetDropFrame.ZIndex = 50; targetDropFrame.Visible = false
-local targetDFS = Instance.new("UIStroke", targetDropFrame)
-targetDFS.Color = Color3.fromRGB(58,58,58); targetDFS.Thickness = 1
-
-local function updateTargetDropdown()
-    for _, ob in ipairs(targetDropFrame:GetChildren()) do
-        if ob:IsA("TextButton") then ob:Destroy() end
-    end
-    
-    local idx = 1
-    for _, p in ipairs(_plrList) do
-        if p == player then continue end
-        if not p.Character then continue end
-        local root = p.Character:FindFirstChild("HumanoidRootPart")
-        if not root then continue end
-        
-        local ob = Instance.new("TextButton", targetDropFrame)
-        ob.Size = UDim2.new(1,0,0,targetOptH); ob.Position = UDim2.fromOffset(0,(idx-1)*targetOptH)
-        ob.BackgroundTransparency = 1; ob.BorderSizePixel = 0
-        ob.Text = p.Name; ob.Font = Enum.Font.GothamMedium; ob.TextSize = 11
-        ob.TextColor3 = Color3.fromRGB(215,215,215)
-        ob.ZIndex = 51; ob.AutoButtonColor = false
-        ob.MouseButton1Click:Connect(function()
-            targetValLbl.Text = p.Name
-            TweenService:Create(targetDropFrame, TIF, {Size=UDim2.new(1,0,0,0)}):Play()
-            task.delay(0.25, function() targetDropFrame.Visible=false end)
-            targetContainer.Size = UDim2.new(1,0,0,42); targetArrowLbl.Text = "▾"
-        end)
-        idx = idx + 1
-    end
-end
-updateTargetDropdown()
-
-local targetOpen = false
-local targetHitArea = Instance.new("TextButton", targetRow)
-targetHitArea.Size = UDim2.new(1,0,1,0); targetHitArea.BackgroundTransparency=1; targetHitArea.Text=""; targetHitArea.ZIndex=5
-targetHitArea.MouseButton1Click:Connect(function()
-    targetOpen = not targetOpen
-    updateTargetDropdown()
-    if targetOpen then
-        targetDropFrame.Visible=true; targetDropFrame.Size=UDim2.new(1,0,0,0)
-        TweenService:Create(targetDropFrame, TIF, {Size=UDim2.new(1,0,0,math.min(#_plrList*targetOptH, 200))}):Play()
-        targetContainer.Size=UDim2.new(1,0,0,42+math.min(#_plrList*targetOptH, 200)); targetArrowLbl.Text="▴"
-    else
-        TweenService:Create(targetDropFrame, TIF, {Size=UDim2.new(1,0,0,0)}):Play()
-        task.delay(0.25, function() targetDropFrame.Visible=false end)
-        targetContainer.Size=UDim2.new(1,0,0,42); targetArrowLbl.Text="▾"
-    end
-end)
-
--- ══ WHITELIST ═════════════════════════════════════════════════
+-- ══ WHITELIST (igual a SyyClient - dropdown con lista del servidor) ══
 local whitelistCard = makeCard(pg_aim)
-makeSecHeader(whitelistCard, "✓", "Whitelist Manager")
+makeSecHeader(whitelistCard, "x", "Whitelist")
 
--- Botón de refresh
-local refreshRow = Instance.new("Frame", whitelistCard)
-refreshRow.Size = UDim2.new(1, 0, 0, 36); refreshRow.BackgroundTransparency = 1
+do
+    -- ── Fila "Jugadores en servidor" + botón Refresh ──────────
+    local WL_ENTRY_H = 28
+    local headerRow = Instance.new("Frame", whitelistCard)
+    headerRow.Size = UDim2.new(1,0,0,WL_ENTRY_H); headerRow.BackgroundTransparency = 1
 
-local refreshBtn = Instance.new("TextButton", refreshRow)
-refreshBtn.Size = UDim2.fromOffset(28, 28); refreshBtn.Position = UDim2.new(1, -42, 0.5, -14)
-refreshBtn.BackgroundColor3 = accentColor; refreshBtn.BorderSizePixel = 0
-refreshBtn.Text = "↻"; refreshBtn.TextColor3 = Color3.fromRGB(255,255,255)
-refreshBtn.Font = Enum.Font.GothamBold; refreshBtn.TextSize = 14; refreshBtn.AutoButtonColor = false
-Instance.new("UICorner", refreshBtn).CornerRadius = UDim.new(0,4)
+    local hdrLbl = Instance.new("TextLabel", headerRow)
+    hdrLbl.Size = UDim2.new(1,-80,1,0); hdrLbl.Position = UDim2.fromOffset(0,0)
+    hdrLbl.BackgroundTransparency=1; hdrLbl.Text="Jugadores en servidor"
+    hdrLbl.TextColor3=Color3.fromRGB(102,92,120); hdrLbl.Font=Enum.Font.GothamMedium
+    hdrLbl.TextSize=11; hdrLbl.TextXAlignment=Enum.TextXAlignment.Left
 
-local refreshLbl = Instance.new("TextLabel", refreshRow)
-refreshLbl.Size = UDim2.new(1, -50, 1, 0); refreshLbl.Position = UDim2.fromOffset(14, 0)
-refreshLbl.BackgroundTransparency = 1; refreshLbl.Text = "Add from server"
-refreshLbl.TextColor3 = Color3.fromRGB(215,215,215); refreshLbl.Font = Enum.Font.GothamMedium
-refreshLbl.TextSize = 12; refreshLbl.TextXAlignment = Enum.TextXAlignment.Left
+    local refreshBtn = Instance.new("TextButton", headerRow)
+    refreshBtn.Size = UDim2.fromOffset(68,22); refreshBtn.Position = UDim2.new(1,-72,0.5,-11)
+    refreshBtn.BackgroundColor3 = Color3.fromRGB(18,14,24); refreshBtn.BorderSizePixel=0
+    refreshBtn.Text=">> Refresh"; refreshBtn.TextColor3=accentColor
+    refreshBtn.Font=Enum.Font.GothamBold; refreshBtn.TextSize=9; refreshBtn.AutoButtonColor=false
+    local rfStroke=Instance.new("UIStroke",refreshBtn); rfStroke.Color=accentColor; rfStroke.Thickness=1
 
--- Dropdown de jugadores en servidor
-local playerOptH = 28
-local playerDropFrame = Instance.new("Frame", whitelistCard)
-playerDropFrame.Size = UDim2.new(1, 0, 0, 0)
-playerDropFrame.BackgroundColor3 = Color3.fromRGB(14,10,18); playerDropFrame.BorderSizePixel = 0
-playerDropFrame.ClipsDescendants = true; playerDropFrame.ZIndex = 49; playerDropFrame.Visible = false
-local playerDFS = Instance.new("UIStroke", playerDropFrame)
-playerDFS.Color = Color3.fromRGB(58,58,58); playerDFS.Thickness = 1
+    -- ── Lista desplegable de jugadores del servidor ──────────
+    local serverOpen = false
+    local serverContainer = Instance.new("Frame", whitelistCard)
+    serverContainer.Size = UDim2.new(1,0,0,0); serverContainer.BackgroundTransparency=1
+    serverContainer.BorderSizePixel=0; serverContainer.ClipsDescendants=false
 
-local function updateServerPlayerDropdown()
-    for _, c in ipairs(playerDropFrame:GetChildren()) do
-        if c:IsA("TextButton") then c:Destroy() end
-    end
-    
-    local idx = 1
-    for _, p in ipairs(_plrList) do
-        if p == player then continue end
-        if not p.Character then continue end
-        local alreadyInWL = false
-        for _, wlName in ipairs(S.Whitelist) do
-            if wlName:lower() == p.Name:lower() then
-                alreadyInWL = true
-                break
-            end
-        end
-        
-        local ob = Instance.new("TextButton", playerDropFrame)
-        ob.Size = UDim2.new(1,0,0,playerOptH); ob.Position = UDim2.fromOffset(0,(idx-1)*playerOptH)
-        ob.BackgroundColor3 = alreadyInWL and Color3.fromRGB(26,20,32) or Color3.fromRGB(18,14,22)
-        ob.BorderSizePixel = 0
-        ob.Text = p.Name .. (alreadyInWL and " ✓" or "")
-        ob.Font = Enum.Font.GothamMedium; ob.TextSize = 11
-        ob.TextColor3 = alreadyInWL and Color3.fromRGB(100,180,100) or Color3.fromRGB(215,215,215)
-        ob.ZIndex = 50; ob.AutoButtonColor = false
-        
-        if not alreadyInWL then
-            ob.MouseButton1Click:Connect(function()
-                addWhitelist(p.Name)
-                updateServerPlayerDropdown()
-                updateWhitelistDisplay()
-                showNotif("✝  Whitelist", "Added: "..p.Name, true)
+    local serverDropFrame = Instance.new("Frame", serverContainer)
+    serverDropFrame.Size = UDim2.new(1,0,0,0); serverDropFrame.BackgroundColor3=Color3.fromRGB(14,10,20)
+    serverDropFrame.BorderSizePixel=0; serverDropFrame.ClipsDescendants=true; serverDropFrame.ZIndex=12
+    serverDropFrame.Visible=false
+    local sdfStroke=Instance.new("UIStroke",serverDropFrame); sdfStroke.Color=Color3.fromRGB(58,50,80); sdfStroke.Thickness=1
+    local serverListFrame = Instance.new("Frame", serverDropFrame)
+    serverListFrame.Size = UDim2.new(1,0,0,0); serverListFrame.BackgroundTransparency=1
+    serverListFrame.AutomaticSize=Enum.AutomaticSize.Y
+    local slLay=Instance.new("UIListLayout",serverListFrame); slLay.SortOrder=Enum.SortOrder.LayoutOrder
+    slLay.Padding=UDim.new(0,2)
+    local slPad=Instance.new("UIPadding",serverListFrame)
+    slPad.PaddingTop=UDim.new(0,4); slPad.PaddingBottom=UDim.new(0,4)
+    slPad.PaddingLeft=UDim.new(0,4); slPad.PaddingRight=UDim.new(0,4)
+
+    -- Header dropdown toggle button (arrow)
+    local arrowLbl = Instance.new("TextLabel", headerRow)
+    arrowLbl.Size=UDim2.fromOffset(14,WL_ENTRY_H); arrowLbl.Position=UDim2.new(1,-16,0,0)
+    arrowLbl.BackgroundTransparency=1; arrowLbl.Text="v"
+    arrowLbl.TextColor3=accentColor; arrowLbl.Font=Enum.Font.GothamBold; arrowLbl.TextSize=10
+
+    -- ── Lista en whitelist (guardada) ──────────────────────────
+    local wlSecLbl = Instance.new("TextLabel", whitelistCard)
+    wlSecLbl.Size = UDim2.new(1,0,0,16); wlSecLbl.BackgroundTransparency=1
+    wlSecLbl.Text="— En Whitelist —"; wlSecLbl.TextColor3=accentColor
+    wlSecLbl.Font=Enum.Font.GothamBlack; wlSecLbl.TextSize=9
+    wlSecLbl.TextXAlignment=Enum.TextXAlignment.Left
+
+    local wlFrame = Instance.new("Frame", whitelistCard)
+    wlFrame.Size = UDim2.new(1,0,0,0); wlFrame.BackgroundTransparency=1
+    wlFrame.AutomaticSize=Enum.AutomaticSize.Y
+    local wlLay=Instance.new("UIListLayout",wlFrame); wlLay.SortOrder=Enum.SortOrder.LayoutOrder
+    wlLay.Padding=UDim.new(0,2)
+
+    -- Forward declarations
+    local rebuildWL, rebuildServerList
+
+    rebuildWL = function()
+        for _,c in ipairs(wlFrame:GetChildren()) do if c:IsA("Frame") then c:Destroy() end end
+        for _, name in ipairs(S.Whitelist) do
+            local e = Instance.new("Frame", wlFrame)
+            e.Size=UDim2.new(1,0,0,WL_ENTRY_H); e.BackgroundColor3=Color3.fromRGB(14,10,20)
+            e.BorderSizePixel=0
+            local eStroke=Instance.new("UIStroke",e); eStroke.Color=Color3.fromRGB(58,50,80); eStroke.Thickness=1
+            local nl=Instance.new("TextLabel",e)
+            nl.Size=UDim2.new(1,-38,1,0); nl.Position=UDim2.fromOffset(6,0)
+            nl.BackgroundTransparency=1; nl.Text="+ "..name
+            nl.TextColor3=accentColor; nl.Font=Enum.Font.GothamMedium
+            nl.TextSize=11; nl.TextXAlignment=Enum.TextXAlignment.Left
+            local db=Instance.new("TextButton",e)
+            db.Size=UDim2.fromOffset(22,20); db.Position=UDim2.new(1,-26,0.5,-10)
+            db.BackgroundColor3=Color3.fromRGB(40,8,8); db.BorderSizePixel=0
+            db.Text="x"; db.TextColor3=Color3.fromRGB(255,80,80)
+            db.Font=Enum.Font.GothamBold; db.TextSize=11; db.AutoButtonColor=false
+            local dbStroke=Instance.new("UIStroke",db); dbStroke.Color=Color3.fromRGB(100,20,20); dbStroke.Thickness=1
+            db.MouseButton1Click:Connect(function()
+                removeWhitelist(name); rebuildWL(); rebuildServerList()
+                showNotif("✝  Whitelist", "Removed: "..name, false)
             end)
         end
-        
-        idx = idx + 1
     end
-end
 
-local playerDropOpen = false
-local refreshHitArea = Instance.new("TextButton", refreshRow)
-refreshHitArea.Size = UDim2.new(1,0,1,0); refreshHitArea.BackgroundTransparency=1; refreshHitArea.Text=""; refreshHitArea.ZIndex=5
-refreshHitArea.MouseButton1Click:Connect(function()
-    playerDropOpen = not playerDropOpen
-    updateServerPlayerDropdown()
-    if playerDropOpen then
-        playerDropFrame.Visible=true; playerDropFrame.Size=UDim2.new(1,0,0,0)
-        local dropH = math.min((#_plrList-1)*playerOptH, 200)
-        TweenService:Create(playerDropFrame, TIF, {Size=UDim2.new(1,0,0,dropH)}):Play()
-        refreshBtn.Text = "▴"
-    else
-        TweenService:Create(playerDropFrame, TIF, {Size=UDim2.new(1,0,0,0)}):Play()
-        task.delay(0.25, function() playerDropFrame.Visible=false end)
-        refreshBtn.Text = "↻"
-    end
-end)
-
--- Lista de whitelisteados actuales
-local wlListContainer = Instance.new("Frame", whitelistCard)
-wlListContainer.Size = UDim2.new(1, 0, 0, 150); wlListContainer.BackgroundTransparency = 1
-wlListContainer.BorderSizePixel = 0
-local wlScroll = Instance.new("ScrollingFrame", wlListContainer)
-wlScroll.Size = UDim2.new(1, 0, 1, 0); wlScroll.BackgroundColor3 = Color3.fromRGB(10,8,14)
-wlScroll.BorderSizePixel = 0; wlScroll.ScrollBarThickness = 2
-wlScroll.ScrollBarImageColor3 = accentColor
-wlScroll.CanvasSize = UDim2.new(0, 0, 0, 0); wlScroll.AutomaticCanvasSize = Enum.AutomaticSize.Y
-local wlLayout = Instance.new("UIListLayout", wlScroll)
-wlLayout.SortOrder = Enum.SortOrder.LayoutOrder; wlLayout.Padding = UDim.new(0, 4)
-local wlPad = Instance.new("UIPadding", wlScroll)
-wlPad.PaddingTop = UDim.new(0,6); wlPad.PaddingLeft = UDim.new(0,8)
-wlPad.PaddingRight = UDim.new(0,8); wlPad.PaddingBottom = UDim.new(0,6)
-
-local function updateWhitelistDisplay()
-    for _, c in ipairs(wlScroll:GetChildren()) do
-        if c:IsA("Frame") and c.Name ~= "UIListLayout" and c.Name ~= "UIPadding" then
-            c:Destroy()
+    rebuildServerList = function()
+        for _,c in ipairs(serverListFrame:GetChildren()) do if c:IsA("Frame") then c:Destroy() end end
+        local plrCount = 0
+        for _,p in ipairs(Players:GetPlayers()) do
+            if p == player then continue end
+            plrCount = plrCount + 1
+            local e=Instance.new("Frame",serverListFrame)
+            e.Size=UDim2.new(1,0,0,WL_ENTRY_H); e.BackgroundColor3=Color3.fromRGB(10,8,14)
+            e.BorderSizePixel=0
+            local eStroke=Instance.new("UIStroke",e); eStroke.Color=Color3.fromRGB(38,30,54); eStroke.Thickness=1
+            local namLbl=Instance.new("TextLabel",e)
+            namLbl.Size=UDim2.new(1,-80,1,0); namLbl.Position=UDim2.fromOffset(6,0)
+            namLbl.BackgroundTransparency=1; namLbl.Text=p.Name
+            namLbl.TextColor3=Color3.fromRGB(215,215,215); namLbl.Font=Enum.Font.GothamMedium
+            namLbl.TextSize=11; namLbl.TextXAlignment=Enum.TextXAlignment.Left
+            local togBtn=Instance.new("TextButton",e)
+            togBtn.Size=UDim2.fromOffset(70,20); togBtn.Position=UDim2.new(1,-74,0.5,-10)
+            togBtn.BorderSizePixel=0; togBtn.AutoButtonColor=false
+            togBtn.Font=Enum.Font.GothamBold; togBtn.TextSize=9
+            local function refreshTogBtn()
+                if isWhitelisted(p) then
+                    togBtn.BackgroundColor3=Color3.fromRGB(40,8,8)
+                    togBtn.TextColor3=Color3.fromRGB(255,80,80); togBtn.Text="x Quitar"
+                    local ts=togBtn:FindFirstChildOfClass("UIStroke")
+                    if ts then ts.Color=Color3.fromRGB(100,20,20) else
+                        local ns=Instance.new("UIStroke",togBtn); ns.Color=Color3.fromRGB(100,20,20); ns.Thickness=1 end
+                else
+                    togBtn.BackgroundColor3=Color3.fromRGB(18,14,24)
+                    togBtn.TextColor3=accentColor; togBtn.Text="+ Añadir"
+                    local ts=togBtn:FindFirstChildOfClass("UIStroke")
+                    if ts then ts.Color=accentColor else
+                        local ns=Instance.new("UIStroke",togBtn); ns.Color=accentColor; ns.Thickness=1 end
+                end
+            end
+            refreshTogBtn()
+            togBtn.MouseButton1Click:Connect(function()
+                if isWhitelisted(p) then removeWhitelist(p.Name) else addWhitelist(p.Name) end
+                refreshTogBtn(); rebuildWL()
+                showNotif("✝  Whitelist", isWhitelisted(p) and ("Added: "..p.Name) or ("Removed: "..p.Name), isWhitelisted(p))
+            end)
+        end
+        -- Actualizar altura del dropdown
+        local totalH = plrCount * (WL_ENTRY_H + 2) + 8
+        serverDropFrame.Size = UDim2.new(1,0,0,0)
+        if serverOpen then
+            TweenService:Create(serverDropFrame, TIF, {Size=UDim2.new(1,0,0,totalH)}):Play()
+            serverContainer.Size = UDim2.new(1,0,0,totalH)
         end
     end
-    
-    for _, name in ipairs(S.Whitelist) do
-        local wlItem = Instance.new("Frame", wlScroll)
-        wlItem.Size = UDim2.new(1, 0, 0, 28); wlItem.BackgroundColor3 = Color3.fromRGB(16,12,22)
-        wlItem.BorderSizePixel = 0
-        local wlStroke = Instance.new("UIStroke", wlItem)
-        wlStroke.Color = Color3.fromRGB(58,58,58); wlStroke.Thickness = 1
-        
-        local nameLbl = Instance.new("TextLabel", wlItem)
-        nameLbl.Size = UDim2.new(1, -38, 1, 0); nameLbl.Position = UDim2.fromOffset(8, 0)
-        nameLbl.BackgroundTransparency = 1; nameLbl.Text = name
-        nameLbl.TextColor3 = Color3.fromRGB(215,215,215); nameLbl.Font = Enum.Font.GothamMedium
-        nameLbl.TextSize = 11; nameLbl.TextXAlignment = Enum.TextXAlignment.Left
-        
-        local removeBtn = Instance.new("TextButton", wlItem)
-        removeBtn.Size = UDim2.fromOffset(24, 24); removeBtn.Position = UDim2.new(1, -28, 0.5, -12)
-        removeBtn.BackgroundColor3 = Color3.fromRGB(220,80,80); removeBtn.BorderSizePixel = 0
-        removeBtn.Text = "✕"; removeBtn.TextColor3 = Color3.fromRGB(255,255,255)
-        removeBtn.Font = Enum.Font.GothamBold; removeBtn.TextSize = 12; removeBtn.AutoButtonColor = false
-        Instance.new("UICorner", removeBtn).CornerRadius = UDim.new(0,4)
-        
-        removeBtn.MouseButton1Click:Connect(function()
-            removeWhitelist(name)
-            updateWhitelistDisplay()
-            updateServerPlayerDropdown()
-            showNotif("✝  Whitelist", "Removed: "..name, true)
+
+    -- Toggle dropdown del servidor
+    local function toggleServerList()
+        serverOpen = not serverOpen
+        if serverOpen then
+            rebuildServerList()
+            local plrCount = 0
+            for _,p in ipairs(Players:GetPlayers()) do if p~=player then plrCount=plrCount+1 end end
+            local totalH = plrCount * (WL_ENTRY_H + 2) + 8
+            serverDropFrame.Visible = true; serverDropFrame.Size=UDim2.new(1,0,0,0)
+            TweenService:Create(serverDropFrame, TIF, {Size=UDim2.new(1,0,0,totalH)}):Play()
+            serverContainer.Size = UDim2.new(1,0,0,totalH)
+            arrowLbl.Text = "^"
+        else
+            TweenService:Create(serverDropFrame, TIF, {Size=UDim2.new(1,0,0,0)}):Play()
+            task.delay(0.25, function() serverDropFrame.Visible=false end)
+            serverContainer.Size = UDim2.new(1,0,0,0)
+            arrowLbl.Text = "v"
+        end
+    end
+
+    local hitArea = Instance.new("TextButton", headerRow)
+    hitArea.Size=UDim2.new(1,-20,1,0); hitArea.BackgroundTransparency=1; hitArea.Text=""; hitArea.ZIndex=5
+    hitArea.MouseButton1Click:Connect(toggleServerList)
+
+    rebuildServerList(); rebuildWL()
+
+    refreshBtn.MouseButton1Click:Connect(function()
+        rebuildServerList()
+        refreshBtn.Text="OK"; task.delay(0.8, function() refreshBtn.Text=">> Refresh" end)
+    end)
+    Players.PlayerAdded:Connect(function() rebuildServerList() end)
+    Players.PlayerRemoving:Connect(function() task.wait(0.05); rebuildServerList() end)
+end
+-- ══ EXTRAS PAGE ═══════════════════════════════════════════════
+-- (Inf Stamina, Item en la Mano, Health Bar, Distancia — copiado de SyyClient)
+-- ── INF STAMINA (lógica completa de SyyClient) ────────────────
+local extrasCard = makeCard(pg_extras)
+makeSecHeader(extrasCard, "+", "Extras")
+makeDivider(extrasCard)
+
+do
+    -- Inf Stamina
+    local staminaConns = {}
+    local staminaWatched = {}
+    local staminaKeys = {"stamina","sprint","energy","endur","breath"}
+    local staminaLoop = false
+
+    local function isStaminaName(name)
+        name = tostring(name or ""):lower()
+        for _, key in ipairs(staminaKeys) do
+            if name:find(key,1,true) then return true end
+        end
+        return false
+    end
+    local function hasStaminaContext(obj)
+        local cur = obj
+        for _ = 1, 4 do
+            if not cur or typeof(cur)~="Instance" then break end
+            if isStaminaName(cur.Name) then return true end
+            cur = cur.Parent
+        end
+        return false
+    end
+    local function isStaminaValue(obj)
+        return obj and typeof(obj)=="Instance"
+            and (obj:IsA("NumberValue") or obj:IsA("IntValue") or obj:IsA("DoubleConstrainedValue"))
+            and hasStaminaContext(obj)
+    end
+    local function staminaMax(stVal)
+        if stVal:IsA("DoubleConstrainedValue") then return stVal.MaxValue end
+        return stVal:GetAttribute("MaxStamina") or stVal:GetAttribute("StaminaMax")
+            or stVal:GetAttribute("MaxSprint") or stVal:GetAttribute("SprintMax")
+            or stVal:GetAttribute("MaxEnergy") or stVal:GetAttribute("EnergyMax")
+            or stVal:GetAttribute("Max") or 100
+    end
+    local function keepStaminaFull(stVal)
+        if not isStaminaValue(stVal) then return end
+        pcall(function() stVal.Value = staminaMax(stVal) end)
+    end
+    local function watchStaminaValue(stVal)
+        if not isStaminaValue(stVal) or staminaWatched[stVal] then return end
+        staminaWatched[stVal]=true
+        keepStaminaFull(stVal)
+        table.insert(staminaConns, stVal.Changed:Connect(function() keepStaminaFull(stVal) end))
+    end
+    local function keepStaminaAttributes(obj)
+        if not obj or typeof(obj)~="Instance" then return end
+        pcall(function()
+            for attr, val in pairs(obj:GetAttributes()) do
+                local attrLower=tostring(attr):lower()
+                if type(val)=="number" and (isStaminaName(attr) or (hasStaminaContext(obj) and attrLower=="value"))
+                and not attrLower:find("max",1,true) then
+                    local maxVal=obj:GetAttribute("Max"..attr) or obj:GetAttribute(attr.."Max")
+                        or obj:GetAttribute("MaxStamina") or obj:GetAttribute("StaminaMax") or 100
+                    obj:SetAttribute(attr, maxVal)
+                end
+            end
         end)
     end
+    local function watchStaminaAttributes(obj)
+        if not obj or typeof(obj)~="Instance" then return end
+        keepStaminaAttributes(obj)
+        pcall(function()
+            for attr, val in pairs(obj:GetAttributes()) do
+                local attrLower=tostring(attr):lower()
+                if type(val)=="number" and (isStaminaName(attr) or (hasStaminaContext(obj) and attrLower=="value"))
+                and not attrLower:find("max",1,true) then
+                    table.insert(staminaConns, obj:GetAttributeChangedSignal(attr):Connect(function()
+                        keepStaminaAttributes(obj)
+                    end))
+                end
+            end
+        end)
+    end
+    local function scanStamina(container)
+        if not container then return end
+        watchStaminaValue(container); watchStaminaAttributes(container)
+        pcall(function()
+            for _, desc in ipairs(container:GetDescendants()) do
+                watchStaminaValue(desc)
+                if desc:IsA("Humanoid") or isStaminaName(desc.Name) then watchStaminaAttributes(desc) end
+            end
+        end)
+    end
+    local function watchStaminaContainer(container)
+        if not container then return end
+        scanStamina(container)
+        table.insert(staminaConns, container.DescendantAdded:Connect(function(desc)
+            watchStaminaValue(desc)
+            if desc:IsA("Humanoid") or isStaminaName(desc.Name) then watchStaminaAttributes(desc) end
+        end))
+    end
+    local staminaMetaHooked=false
+    local function installStaminaMetaHook()
+        if staminaMetaHooked then return end; staminaMetaHooked=true
+        pcall(function()
+            if not hookmetamethod then return end
+            local oldNewIndex
+            oldNewIndex=hookmetamethod(game,"__newindex",function(self,key,value)
+                if S.InfStamina and key=="Value" and type(value)=="number" and isStaminaValue(self) then
+                    local maxVal=staminaMax(self)
+                    if value<maxVal then return oldNewIndex(self,key,maxVal) end
+                end
+                return oldNewIndex(self,key,value)
+            end)
+        end)
+    end
+    local function disconnectStamina()
+        staminaLoop=false
+        for _,c in ipairs(staminaConns) do pcall(function() c:Disconnect() end) end
+        staminaConns={}; staminaWatched={}
+    end
+    local function hookStamina(char)
+        if not char then return end
+        installStaminaMetaHook(); staminaLoop=true
+        watchStaminaContainer(char); watchStaminaContainer(player)
+        task.spawn(function()
+            while staminaLoop and S.InfStamina do
+                pcall(function()
+                    local c2=player.Character; if not c2 then return end
+                    if game.PlaceId==455366377 then watchStaminaValue(c2:FindFirstChild("Stamina",true)) end
+                    for stVal in pairs(staminaWatched) do keepStaminaFull(stVal) end
+                    local hum=c2:FindFirstChildOfClass("Humanoid")
+                    if hum then keepStaminaAttributes(hum) end
+                    keepStaminaAttributes(c2)
+                end)
+                task.wait(0.05)
+            end
+        end)
+        if game.PlaceId==455366377 then
+            local stVal=char:WaitForChild("Stamina",4)
+            watchStaminaValue(stVal)
+            table.insert(staminaConns, char.ChildAdded:Connect(function(child)
+                if child.Name=="Stamina" then watchStaminaValue(child) end
+            end))
+        end
+    end
+
+    makeToggle(extrasCard, "ext_inf_stamina", "ext_inf_stamina_d", "InfStamina", function(on)
+        if on then hookStamina(player.Character)
+        else disconnectStamina() end
+    end)
+    player.CharacterAdded:Connect(function(char)
+        if not S.InfStamina then return end
+        disconnectStamina(); task.wait(0.5); hookStamina(char)
+    end)
+    task.defer(function()
+        if S.InfStamina then hookStamina(player.Character or player.CharacterAdded:Wait()) end
+    end)
 end
-updateWhitelistDisplay()
 
--- Refresh automático cuando un jugador se une
-Players.PlayerAdded:Connect(function()
-    task.wait(0.5)
-    updateServerPlayerDropdown()
-end)
+makeDivider(extrasCard)
 
--- ══ AJUSTES PAGE ══════════════════════════════════════════════
+-- Health Bar Drawing
+makeToggle(extrasCard, "ext_health_bar", "ext_health_bar_d", "EspHealthBar")
+makeDivider(extrasCard)
+
+-- Distance Drawing
+makeToggle(extrasCard, "ext_distance",  "ext_distance_d",  "EspDistance")
+makeDivider(extrasCard)
+
+-- Item in Hand Drawing
+makeToggle(extrasCard, "ext_item_hand", "ext_item_hand_d", "ItemInHand")
 
 -- ══ AJUSTES PAGE ══════════════════════════════════
 local cfgCard = makeCard(pg_ajustes)
@@ -1698,7 +1841,7 @@ for _, ch in ipairs(navBtns[1]:GetChildren()) do
 end
 
 -- Expose tabPages alias para compatibilidad con keybinds toggle
-local tabPages = {pages[1], pages[2], pages[2], pages[3]}  -- dummy, no se usa con tabs
+local tabPages = {pages[1], pages[2], pages[3], pages[4]}  -- dummy, no se usa con tabs
 
 -- ══════════════════════════════════════════════
 --  DRAG — mover panel (por el header)
@@ -1744,7 +1887,7 @@ end
 -- ══════════════════════════════════════════════
 --  CHARACTER ESP — Highlight por partes + Avatar
 -- ══════════════════════════════════════════════
-local espObjects = {}
+-- (espObjects ya fue declarado arriba, antes de los toggles del ESP)
 
 local BODY_PARTS = {"Head","Torso","UpperTorso","LowerTorso","LeftArm","RightArm",
     "LeftLeg","RightLeg","LeftUpperArm","LeftLowerArm","LeftHand",
@@ -1904,6 +2047,16 @@ local function createSelectionBox3D_always(char)
     return sb
 end
 
+local function newFilledRect()
+    if not HAS_DRAWING then return newDrawingFallback() end
+    local r = Drawing.new("Square"); r.Visible=false; r.Filled=true; r.Thickness=1; return r
+end
+local function newSmallText(sz)
+    if not HAS_DRAWING then return newDrawingFallback() end
+    local t = Drawing.new("Text"); t.Visible=false; t.Size=sz or 11; t.Outline=true
+    t.OutlineColor=Color3.fromRGB(0,0,0); return t
+end
+
 local function createEspObj(p)
     if p == player then return end
     -- SelectionBox 3D real para Show Hitbox
@@ -1923,6 +2076,11 @@ local function createEspObj(p)
         hbx    = newBox(),
         selBox = selBox3D,   -- SelectionBox 3D Instance (puede ser nil si sin Drawing)
         selBox2 = selBox3D2, -- SelectionBox independiente (siempre visible)
+        -- EXTRAS: Health Bar, Distance, Item in Hand
+        healthBg  = newFilledRect(),
+        healthBar = newFilledRect(),
+        distTag   = newSmallText(11),
+        itemTag   = newSmallText(11),
     }
     if p.Character then
         espObjects[p].billboard     = createAvatarBillboard(p, p.Character)
@@ -1965,6 +2123,11 @@ local function removeEspObj(p)
         pcall(function() obj.selBox2:Destroy() end)
     end
     obj.box:Remove(); obj.name:Remove(); obj.line:Remove(); obj.hbx:Remove()
+    -- EXTRAS drawings
+    if obj.healthBg  and obj.healthBg.Remove  then pcall(function() obj.healthBg:Remove()  end) end
+    if obj.healthBar and obj.healthBar.Remove  then pcall(function() obj.healthBar:Remove() end) end
+    if obj.distTag   and obj.distTag.Remove    then pcall(function() obj.distTag:Remove()   end) end
+    if obj.itemTag   and obj.itemTag.Remove    then pcall(function() obj.itemTag:Remove()   end) end
     espObjects[p] = nil
 end
 for _, p in ipairs(Players:GetPlayers()) do createEspObj(p) end
@@ -1998,6 +2161,11 @@ applyStreamMode = function(on)
                 if obj.nameBillboard then obj.nameBillboard.Enabled = false end
                 obj.line.Visible = false; obj.hbx.Visible = false
                 if obj.selBox then obj.selBox.Visible = false end
+                -- EXTRAS
+                if obj.healthBg  then obj.healthBg.Visible  = false end
+                if obj.healthBar then obj.healthBar.Visible = false end
+                if obj.distTag   then obj.distTag.Visible   = false end
+                if obj.itemTag   then obj.itemTag.Visible   = false end
             end
         end
     else
@@ -2117,6 +2285,7 @@ Players.PlayerRemoving:Connect(function() task.defer(function() _plrList = Playe
 -- ══════════════════════════════════════════════
 local _frame = 0
 RunService.RenderStepped:Connect(function()
+    local _ok, _err = pcall(function()
     _frame = _frame + 1
     -- Avanzar el hue del arcoíris cada frame
     if S.esp_rainbow then
@@ -2151,6 +2320,10 @@ RunService.RenderStepped:Connect(function()
             obj.hbx.Visible = false
             if obj.selBox then obj.selBox.Visible = false end
             if obj.selBox2 then obj.selBox2.Visible = false end
+            if obj.healthBg  then obj.healthBg.Visible  = false end
+            if obj.healthBar then obj.healthBar.Visible = false end
+            if obj.distTag   then obj.distTag.Visible   = false end
+            if obj.itemTag   then obj.itemTag.Visible   = false end
             continue
         end
         
@@ -2162,6 +2335,11 @@ RunService.RenderStepped:Connect(function()
             obj.line.Visible = false
             obj.hbx.Visible  = false
             if obj.selBox then obj.selBox.Visible = false end
+            -- EXTRAS
+            if obj.healthBg  then obj.healthBg.Visible  = false end
+            if obj.healthBar then obj.healthBar.Visible = false end
+            if obj.distTag   then obj.distTag.Visible   = false end
+            if obj.itemTag   then obj.itemTag.Visible   = false end
         end
         if not char then allOff(); continue end
         local root = char:FindFirstChild("HumanoidRootPart")
@@ -2288,7 +2466,80 @@ RunService.RenderStepped:Connect(function()
                 obj.selBox2.Visible = false
             end
         end
+
+        -- ▸ EXTRAS: Health Bar (Drawing) — igual a SyyClient
+        local myRoot2 = myChar and myChar:FindFirstChild("HumanoidRootPart")
+        local dist3D  = myRoot2 and (root.Position - myRoot2.Position).Magnitude or 0
+        local headPart2 = char:FindFirstChild("Head")
+        local footPart  = char:FindFirstChild("LeftFoot") or root
+
+        if onS and headPart2 and footPart and HAS_DRAWING then
+            local topSP  = Vector2.new(camera:WorldToViewportPoint(headPart2.Position + Vector3.new(0,0.6,0)).X,
+                                       camera:WorldToViewportPoint(headPart2.Position + Vector3.new(0,0.6,0)).Y)
+            local botSP  = Vector2.new(camera:WorldToViewportPoint(footPart.Position  - Vector3.new(0,0.2,0)).X,
+                                       camera:WorldToViewportPoint(footPart.Position  - Vector3.new(0,0.2,0)).Y)
+            local boxH   = math.abs(botSP.Y - topSP.Y)
+            local boxW   = boxH * 0.45
+
+            -- Health Bar
+            local hp = hum.Health / math.max(hum.MaxHealth, 1)
+            if S.EspHealthBar and S.esp_on then
+                local bx = sp2.X - boxW * 0.5 - 7
+                obj.healthBg.Visible   = true
+                obj.healthBg.Position  = Vector2.new(bx, topSP.Y)
+                obj.healthBg.Size      = Vector2.new(4, boxH)
+                obj.healthBg.Color     = Color3.fromRGB(20, 20, 20)
+                local barH = boxH * hp
+                local r = hp < 0.5 and 255 or math.floor(255*(1-hp)*2)
+                local g = hp > 0.5 and 255 or math.floor(255*hp*2)
+                obj.healthBar.Visible  = true
+                obj.healthBar.Position = Vector2.new(bx, topSP.Y + boxH - barH)
+                obj.healthBar.Size     = Vector2.new(4, barH)
+                obj.healthBar.Color    = Color3.fromRGB(r, g, 0)
+            else
+                obj.healthBg.Visible  = false
+                obj.healthBar.Visible = false
+            end
+
+            -- Distance
+            if S.EspDistance and S.esp_on then
+                obj.distTag.Visible   = true
+                obj.distTag.Text      = math.floor(dist3D) .. "m"
+                obj.distTag.Position  = Vector2.new(sp2.X - boxW * 0.5, botSP.Y + 2)
+                obj.distTag.Color     = Color3.fromRGB(70, 160, 210)
+            else
+                obj.distTag.Visible = false
+            end
+
+            -- Item in Hand
+            if S.ItemInHand and S.esp_on then
+                local iname = nil
+                for _, v in ipairs(char:GetChildren()) do
+                    if v:IsA("Tool") then iname = v.Name; break end
+                end
+                if iname then
+                    obj.itemTag.Visible   = true
+                    obj.itemTag.Text      = "[" .. iname .. "]"
+                    obj.itemTag.Position  = Vector2.new(sp2.X, topSP.Y - 16)
+                    obj.itemTag.Color     = Color3.fromRGB(255, 215, 0)
+                else
+                    obj.itemTag.Visible = false
+                end
+            else
+                obj.itemTag.Visible = false
+            end
+        else
+            if obj.healthBg  then obj.healthBg.Visible  = false end
+            if obj.healthBar then obj.healthBar.Visible = false end
+            if obj.distTag   then obj.distTag.Visible   = false end
+            if obj.itemTag   then obj.itemTag.Visible   = false end
+        end
+
         obj.hbx.Visible = false
+    end
+    end)
+    if not _ok then
+        warn("[x7s] Error en RenderStepped (frame ".._frame.."): ".. tostring(_err))
     end
 end)
 
@@ -2298,6 +2549,7 @@ end)
 local camLockTarget=nil
 
 RunService:BindToRenderStep("x7sCamLock", Enum.RenderPriority.Camera.Value+1, function()
+    pcall(function()
     if not S.CamLockEnabled then camLockTarget=nil; return end
 
     local myChar=player.Character
@@ -2333,6 +2585,7 @@ RunService:BindToRenderStep("x7sCamLock", Enum.RenderPriority.Camera.Value+1, fu
     if newLook.Magnitude>0.01 then
         camera.CFrame=CFrame.lookAt(camPos,camPos+newLook.Unit)
     end
+    end)
 end)
 
 -- ══════════════════════════════════════════════
