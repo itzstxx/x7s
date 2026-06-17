@@ -458,7 +458,7 @@ headerBorder.BackgroundColor3 = Color3.fromRGB(42,42,42); headerBorder.BorderSiz
 local titleLbl = Instance.new("TextLabel", header)
 titleLbl.Size = UDim2.new(0.5, 0, 1, 0); titleLbl.Position = UDim2.fromOffset(16, 0)
 titleLbl.BackgroundTransparency = 1; titleLbl.Text = "† interfaz oscura v.XIII †"
-titleLbl.TextColor3 = Color3.fromRGB(58, 58, 58); titleLbl.Font = Enum.Font.Gotham
+titleLbl.TextColor3 = Color3.fromRGB(58, 58, 58); titleLbl.Font = Enum.Font.GothamBold
 titleLbl.TextSize = 9; titleLbl.TextXAlignment = Enum.TextXAlignment.Left
 titleLbl.TextScaled = false
 
