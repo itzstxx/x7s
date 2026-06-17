@@ -102,6 +102,8 @@ local function mkDefault()
         CamLockSafeZone = true,
         -- === TARGET ===
         TargetPart = "Random",
+        silent_on = false, silent_chance = 100, silent_key = "X",
+        mouse_lock = false, mouse_lock_key = "Z", mouse_lock_strength = 10,
         -- === EXTRAS ===
         InfStamina   = false,
         EspHealthBar = false,
@@ -193,6 +195,12 @@ local Locale = {
 
         camlock_on="Enable Cam Lock",      camlock_on_d="Automatically locks camera on the closest enemy.",
         camlock_key="Cam Lock Keybind",
+        mouse_lock="Mouse Lock",          mouse_lock_d="The cursor physically follows the enemy. Smooth mouse tracking.",
+        mouse_lock_key="Mouse Lock Keybind",
+        mouse_lock_strength="Mouse Lock Speed", mouse_lock_strength_d="How fast the cursor chases the enemy (1-100).",
+        silent_on="Silent Aim",         silent_on_d="Redirects raycasts to the target. Cursor follows the enemy.",
+        silent_chance="Hit Chance %",    silent_chance_d="Probability of each shot hitting (1-100).",
+        silent_key="Silent Aim Keybind",
         fov_on="Enable FOV Circle",    fov_on_d="Only lock enemies inside the FOV circle.",
         fov_visible="Show FOV Circle",  fov_visible_d="Draw the FOV circle on screen.",
         fov_radius="FOV Radius",        fov_radius_d="Size of the FOV circle in pixels.",
@@ -240,6 +248,12 @@ local Locale = {
         hbx_vis="Visible Check",    hbx_vis_d="Solo registra el hit si el enemigo está a la vista. Evita matar a través de paredes.",
         camlock_on="Activar Cam Lock",      camlock_on_d="Bloquea automáticamente la cámara en el enemigo más cercano.",
         camlock_key="Tecla Cam Lock",
+        mouse_lock="Mouse Lock",          mouse_lock_d="El cursor físicamente sigue al enemigo. Seguimiento suave del mouse.",
+        mouse_lock_key="Tecla Mouse Lock",
+        mouse_lock_strength="Velocidad Mouse Lock", mouse_lock_strength_d="Qué tan rápido el cursor persigue al enemigo (1-100).",
+        silent_on="Silent Aim",         silent_on_d="Redirige los raycasts al objetivo. El cursor sigue al enemigo.",
+        silent_chance="Hit Chance %",    silent_chance_d="Probabilidad de que cada disparo impacte (1-100).",
+        silent_key="Tecla Silent Aim",
         fov_on="Activar Círculo FOV",   fov_on_d="Solo bloquea enemigos dentro del círculo FOV.",
         fov_visible="Mostrar Círculo",   fov_visible_d="Dibuja el círculo FOV en pantalla.",
         fov_radius="Radio FOV",          fov_radius_d="Tamaño del círculo FOV en píxeles.",
@@ -1464,6 +1478,28 @@ makeToggle(fovCard, "fov_visible", "fov_visible_d", "fov_visible")
 makeDivider(fovCard)
 makeSlider(fovCard, "fov_radius", "fov_radius", 20, 400)
 
+-- ══ MOUSE LOCK CARD ═════════════════════════════════════════════
+local mouseLockCard = makeCard(pg_aim)
+makeSecHeader(mouseLockCard, "M", "Mouse Lock")
+makeToggle(mouseLockCard, "mouse_lock", "mouse_lock_d", "mouse_lock", function(on)
+    showNotif("✝  Mouse Lock", on and L("n_on") or L("n_off"), on)
+end)
+makeDivider(mouseLockCard)
+makeSlider(mouseLockCard, "mouse_lock_strength", "mouse_lock_strength", 1, 100)
+makeDivider(mouseLockCard)
+makeKeybind(mouseLockCard, "mouse_lock_key", "mouse_lock_key")
+
+-- ══ SILENT AIM CARD ════════════════════════════════════════════
+local silentCard = makeCard(pg_aim)
+makeSecHeader(silentCard, "S", "Silent Aim")
+makeToggle(silentCard, "silent_on", "silent_on_d", "silent_on", function(on)
+    showNotif("✝  Silent Aim", on and L("n_on") or L("n_off"), on)
+end)
+makeDivider(silentCard)
+makeSlider(silentCard, "silent_chance", "silent_chance", 1, 100)
+makeDivider(silentCard)
+makeKeybind(silentCard, "silent_key", "silent_key")
+
 -- ══ TARGET (igual a SyyClient - dropdown desplegable) ═════════
 local targetCard = makeCard(pg_aim)
 makeSecHeader(targetCard, "+", "Target")
@@ -2618,6 +2654,100 @@ RunService.RenderStepped:Connect(function()
     end
 end)
 
+
+-- ══════════════════════════════════════════════
+--  SILENT AIM (de SyyClient - hookmetamethod)
+-- ══════════════════════════════════════════════
+local cachedTargetPos = nil
+
+-- Calcular el mejor target cada frame en RenderStepped
+RunService.RenderStepped:Connect(function()
+    if not S.silent_on then cachedTargetPos=nil; return end
+    local myChar = player.Character
+    local myRoot = myChar and myChar:FindFirstChild("HumanoidRootPart")
+    local vp = camera.ViewportSize
+    local center2D = Vector2.new(vp.X*0.5, vp.Y*0.5)
+    local fovLimit = S.fov_on and S.fov_radius or math.huge
+    local bestD = math.huge; local bestPos = nil
+
+    for _, p in ipairs(_plrList) do
+        if shouldSkipPlayer(p) then continue end
+        local char = p.Character; if not char then continue end
+        local hum = char:FindFirstChildOfClass("Humanoid")
+        local root = char:FindFirstChild("HumanoidRootPart")
+        if not hum or hum.Health<=0 or not root then continue end
+        local sp2, onS = camera:WorldToViewportPoint(root.Position)
+        if not onS then continue end
+        local d2 = (Vector2.new(sp2.X, sp2.Y) - center2D).Magnitude
+        if d2 > fovLimit then continue end
+        -- wall check
+        if myChar then
+            local ok,obs = pcall(function()
+                return camera:GetPartsObscuringTarget({root.Position},{myChar,char})
+            end)
+            if ok and #obs>0 then continue end
+        end
+        if d2 < bestD then
+            bestD = d2
+            local pn = S.TargetPart or "Random"
+            if pn=="Random" then
+                local r=math.random(100)
+                pn = r<=30 and "Head" or (r<=80 and "UpperTorso" or "LowerTorso")
+            elseif pn=="Pierna" then pn="LowerTorso"
+            elseif pn=="Pecho"  then pn="UpperTorso"
+            elseif pn=="Combo"  then
+                local r=math.random(100)
+                pn = r<=35 and "LowerTorso" or (r<=85 and "UpperTorso" or "Head")
+            end
+            local hp = char:FindFirstChild(pn) or root
+            bestPos = hp.Position
+        end
+    end
+    cachedTargetPos = bestPos
+end)
+
+-- Hook raycast igual que SyyClient
+pcall(function()
+    local oldNC
+    oldNC = hookmetamethod(game, "__namecall", newcclosure(function(...)
+        local method = getnamecallmethod()
+        if not S.silent_on or not cachedTargetPos then return oldNC(...) end
+        if checkcaller() then return oldNC(...) end
+        if math.random(100) > S.silent_chance then return oldNC(...) end
+        local args = {...}
+        -- FireServer / InvokeServer (Universal Silent Aim)
+        if method=="FireServer" or method=="InvokeServer" then
+            local myC = player.Character
+            local myR = myC and myC:FindFirstChild("HumanoidRootPart")
+            local replaced = false
+            for i=2, math.min(#args,8) do
+                if typeof(args[i])=="Vector3" then
+                    local v = args[i]
+                    if v.Magnitude > 2 and myR then
+                        local d = (v-myR.Position).Magnitude
+                        if d>5 and d<2000 then args[i]=cachedTargetPos; replaced=true end
+                    end
+                end
+            end
+            if replaced then return oldNC(table.unpack(args)) end
+            return oldNC(...)
+        end
+        -- Raycast
+        if args[1] ~= Workspace then return oldNC(...) end
+        if method=="Raycast" then
+            if typeof(args[2])~="Vector3" or typeof(args[3])~="Vector3" then return oldNC(...) end
+            args[3] = (cachedTargetPos - args[2]).Unit * 1000
+            return oldNC(table.unpack(args))
+        elseif method=="FindPartOnRayWithIgnoreList" or method=="FindPartOnRay" then
+            if typeof(args[2])~="Ray" then return oldNC(...) end
+            local o = args[2].Origin
+            args[2] = Ray.new(o, (cachedTargetPos-o).Unit*1000)
+            return oldNC(table.unpack(args))
+        end
+        return oldNC(...)
+    end))
+end)
+
 RunService:BindToRenderStep("x7sCamLock", Enum.RenderPriority.Camera.Value+1, function()
     pcall(function()
     if not S.CamLockEnabled then camLockTarget=nil; return end
@@ -2659,6 +2789,76 @@ RunService:BindToRenderStep("x7sCamLock", Enum.RenderPriority.Camera.Value+1, fu
         camera.CFrame=CFrame.lookAt(camPos,camPos+newLook.Unit)
     end
     end)
+end)
+
+
+-- ══════════════════════════════════════════════
+--  MOUSE LOCK (cursor físicamente sigue al enemigo)
+-- ══════════════════════════════════════════════
+RunService:BindToRenderStep("x7sMouseLock", Enum.RenderPriority.Input.Value + 1, function()
+    if not S.mouse_lock then return end
+    if not mousemoverel then return end
+
+    local myChar = player.Character
+    local myRoot = myChar and myChar:FindFirstChild("HumanoidRootPart")
+    local bestRoot = nil
+    local bestDist = math.huge
+    local vp = camera.ViewportSize
+    local center2D = Vector2.new(vp.X * 0.5, vp.Y * 0.5)
+    local fovLimit = S.fov_on and S.fov_radius or math.huge
+
+    for _, p in ipairs(_plrList) do
+        if shouldSkipPlayer(p) then continue end
+        local char = p.Character; if not char then continue end
+        local hum = char:FindFirstChildOfClass("Humanoid")
+        local root = char:FindFirstChild("HumanoidRootPart")
+        if not hum or hum.Health <= 0 or not root then continue end
+        local sp, onS = camera:WorldToViewportPoint(root.Position)
+        if not onS then continue end
+        local d2 = (Vector2.new(sp.X, sp.Y) - center2D).Magnitude
+        if d2 > fovLimit then continue end
+        local dist3D = myRoot and (root.Position - myRoot.Position).Magnitude or math.huge
+        if dist3D > S.CamLockRange then continue end
+        if S.CamLockWallCheck and myChar then
+            local ok, obs = pcall(function()
+                return camera:GetPartsObscuringTarget({root.Position}, {myChar, char})
+            end)
+            if ok and #obs > 0 then continue end
+        end
+        if d2 < bestDist then bestDist = d2; bestRoot = root end
+    end
+
+    if not bestRoot then return end
+
+    -- Obtener posición 2D del objetivo en pantalla
+    local pn = S.TargetPart or "UpperTorso"
+    if pn == "Random" then pn = "UpperTorso"
+    elseif pn == "Pierna" then pn = "LowerTorso"
+    elseif pn == "Pecho" then pn = "UpperTorso"
+    elseif pn == "Combo" then pn = "UpperTorso" end
+
+    local targetPart = bestRoot.Parent and bestRoot.Parent:FindFirstChild(pn) or bestRoot
+    local sp2, onS2 = camera:WorldToViewportPoint(targetPart.Position)
+    if not onS2 then return end
+
+    local targetScreen = Vector2.new(sp2.X, sp2.Y)
+    local mousePos = UserInputService:GetMouseLocation()
+
+    -- Delta = diferencia entre cursor actual y donde está el enemigo
+    local dx = targetScreen.X - mousePos.X
+    local dy = targetScreen.Y - mousePos.Y
+
+    -- Aplicar suavidad con strength
+    local speed = math.clamp(S.mouse_lock_strength, 1, 100) * 0.05
+    local moveX = dx * speed
+    local moveY = dy * speed
+
+    -- Solo mover si la diferencia es significativa (evita jitter)
+    if math.abs(dx) > 0.5 or math.abs(dy) > 0.5 then
+        pcall(function()
+            mousemoverel(moveX, moveY)
+        end)
+    end
 end)
 
 -- ══════════════════════════════════════════════
@@ -2710,6 +2910,22 @@ UserInputService.InputBegan:Connect(function(inp, proc)
                 if obj.selBox then obj.selBox.Visible = false end
             end
         end
+        return
+    end
+
+    -- Toggle Mouse Lock
+    if kn == S.mouse_lock_key then
+        S.mouse_lock = not S.mouse_lock; save()
+        if refreshers["mouse_lock"] then refreshers["mouse_lock"]() end
+        showNotif("✝  Mouse Lock", S.mouse_lock and L("n_on") or L("n_off"), S.mouse_lock)
+        return
+    end
+
+    -- Toggle Silent Aim
+    if kn == S.silent_key then
+        S.silent_on = not S.silent_on; save()
+        if refreshers["silent_on"] then refreshers["silent_on"]() end
+        showNotif("✝  Silent Aim", S.silent_on and L("n_on") or L("n_off"), S.silent_on)
         return
     end
 
@@ -2782,4 +2998,4 @@ task.spawn(function()
     end
 end)
 
-print("   "..S.gui_key.." = Toggle GUI  ·  "..S.esp_key.." = ESP  ·  "..S.hbx_key.." = Hitbox  ·  "..S.camlock_key.." = Cam Lock")
+print("   "..S.gui_key.." = GUI  ·  "..S.esp_key.." = ESP  ·  "..S.hbx_key.." = HBX  ·  "..S.camlock_key.." = CamLock  ·  "..S.silent_key.." = SilentAim  ·  "..S.mouse_lock_key.." = MouseLock")
