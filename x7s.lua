@@ -198,8 +198,8 @@ local Locale = {
         mouse_lock="Mouse Lock",          mouse_lock_d="The cursor physically follows the enemy. Smooth mouse tracking.",
         mouse_lock_key="Mouse Lock Keybind",
         mouse_lock_strength="Mouse Lock Speed", mouse_lock_strength_d="How fast the cursor chases the enemy (1-100).",
-        silent_on="Silent Aim",         silent_on_d="Redirects raycasts to the target. Cursor follows the enemy.",
-        silent_chance="Hit Chance %",    silent_chance_d="Probability of each shot hitting (1-100).",
+        silent_on="Silent Aim",         silent_on_d="Moves cursor onto the enemy inside the FOV. Works on all executors.",
+        silent_chance="Smoothness",      silent_chance_d="100 = instant snap. Lower = smoother follow.",
         silent_key="Silent Aim Keybind",
         fov_on="Enable FOV Circle",    fov_on_d="Only lock enemies inside the FOV circle.",
         fov_visible="Show FOV Circle",  fov_visible_d="Draw the FOV circle on screen.",
@@ -251,8 +251,8 @@ local Locale = {
         mouse_lock="Mouse Lock",          mouse_lock_d="El cursor físicamente sigue al enemigo. Seguimiento suave del mouse.",
         mouse_lock_key="Tecla Mouse Lock",
         mouse_lock_strength="Velocidad Mouse Lock", mouse_lock_strength_d="Qué tan rápido el cursor persigue al enemigo (1-100).",
-        silent_on="Silent Aim",         silent_on_d="Redirige los raycasts al objetivo. El cursor sigue al enemigo.",
-        silent_chance="Hit Chance %",    silent_chance_d="Probabilidad de que cada disparo impacte (1-100).",
+        silent_on="Silent Aim",         silent_on_d="Mueve el cursor encima del enemigo dentro del FOV. Funciona en todos los executors.",
+        silent_chance="Suavidad",        silent_chance_d="100 = snap instantáneo. Más bajo = seguimiento más suave.",
         silent_key="Tecla Silent Aim",
         fov_on="Activar Círculo FOV",   fov_on_d="Solo bloquea enemigos dentro del círculo FOV.",
         fov_visible="Mostrar Círculo",   fov_visible_d="Dibuja el círculo FOV en pantalla.",
@@ -2656,96 +2656,84 @@ end)
 
 
 -- ══════════════════════════════════════════════
---  SILENT AIM (de SyyClient - hookmetamethod)
+--  SILENT AIM — FOV cursor (funciona en todos los executors)
+--  Mueve el cursor encima del enemigo cuando está dentro del FOV.
+--  Cuando disparas, tu cursor YA está sobre él → hit garantizado.
 -- ══════════════════════════════════════════════
-local cachedTargetPos = nil
+RunService:BindToRenderStep("x7sSilentAim", Enum.RenderPriority.Input.Value + 2, function()
+    if not S.silent_on then return end
+    if not mousemoverel then return end
 
--- Calcular el mejor target cada frame en RenderStepped
-RunService.RenderStepped:Connect(function()
-    if not S.silent_on then cachedTargetPos=nil; return end
     local myChar = player.Character
     local myRoot = myChar and myChar:FindFirstChild("HumanoidRootPart")
-    local vp = camera.ViewportSize
-    local center2D = Vector2.new(vp.X*0.5, vp.Y*0.5)
+    local mousePos = UserInputService:GetMouseLocation()
     local fovLimit = S.fov_on and S.fov_radius or math.huge
-    local bestD = math.huge; local bestPos = nil
+
+    -- Buscar el enemigo más cercano al cursor dentro del FOV
+    local bestPart = nil
+    local bestDist = math.huge
 
     for _, p in ipairs(_plrList) do
         if shouldSkipPlayer(p) then continue end
         local char = p.Character; if not char then continue end
         local hum = char:FindFirstChildOfClass("Humanoid")
         local root = char:FindFirstChild("HumanoidRootPart")
-        if not hum or hum.Health<=0 or not root then continue end
-        local sp2, onS = camera:WorldToViewportPoint(root.Position)
+        if not hum or hum.Health <= 0 or not root then continue end
+
+        -- Solo si está en pantalla
+        local sp, onS = camera:WorldToViewportPoint(root.Position)
         if not onS then continue end
-        local d2 = (Vector2.new(sp2.X, sp2.Y) - center2D).Magnitude
+
+        -- Distancia del cursor al enemigo en pantalla
+        local d2 = (Vector2.new(sp.X, sp.Y) - mousePos).Magnitude
         if d2 > fovLimit then continue end
-        -- wall check
-        if myChar then
-            local ok,obs = pcall(function()
-                return camera:GetPartsObscuringTarget({root.Position},{myChar,char})
+
+        -- Wall check
+        if S.CamLockWallCheck and myChar then
+            local ok, obs = pcall(function()
+                return camera:GetPartsObscuringTarget({root.Position}, {myChar, char})
             end)
-            if ok and #obs>0 then continue end
+            if ok and #obs > 0 then continue end
         end
-        if d2 < bestD then
-            bestD = d2
-            local pn = S.TargetPart or "Random"
-            if pn=="Random" then
-                local r=math.random(100)
-                pn = r<=30 and "Head" or (r<=80 and "UpperTorso" or "LowerTorso")
-            elseif pn=="Pierna" then pn="LowerTorso"
-            elseif pn=="Pecho"  then pn="UpperTorso"
-            elseif pn=="Combo"  then
-                local r=math.random(100)
-                pn = r<=35 and "LowerTorso" or (r<=85 and "UpperTorso" or "Head")
+
+        if d2 < bestDist then
+            bestDist = d2
+            -- Resolver Target Part
+            local pn = S.TargetPart or "UpperTorso"
+            if pn == "Random" then
+                local r = math.random(100)
+                pn = r <= 30 and "Head" or (r <= 80 and "UpperTorso" or "LowerTorso")
+            elseif pn == "Pierna" then pn = "LowerTorso"
+            elseif pn == "Pecho"  then pn = "UpperTorso"
+            elseif pn == "Combo"  then
+                local r = math.random(100)
+                pn = r <= 35 and "LowerTorso" or (r <= 85 and "UpperTorso" or "Head")
             end
-            local hp = char:FindFirstChild(pn) or root
-            bestPos = hp.Position
+            bestPart = char:FindFirstChild(pn) or root
         end
     end
-    cachedTargetPos = bestPos
-end)
 
--- Hook raycast igual que SyyClient
-pcall(function()
-    local oldNC
-    oldNC = hookmetamethod(game, "__namecall", newcclosure(function(...)
-        local method = getnamecallmethod()
-        if not S.silent_on or not cachedTargetPos then return oldNC(...) end
-        if checkcaller() then return oldNC(...) end
-        if math.random(100) > S.silent_chance then return oldNC(...) end
-        local args = {...}
-        -- FireServer / InvokeServer (Universal Silent Aim)
-        if method=="FireServer" or method=="InvokeServer" then
-            local myC = player.Character
-            local myR = myC and myC:FindFirstChild("HumanoidRootPart")
-            local replaced = false
-            for i=2, math.min(#args,8) do
-                if typeof(args[i])=="Vector3" then
-                    local v = args[i]
-                    if v.Magnitude > 2 and myR then
-                        local d = (v-myR.Position).Magnitude
-                        if d>5 and d<2000 then args[i]=cachedTargetPos; replaced=true end
-                    end
-                end
-            end
-            if replaced then return oldNC(table.unpack(args)) end
-            return oldNC(...)
-        end
-        -- Raycast
-        if args[1] ~= Workspace then return oldNC(...) end
-        if method=="Raycast" then
-            if typeof(args[2])~="Vector3" or typeof(args[3])~="Vector3" then return oldNC(...) end
-            args[3] = (cachedTargetPos - args[2]).Unit * 1000
-            return oldNC(table.unpack(args))
-        elseif method=="FindPartOnRayWithIgnoreList" or method=="FindPartOnRay" then
-            if typeof(args[2])~="Ray" then return oldNC(...) end
-            local o = args[2].Origin
-            args[2] = Ray.new(o, (cachedTargetPos-o).Unit*1000)
-            return oldNC(table.unpack(args))
-        end
-        return oldNC(...)
-    end))
+    if not bestPart then return end
+
+    -- Proyectar la parte objetivo en pantalla
+    local sp2, onS2 = camera:WorldToViewportPoint(bestPart.Position)
+    if not onS2 then return end
+
+    -- Delta: diferencia entre donde está el cursor y donde está el enemigo
+    local dx = sp2.X - mousePos.X
+    local dy = sp2.Y - mousePos.Y
+
+    -- Suavidad: chance controla qué fracción del delta aplicamos cada frame
+    -- 100% = snap instantáneo, 1% = muy suave
+    local t = math.clamp(S.silent_chance / 100, 0.01, 1)
+    local moveX = dx * t
+    local moveY = dy * t
+
+    if math.abs(dx) > 0.3 or math.abs(dy) > 0.3 then
+        pcall(function()
+            mousemoverel(moveX, moveY)
+        end)
+    end
 end)
 
 RunService:BindToRenderStep("x7sCamLock", Enum.RenderPriority.Camera.Value+1, function()
