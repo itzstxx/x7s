@@ -102,8 +102,11 @@ local function mkDefault()
         CamLockSafeZone = true,
         -- === TARGET ===
         TargetPart = "Random",
-        silent_on = false, silent_chance = 100, silent_key = "X",
-        mouse_lock = false, mouse_lock_key = "Z", mouse_lock_strength = 10,
+        -- === MM2 ===
+        mm2_shoot_key = "H",
+        mm2_esp_key   = "J",
+        mm2_shoot_offset = 2.8,
+
         -- === EXTRAS ===
         InfStamina   = false,
         EspHealthBar = false,
@@ -195,12 +198,7 @@ local Locale = {
 
         camlock_on="Enable Cam Lock",      camlock_on_d="Automatically locks camera on the closest enemy.",
         camlock_key="Cam Lock Keybind",
-        mouse_lock="Mouse Lock",          mouse_lock_d="The cursor physically follows the enemy. Smooth mouse tracking.",
-        mouse_lock_key="Mouse Lock Keybind",
-        mouse_lock_strength="Mouse Lock Speed", mouse_lock_strength_d="How fast the cursor chases the enemy (1-100).",
-        silent_on="Silent Aim",         silent_on_d="Moves cursor onto the enemy inside the FOV. Works on all executors.",
-        silent_chance="Smoothness",      silent_chance_d="100 = instant snap. Lower = smoother follow.",
-        silent_key="Silent Aim Keybind",
+
         fov_on="Enable FOV Circle",    fov_on_d="Only lock enemies inside the FOV circle.",
         fov_visible="Show FOV Circle",  fov_visible_d="Draw the FOV circle on screen.",
         fov_radius="FOV Radius",        fov_radius_d="Size of the FOV circle in pixels.",
@@ -229,6 +227,7 @@ local Locale = {
         st_r1="Reset Toggle UI Keybind",  st_r1_d="Reset this keybind to its default value.",
         st_r2="Reset All Keybinds",       st_r2_d="Reset all keybinds to their default values.",
 
+        mm2_offset="Prediction Offset",
         n_on="Enabled", n_off="Disabled", n_reset="Keybind reset",
     },
     ["Español"] = {
@@ -248,12 +247,7 @@ local Locale = {
         hbx_vis="Visible Check",    hbx_vis_d="Solo registra el hit si el enemigo está a la vista. Evita matar a través de paredes.",
         camlock_on="Activar Cam Lock",      camlock_on_d="Bloquea automáticamente la cámara en el enemigo más cercano.",
         camlock_key="Tecla Cam Lock",
-        mouse_lock="Mouse Lock",          mouse_lock_d="El cursor físicamente sigue al enemigo. Seguimiento suave del mouse.",
-        mouse_lock_key="Tecla Mouse Lock",
-        mouse_lock_strength="Velocidad Mouse Lock", mouse_lock_strength_d="Qué tan rápido el cursor persigue al enemigo (1-100).",
-        silent_on="Silent Aim",         silent_on_d="Mueve el cursor encima del enemigo dentro del FOV. Funciona en todos los executors.",
-        silent_chance="Suavidad",        silent_chance_d="100 = snap instantáneo. Más bajo = seguimiento más suave.",
-        silent_key="Tecla Silent Aim",
+
         fov_on="Activar Círculo FOV",   fov_on_d="Solo bloquea enemigos dentro del círculo FOV.",
         fov_visible="Mostrar Círculo",   fov_visible_d="Dibuja el círculo FOV en pantalla.",
         fov_radius="Radio FOV",          fov_radius_d="Tamaño del círculo FOV en píxeles.",
@@ -278,6 +272,7 @@ local Locale = {
         st_stream="Stream Mode",       st_stream_d="Oculta la GUI y desactiva el ESP visual. Tecla: RightAlt.",
         st_r1="Restablecer Tecla UI",     st_r1_d="Restablece esta tecla a su valor predeterminado.",
         st_r2="Restablecer Todas",        st_r2_d="Restablece todas las teclas a sus valores predeterminados.",
+        mm2_offset="Offset de Predicción",
         n_on="Activado", n_off="Desactivado", n_reset="Tecla restablecida",
     }
 }
@@ -620,12 +615,18 @@ local function makeContentPage()
 end
 
 -- SVG-like icon labels (usando Unicode para los iconos de nav)
+local MM2_GAME_ID = 142823291
+local isMM2 = (game.GameId == MM2_GAME_ID)
+
 local NAV_DATA = {
     { icon = "*", label = "Inicio" },
     { icon = "o", label = "Aim" },
     { icon = "+", label = "Extras" },
     { icon = "#", label = "Ajustes" },
 }
+if isMM2 then
+    table.insert(NAV_DATA, { icon = "M", label = "MM2" })
+end
 
 local function setPage(idx)
     if activePage == idx then return end
@@ -1282,6 +1283,7 @@ local pg_inicio   = pages[1]
 local pg_aim      = pages[2]
 local pg_extras   = pages[3]
 local pg_ajustes  = pages[4]
+local pg_mm2      = isMM2 and pages[5] or nil
 
 -- ══ INICIO PAGE ══════════════════════════════════
 
@@ -1477,28 +1479,6 @@ makeDivider(fovCard)
 makeToggle(fovCard, "fov_visible", "fov_visible_d", "fov_visible")
 makeDivider(fovCard)
 makeSlider(fovCard, "fov_radius", "fov_radius", 20, 400)
-
--- ══ MOUSE LOCK CARD ═════════════════════════════════════════════
-local mouseLockCard = makeCard(pg_aim)
-makeSecHeader(mouseLockCard, "M", "Mouse Lock")
-makeToggle(mouseLockCard, "mouse_lock", "mouse_lock_d", "mouse_lock", function(on)
-    showNotif("✝  Mouse Lock", on and L("n_on") or L("n_off"), on)
-end)
-makeDivider(mouseLockCard)
-makeSlider(mouseLockCard, "mouse_lock_strength", "mouse_lock_strength", 1, 100)
-makeDivider(mouseLockCard)
-makeKeybind(mouseLockCard, "mouse_lock_key", "mouse_lock_key")
-
--- ══ SILENT AIM CARD ════════════════════════════════════════════
-local silentCard = makeCard(pg_aim)
-makeSecHeader(silentCard, "S", "Silent Aim")
-makeToggle(silentCard, "silent_on", "silent_on_d", "silent_on", function(on)
-    showNotif("✝  Silent Aim", on and L("n_on") or L("n_off"), on)
-end)
-makeDivider(silentCard)
-makeSlider(silentCard, "silent_chance", "silent_chance", 1, 100)
-makeDivider(silentCard)
-makeKeybind(silentCard, "silent_key", "silent_key")
 
 -- ══ TARGET (igual a SyyClient - dropdown desplegable) ═════════
 local targetCard = makeCard(pg_aim)
@@ -1897,6 +1877,302 @@ local guiColorRow, guiColorPop = makeColorPicker(cfgCard, "GUI Accent Color",
 
 -- Activar página 1 por defecto
 setPage = setPage  -- referencia correcta (definida arriba con forward)
+
+-- ══════════════════════════════════════════════════════════════
+--  MM2 — Murder Mystery 2 (solo carga si game.GameId == 142823291)
+-- ══════════════════════════════════════════════════════════════
+if isMM2 and pg_mm2 then
+
+    -- Config keys extra
+    if S.mm2_shoot_key == nil then S.mm2_shoot_key = "H" end
+    if S.mm2_esp_key   == nil then S.mm2_esp_key   = "J" end
+    if S.mm2_shoot_offset == nil then S.mm2_shoot_offset = 2.8 end
+
+    local mm2LocalPlayer = Players.LocalPlayer
+    local mm2ESP_on      = false
+    local mm2EspObjects  = {}   -- highlights por jugador
+
+    -- ── Funciones internas ─────────────────────────────────────
+    local function mm2_findMurderer()
+        for _, p in ipairs(Players:GetPlayers()) do
+            if p.Backpack:FindFirstChild("Knife") then return p end
+        end
+        for _, p in ipairs(Players:GetPlayers()) do
+            if p.Character and p.Character:FindFirstChild("Knife") then return p end
+        end
+        return nil
+    end
+
+    local function mm2_findSheriff()
+        for _, p in ipairs(Players:GetPlayers()) do
+            if p.Backpack:FindFirstChild("Gun") then return p end
+        end
+        for _, p in ipairs(Players:GetPlayers()) do
+            if p.Character and p.Character:FindFirstChild("Gun") then return p end
+        end
+        return nil
+    end
+
+    local function mm2_clearESP()
+        for _, hl in pairs(mm2EspObjects) do
+            pcall(function() hl:Destroy() end)
+        end
+        mm2EspObjects = {}
+    end
+
+    local function mm2_buildESP()
+        mm2_clearESP()
+        if not mm2ESP_on then return end
+        local murd  = mm2_findMurderer()
+        local sher  = mm2_findSheriff()
+        for _, p in ipairs(Players:GetPlayers()) do
+            if p == mm2LocalPlayer then continue end
+            if not p.Character then continue end
+            local hl = Instance.new("Highlight")
+            hl.DepthMode    = Enum.HighlightDepthMode.AlwaysOnTop
+            hl.FillTransparency = 0.55
+            hl.Adornee      = p.Character
+            hl.Parent       = game:GetService("CoreGui")
+            if p == murd then
+                hl.FillColor    = Color3.fromRGB(255, 0, 0)
+                hl.OutlineColor = Color3.fromRGB(255, 0, 0)
+            elseif p == sher then
+                hl.FillColor    = Color3.fromRGB(0, 170, 255)
+                hl.OutlineColor = Color3.fromRGB(0, 170, 255)
+            else
+                hl.FillColor    = Color3.fromRGB(0, 220, 80)
+                hl.OutlineColor = Color3.fromRGB(0, 220, 80)
+            end
+            mm2EspObjects[p] = hl
+        end
+    end
+
+    -- Re-build ESP cuando alguien muere o reaparece
+    Players.PlayerAdded:Connect(function(p)
+        p.CharacterAdded:Connect(function()
+            task.wait(0.5)
+            if mm2ESP_on then mm2_buildESP() end
+        end)
+    end)
+    for _, p in ipairs(Players:GetPlayers()) do
+        p.CharacterAdded:Connect(function()
+            task.wait(0.5)
+            if mm2ESP_on then mm2_buildESP() end
+        end)
+    end
+
+    -- ── Shoot murderer ──────────────────────────────────────────
+    local function mm2_shootMurderer()
+        local murd = mm2_findMurderer()
+        if not murd then
+            showNotif("✝  MM2", "No hay asesino detectado.", false)
+            return
+        end
+        local myChar = mm2LocalPlayer.Character
+        if not myChar then return end
+
+        -- Equipar pistola si está en backpack
+        if not myChar:FindFirstChild("Gun") then
+            local hum = myChar:FindFirstChildOfClass("Humanoid")
+            local gun = mm2LocalPlayer.Backpack:FindFirstChild("Gun")
+            if hum and gun then hum:EquipTool(gun) end
+        end
+
+        if not myChar:FindFirstChild("Gun") then
+            showNotif("✝  MM2", "No tienes la pistola.", false)
+            return
+        end
+
+        local murdChar  = murd.Character
+        if not murdChar then return end
+        local murdHRP   = murdChar:FindFirstChild("HumanoidRootPart")
+        if not murdHRP then return end
+
+        -- Predicción de posición
+        local vel       = murdHRP.AssemblyLinearVelocity
+        local hum2      = murdChar:FindFirstChildOfClass("Humanoid")
+        local moveDir   = hum2 and hum2.MoveDirection or Vector3.zero
+        local offset    = S.mm2_shoot_offset
+        local predicted = murdHRP.Position
+            + (vel * Vector3.new(0.75, 0.5, 0.75)) * (offset / 15)
+            + moveDir * offset
+
+        local gun = myChar:FindFirstChild("Gun")
+        local shootRemote = gun and gun:FindFirstChild("Shoot", true)
+
+        if shootRemote and shootRemote:IsA("RemoteEvent") then
+            shootRemote:FireServer(
+                CFrame.new(myChar:FindFirstChild("RightHand") and myChar.RightHand.Position or murdHRP.Position),
+                CFrame.new(predicted)
+            )
+            showNotif("✝  MM2", "Disparo enviado.", true)
+        else
+            showNotif("✝  MM2", "No se encontró el Remote de disparo.", false)
+        end
+    end
+
+    -- ── UI MM2 ──────────────────────────────────────────────────
+
+    -- Card ESP
+    local mm2EspCard = makeCard(pg_mm2)
+    makeSecHeader(mm2EspCard, "o", "ESP — Murder Mystery 2")
+    makeToggle(mm2EspCard, "mm2_esp", nil, nil, function(on)
+        mm2ESP_on = on
+        mm2_buildESP()
+        if not on then mm2_clearESP() end
+        showNotif("✝  MM2 ESP", on and L("n_on") or L("n_off"), on)
+    end)
+    -- Toggle manual (no usa S, usamos estado local mm2ESP_on)
+    -- El makeToggle necesita una clave de S; lo reemplazamos con un toggle raw:
+    -- (Ya está creado arriba con callback — funciona porque el toggle llama el cb)
+
+    makeDivider(mm2EspCard)
+
+    -- Keybind ESP
+    do
+        local row = Instance.new("Frame", mm2EspCard)
+        row.Size = UDim2.new(1, 0, 0, 42); row.BackgroundTransparency = 1
+        local tl = Instance.new("TextLabel", row)
+        tl.Size = UDim2.new(1, -110, 0, 16); tl.Position = UDim2.fromOffset(14, 13)
+        tl.BackgroundTransparency = 1; tl.Text = "Tecla ESP (MM2)"
+        tl.TextColor3 = Color3.fromRGB(215,215,215); tl.Font = Enum.Font.GothamMedium; tl.TextSize = 12
+        tl.TextXAlignment = Enum.TextXAlignment.Left
+        local kbBtn = Instance.new("TextButton", row)
+        kbBtn.Size = UDim2.fromOffset(80, 26); kbBtn.Position = UDim2.new(1, -94, 0.5, -13)
+        kbBtn.BackgroundColor3 = Color3.fromRGB(22,18,32); kbBtn.BorderSizePixel = 0
+        kbBtn.Text = "[" .. S.mm2_esp_key .. "]"
+        kbBtn.TextColor3 = accentColor; kbBtn.Font = Enum.Font.GothamBold; kbBtn.TextSize = 11
+        local kbStroke = Instance.new("UIStroke", kbBtn); kbStroke.Color = accentColor; kbStroke.Thickness = 1
+        local listening = false
+        kbBtn.MouseButton1Click:Connect(function()
+            if listening then return end
+            listening = true
+            kbBtn.Text = "..."
+            local conn
+            conn = UserInputService.InputBegan:Connect(function(inp, proc)
+                if proc then return end
+                if inp.UserInputType == Enum.UserInputType.Keyboard then
+                    S.mm2_esp_key = inp.KeyCode.Name
+                    save()
+                    kbBtn.Text = "[" .. S.mm2_esp_key .. "]"
+                    listening = false
+                    conn:Disconnect()
+                end
+            end)
+        end)
+    end
+
+    makeDivider(mm2EspCard)
+
+    -- Botón Reload ESP
+    do
+        local btn = Instance.new("TextButton", mm2EspCard)
+        btn.Size = UDim2.new(1, 0, 0, 36); btn.BackgroundTransparency = 1; btn.BorderSizePixel = 0
+        btn.Text = "⟳  Recargar ESP"; btn.TextColor3 = accentColor
+        btn.Font = Enum.Font.GothamBold; btn.TextSize = 12; btn.AutoButtonColor = false
+        btn.MouseButton1Click:Connect(function()
+            mm2_buildESP()
+            showNotif("✝  MM2 ESP", "ESP recargado.", true)
+        end)
+    end
+
+    -- Card Shoot Murderer
+    local mm2ShootCard = makeCard(pg_mm2)
+    makeSecHeader(mm2ShootCard, "x", "Disparar al Asesino")
+
+    do
+        local row = Instance.new("Frame", mm2ShootCard)
+        row.Size = UDim2.new(1, 0, 0, 42); row.BackgroundTransparency = 1
+        local tl = Instance.new("TextLabel", row)
+        tl.Size = UDim2.new(1, -110, 0, 16); tl.Position = UDim2.fromOffset(14, 13)
+        tl.BackgroundTransparency = 1; tl.Text = "Tecla Disparar"
+        tl.TextColor3 = Color3.fromRGB(215,215,215); tl.Font = Enum.Font.GothamMedium; tl.TextSize = 12
+        tl.TextXAlignment = Enum.TextXAlignment.Left
+        local kbBtn = Instance.new("TextButton", row)
+        kbBtn.Size = UDim2.fromOffset(80, 26); kbBtn.Position = UDim2.new(1, -94, 0.5, -13)
+        kbBtn.BackgroundColor3 = Color3.fromRGB(22,18,32); kbBtn.BorderSizePixel = 0
+        kbBtn.Text = "[" .. S.mm2_shoot_key .. "]"
+        kbBtn.TextColor3 = accentColor; kbBtn.Font = Enum.Font.GothamBold; kbBtn.TextSize = 11
+        local kbStroke = Instance.new("UIStroke", kbBtn); kbStroke.Color = accentColor; kbStroke.Thickness = 1
+        local listening = false
+        kbBtn.MouseButton1Click:Connect(function()
+            if listening then return end
+            listening = true
+            kbBtn.Text = "..."
+            local conn
+            conn = UserInputService.InputBegan:Connect(function(inp, proc)
+                if proc then return end
+                if inp.UserInputType == Enum.UserInputType.Keyboard then
+                    S.mm2_shoot_key = inp.KeyCode.Name
+                    save()
+                    kbBtn.Text = "[" .. S.mm2_shoot_key .. "]"
+                    listening = false
+                    conn:Disconnect()
+                end
+            end)
+        end)
+    end
+
+    makeDivider(mm2ShootCard)
+
+    -- Slider offset
+    makeSlider(mm2ShootCard, "mm2_offset", "mm2_shoot_offset", 0, 10)
+    local mm2OffsetNote = Instance.new("TextLabel", mm2ShootCard)
+    mm2OffsetNote.Size = UDim2.new(1, 0, 0, 28); mm2OffsetNote.BackgroundTransparency = 1
+    mm2OffsetNote.Text = "Offset de predicción (default 2.8)"
+    mm2OffsetNote.TextColor3 = Color3.fromRGB(90,80,110); mm2OffsetNote.Font = Enum.Font.Gotham
+    mm2OffsetNote.TextSize = 10; mm2OffsetNote.TextWrapped = true
+    mm2OffsetNote.TextXAlignment = Enum.TextXAlignment.Left
+    local mm2OffsetPad = Instance.new("UIPadding", mm2OffsetNote)
+    mm2OffsetPad.PaddingLeft = UDim.new(0,14)
+
+    makeDivider(mm2ShootCard)
+
+    -- Botón manual
+    do
+        local btn = Instance.new("TextButton", mm2ShootCard)
+        btn.Size = UDim2.new(1, 0, 0, 36); btn.BackgroundTransparency = 1; btn.BorderSizePixel = 0
+        btn.Text = "✝  Disparar ahora"; btn.TextColor3 = accentColor
+        btn.Font = Enum.Font.GothamBold; btn.TextSize = 12; btn.AutoButtonColor = false
+        btn.MouseButton1Click:Connect(mm2_shootMurderer)
+    end
+
+    -- Card Info
+    local mm2InfoCard = makeCard(pg_mm2)
+    makeSecHeader(mm2InfoCard, "i", "Info Roles")
+
+    do
+        local infoLbl = Instance.new("TextLabel", mm2InfoCard)
+        infoLbl.Size = UDim2.new(1, 0, 0, 0); infoLbl.AutomaticSize = Enum.AutomaticSize.Y
+        infoLbl.BackgroundTransparency = 1
+        infoLbl.Text = "Rojo = Asesino   Azul = Sheriff   Verde = Inocente"
+        infoLbl.TextColor3 = Color3.fromRGB(150,140,170); infoLbl.Font = Enum.Font.Gotham
+        infoLbl.TextSize = 11; infoLbl.TextWrapped = true
+        infoLbl.TextXAlignment = Enum.TextXAlignment.Left
+        local pad = Instance.new("UIPadding", infoLbl)
+        pad.PaddingLeft=UDim.new(0,14); pad.PaddingRight=UDim.new(0,14)
+        pad.PaddingTop=UDim.new(0,10); pad.PaddingBottom=UDim.new(0,10)
+    end
+
+    -- ── Keybinds MM2 ────────────────────────────────────────────
+    UserInputService.InputBegan:Connect(function(inp, proc)
+        if proc then return end
+        if inp.UserInputType ~= Enum.UserInputType.Keyboard then return end
+        local kn = inp.KeyCode.Name
+
+        if kn == S.mm2_esp_key then
+            mm2ESP_on = not mm2ESP_on
+            if mm2ESP_on then mm2_buildESP() else mm2_clearESP() end
+            showNotif("✝  MM2 ESP", mm2ESP_on and L("n_on") or L("n_off"), mm2ESP_on)
+        end
+
+        if kn == S.mm2_shoot_key then
+            mm2_shootMurderer()
+        end
+    end)
+
+end -- fin bloque isMM2
+
 pages[1].Visible = true
 navBtns[1].BackgroundColor3 = Color3.fromRGB(36,30,46)
 navBtns[1].BackgroundTransparency = 0.5
@@ -2655,87 +2931,6 @@ RunService.RenderStepped:Connect(function()
 end)
 
 
--- ══════════════════════════════════════════════
---  SILENT AIM — FOV cursor (funciona en todos los executors)
---  Mueve el cursor encima del enemigo cuando está dentro del FOV.
---  Cuando disparas, tu cursor YA está sobre él → hit garantizado.
--- ══════════════════════════════════════════════
-RunService:BindToRenderStep("x7sSilentAim", Enum.RenderPriority.Input.Value + 2, function()
-    if not S.silent_on then return end
-    if not mousemoverel then return end
-
-    local myChar = player.Character
-    local myRoot = myChar and myChar:FindFirstChild("HumanoidRootPart")
-    local mousePos = UserInputService:GetMouseLocation()
-    local fovLimit = S.fov_on and S.fov_radius or math.huge
-
-    -- Buscar el enemigo más cercano al cursor dentro del FOV
-    local bestPart = nil
-    local bestDist = math.huge
-
-    for _, p in ipairs(_plrList) do
-        if shouldSkipPlayer(p) then continue end
-        local char = p.Character; if not char then continue end
-        local hum = char:FindFirstChildOfClass("Humanoid")
-        local root = char:FindFirstChild("HumanoidRootPart")
-        if not hum or hum.Health <= 0 or not root then continue end
-
-        -- Solo si está en pantalla
-        local sp, onS = camera:WorldToViewportPoint(root.Position)
-        if not onS then continue end
-
-        -- Distancia del cursor al enemigo en pantalla
-        local d2 = (Vector2.new(sp.X, sp.Y) - mousePos).Magnitude
-        if d2 > fovLimit then continue end
-
-        -- Wall check
-        if S.CamLockWallCheck and myChar then
-            local ok, obs = pcall(function()
-                return camera:GetPartsObscuringTarget({root.Position}, {myChar, char})
-            end)
-            if ok and #obs > 0 then continue end
-        end
-
-        if d2 < bestDist then
-            bestDist = d2
-            -- Resolver Target Part
-            local pn = S.TargetPart or "UpperTorso"
-            if pn == "Random" then
-                local r = math.random(100)
-                pn = r <= 30 and "Head" or (r <= 80 and "UpperTorso" or "LowerTorso")
-            elseif pn == "Pierna" then pn = "LowerTorso"
-            elseif pn == "Pecho"  then pn = "UpperTorso"
-            elseif pn == "Combo"  then
-                local r = math.random(100)
-                pn = r <= 35 and "LowerTorso" or (r <= 85 and "UpperTorso" or "Head")
-            end
-            bestPart = char:FindFirstChild(pn) or root
-        end
-    end
-
-    if not bestPart then return end
-
-    -- Proyectar la parte objetivo en pantalla
-    local sp2, onS2 = camera:WorldToViewportPoint(bestPart.Position)
-    if not onS2 then return end
-
-    -- Delta: diferencia entre donde está el cursor y donde está el enemigo
-    local dx = sp2.X - mousePos.X
-    local dy = sp2.Y - mousePos.Y
-
-    -- Suavidad: chance controla qué fracción del delta aplicamos cada frame
-    -- 100% = snap instantáneo, 1% = muy suave
-    local t = math.clamp(S.silent_chance / 100, 0.01, 1)
-    local moveX = dx * t
-    local moveY = dy * t
-
-    if math.abs(dx) > 0.3 or math.abs(dy) > 0.3 then
-        pcall(function()
-            mousemoverel(moveX, moveY)
-        end)
-    end
-end)
-
 RunService:BindToRenderStep("x7sCamLock", Enum.RenderPriority.Camera.Value+1, function()
     pcall(function()
     if not S.CamLockEnabled then camLockTarget=nil; return end
@@ -2779,75 +2974,6 @@ RunService:BindToRenderStep("x7sCamLock", Enum.RenderPriority.Camera.Value+1, fu
     end)
 end)
 
-
--- ══════════════════════════════════════════════
---  MOUSE LOCK (cursor físicamente sigue al enemigo)
--- ══════════════════════════════════════════════
-RunService:BindToRenderStep("x7sMouseLock", Enum.RenderPriority.Input.Value + 1, function()
-    if not S.mouse_lock then return end
-    if not mousemoverel then return end
-
-    local myChar = player.Character
-    local myRoot = myChar and myChar:FindFirstChild("HumanoidRootPart")
-    local bestRoot = nil
-    local bestDist = math.huge
-    local vp = camera.ViewportSize
-    local center2D = Vector2.new(vp.X * 0.5, vp.Y * 0.5)
-    local fovLimit = S.fov_on and S.fov_radius or math.huge
-
-    for _, p in ipairs(_plrList) do
-        if shouldSkipPlayer(p) then continue end
-        local char = p.Character; if not char then continue end
-        local hum = char:FindFirstChildOfClass("Humanoid")
-        local root = char:FindFirstChild("HumanoidRootPart")
-        if not hum or hum.Health <= 0 or not root then continue end
-        local sp, onS = camera:WorldToViewportPoint(root.Position)
-        if not onS then continue end
-        local d2 = (Vector2.new(sp.X, sp.Y) - center2D).Magnitude
-        if d2 > fovLimit then continue end
-        local dist3D = myRoot and (root.Position - myRoot.Position).Magnitude or math.huge
-        if dist3D > S.CamLockRange then continue end
-        if S.CamLockWallCheck and myChar then
-            local ok, obs = pcall(function()
-                return camera:GetPartsObscuringTarget({root.Position}, {myChar, char})
-            end)
-            if ok and #obs > 0 then continue end
-        end
-        if d2 < bestDist then bestDist = d2; bestRoot = root end
-    end
-
-    if not bestRoot then return end
-
-    -- Obtener posición 2D del objetivo en pantalla
-    local pn = S.TargetPart or "UpperTorso"
-    if pn == "Random" then pn = "UpperTorso"
-    elseif pn == "Pierna" then pn = "LowerTorso"
-    elseif pn == "Pecho" then pn = "UpperTorso"
-    elseif pn == "Combo" then pn = "UpperTorso" end
-
-    local targetPart = bestRoot.Parent and bestRoot.Parent:FindFirstChild(pn) or bestRoot
-    local sp2, onS2 = camera:WorldToViewportPoint(targetPart.Position)
-    if not onS2 then return end
-
-    local targetScreen = Vector2.new(sp2.X, sp2.Y)
-    local mousePos = UserInputService:GetMouseLocation()
-
-    -- Delta = diferencia entre cursor actual y donde está el enemigo
-    local dx = targetScreen.X - mousePos.X
-    local dy = targetScreen.Y - mousePos.Y
-
-    -- Aplicar suavidad con strength
-    local speed = math.clamp(S.mouse_lock_strength, 1, 100) * 0.05
-    local moveX = dx * speed
-    local moveY = dy * speed
-
-    -- Solo mover si la diferencia es significativa (evita jitter)
-    if math.abs(dx) > 0.5 or math.abs(dy) > 0.5 then
-        pcall(function()
-            mousemoverel(moveX, moveY)
-        end)
-    end
-end)
 
 -- ══════════════════════════════════════════════
 --  KEYBINDS globales
@@ -2898,22 +3024,6 @@ UserInputService.InputBegan:Connect(function(inp, proc)
                 if obj.selBox then obj.selBox.Visible = false end
             end
         end
-        return
-    end
-
-    -- Toggle Mouse Lock
-    if kn == S.mouse_lock_key then
-        S.mouse_lock = not S.mouse_lock; save()
-        if refreshers["mouse_lock"] then refreshers["mouse_lock"]() end
-        showNotif("✝  Mouse Lock", S.mouse_lock and L("n_on") or L("n_off"), S.mouse_lock)
-        return
-    end
-
-    -- Toggle Silent Aim
-    if kn == S.silent_key then
-        S.silent_on = not S.silent_on; save()
-        if refreshers["silent_on"] then refreshers["silent_on"]() end
-        showNotif("✝  Silent Aim", S.silent_on and L("n_on") or L("n_off"), S.silent_on)
         return
     end
 
@@ -2986,4 +3096,4 @@ task.spawn(function()
     end
 end)
 
-print("   "..S.gui_key.." = GUI  ·  "..S.esp_key.." = ESP  ·  "..S.hbx_key.." = HBX  ·  "..S.camlock_key.." = CamLock  ·  "..S.silent_key.." = SilentAim  ·  "..S.mouse_lock_key.." = MouseLock")
+print("   "..S.gui_key.." = GUI  ·  "..S.esp_key.." = ESP  ·  "..S.hbx_key.." = HBX  ·  "..S.camlock_key.." = CamLock")
