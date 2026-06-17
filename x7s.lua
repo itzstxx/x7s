@@ -2580,26 +2580,32 @@ local camLockTarget=nil
 
 
 -- ══════════════════════════════════════════════
---  FOV CIRCLE (Drawing)
+--  FOV CIRCLE (ImageLabel - siempre funciona)
 -- ══════════════════════════════════════════════
-local fovCircle = nil
-if HAS_DRAWING then
-    fovCircle = Drawing.new("Circle")
-    fovCircle.Visible    = false
-    fovCircle.Thickness  = 1.5
-    fovCircle.Color      = Color3.fromRGB(255, 255, 255)
-    fovCircle.Transparency = 0
-    fovCircle.Filled     = false
-    fovCircle.NumSides   = 64
-    fovCircle.Radius     = S.fov_radius
-end
+local fovContainer = Instance.new("Frame", gui)
+fovContainer.Name = "x7sFovCircle"
+fovContainer.BackgroundTransparency = 1
+fovContainer.BorderSizePixel = 0
+fovContainer.Size = UDim2.fromOffset(0, 0)
+fovContainer.Position = UDim2.fromOffset(0, 0)
+fovContainer.ZIndex = 998
+fovContainer.Visible = false
+
+local fovImg = Instance.new("ImageLabel", fovContainer)
+fovImg.Name = "FovImg"
+fovImg.BackgroundTransparency = 1
+fovImg.Image = "rbxassetid://2454009026"  -- ring/circulo
+fovImg.ImageTransparency = 0
+fovImg.ScaleType = Enum.ScaleType.Fit
+fovImg.BorderSizePixel = 0
+fovImg.ZIndex = 999
 
 local function getFovCenter()
     return UserInputService:GetMouseLocation()
 end
 
 local function isInFov(root)
-    if not S.fov_on then return true end  -- si FOV off, todos pasan
+    if not S.fov_on then return true end
     local sp, onScreen = camera:WorldToViewportPoint(root.Position)
     if not onScreen then return false end
     local center = getFovCenter()
@@ -2609,14 +2615,14 @@ local function isInFov(root)
 end
 
 RunService.RenderStepped:Connect(function()
-    if not fovCircle then return end
-    local show = S.fov_visible  -- visible independientemente de si el filtro está ON
-    fovCircle.Visible = show
-    if show then
-        fovCircle.Radius = S.fov_radius
-        fovCircle.Position = getFovCenter()
-        -- Blanco si FOV filtro OFF, color acento si está ON
-        fovCircle.Color = S.fov_on and accentColor or Color3.fromRGB(180, 180, 180)
+    fovContainer.Visible = S.fov_visible
+    if S.fov_visible then
+        local mp = getFovCenter()
+        local r = S.fov_radius
+        fovContainer.Position = UDim2.fromOffset(mp.X, mp.Y)
+        fovImg.Size = UDim2.fromOffset(r * 2, r * 2)
+        fovImg.Position = UDim2.fromOffset(-r, -r)
+        fovImg.ImageColor3 = S.fov_on and accentColor or Color3.fromRGB(200, 200, 200)
     end
 end)
 
