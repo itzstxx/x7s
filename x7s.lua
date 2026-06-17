@@ -1315,6 +1315,10 @@ statusLbl.BackgroundTransparency=1; statusLbl.Text="ONLINE"
 statusLbl.TextColor3=Color3.fromRGB(42,42,42); statusLbl.Font=Enum.Font.GothamBold
 statusLbl.TextSize=7; statusLbl.TextXAlignment=Enum.TextXAlignment.Right
 
+-- BUGFIX: espObjects se declara aquí (antes era local más abajo, lo que hacía
+-- que estos toggles vieran una variable global distinta y nunca la encontraran).
+local espObjects = {}
+
 -- ── ESP + HBX en una sola columna funcional ───────
 local espCard = makeCard(pg_inicio)
 makeSecHeader(espCard, "†", "ESP")
@@ -1883,7 +1887,7 @@ end
 -- ══════════════════════════════════════════════
 --  CHARACTER ESP — Highlight por partes + Avatar
 -- ══════════════════════════════════════════════
-local espObjects = {}
+-- (espObjects ya fue declarado arriba, antes de los toggles del ESP)
 
 local BODY_PARTS = {"Head","Torso","UpperTorso","LowerTorso","LeftArm","RightArm",
     "LeftLeg","RightLeg","LeftUpperArm","LeftLowerArm","LeftHand",
@@ -2281,6 +2285,7 @@ Players.PlayerRemoving:Connect(function() task.defer(function() _plrList = Playe
 -- ══════════════════════════════════════════════
 local _frame = 0
 RunService.RenderStepped:Connect(function()
+    local _ok, _err = pcall(function()
     _frame = _frame + 1
     -- Avanzar el hue del arcoíris cada frame
     if S.esp_rainbow then
@@ -2532,6 +2537,10 @@ RunService.RenderStepped:Connect(function()
 
         obj.hbx.Visible = false
     end
+    end)
+    if not _ok then
+        warn("[x7s] Error en RenderStepped (frame ".._frame.."): ".. tostring(_err))
+    end
 end)
 
 -- ══════════════════════════════════════════════
@@ -2540,6 +2549,7 @@ end)
 local camLockTarget=nil
 
 RunService:BindToRenderStep("x7sCamLock", Enum.RenderPriority.Camera.Value+1, function()
+    pcall(function()
     if not S.CamLockEnabled then camLockTarget=nil; return end
 
     local myChar=player.Character
@@ -2575,6 +2585,7 @@ RunService:BindToRenderStep("x7sCamLock", Enum.RenderPriority.Camera.Value+1, fu
     if newLook.Magnitude>0.01 then
         camera.CFrame=CFrame.lookAt(camPos,camPos+newLook.Unit)
     end
+    end)
 end)
 
 -- ══════════════════════════════════════════════
