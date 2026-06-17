@@ -2610,12 +2610,13 @@ end
 
 RunService.RenderStepped:Connect(function()
     if not fovCircle then return end
-    local show = S.fov_on and S.fov_visible
+    local show = S.fov_visible  -- visible independientemente de si el filtro está ON
     fovCircle.Visible = show
     if show then
         fovCircle.Radius = S.fov_radius
         fovCircle.Position = getFovCenter()
-        fovCircle.Color = accentColor
+        -- Blanco si FOV filtro OFF, color acento si está ON
+        fovCircle.Color = S.fov_on and accentColor or Color3.fromRGB(180, 180, 180)
     end
 end)
 
