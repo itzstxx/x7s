@@ -47,7 +47,7 @@ if MaintenanceEnabled then
     _sm.Font=Enum.Font.GothamBold; _sm.TextSize=20; _sm.TextXAlignment=Enum.TextXAlignment.Left
     local _cb=Instance.new("TextButton",_m); _cb.Size=UDim2.fromOffset(30,30)
     _cb.Position=UDim2.new(1,-40,0,10); _cb.BackgroundColor3=Color3.fromRGB(30,22,42)
-    _cb.BorderSizePixel=0; _cb.Text="✕"; _cb.TextColor3=Color3.fromRGB(200,170,220)
+    _cb.BorderSizePixel=0; _cb.Text="x"; _cb.TextColor3=Color3.fromRGB(200,170,220)
     _cb.Font=Enum.Font.GothamBold; _cb.TextSize=13
     Instance.new("UICorner",_cb).CornerRadius=UDim.new(1,0)
     _cb.MouseButton1Click:Connect(function()
@@ -481,7 +481,7 @@ guiKeyLbl.TextSize = 8; guiKeyLbl.TextXAlignment = Enum.TextXAlignment.Left
 local closeBtn = Instance.new("TextButton", header)
 closeBtn.Size = UDim2.fromOffset(22, 22); closeBtn.Position = UDim2.new(1, -30, 0.5, -11)
 closeBtn.BackgroundColor3 = Color3.fromRGB(26, 10, 26)
-closeBtn.BorderSizePixel = 0; closeBtn.Text = "✕"
+closeBtn.BorderSizePixel = 0; closeBtn.Text = "x"
 closeBtn.TextColor3 = Color3.fromRGB(102, 102, 102)
 closeBtn.Font = Enum.Font.GothamBold; closeBtn.TextSize = 11; closeBtn.AutoButtonColor = false
 local closeStroke = Instance.new("UIStroke", closeBtn)
@@ -1067,7 +1067,7 @@ local function makeResetBtn(parent, titleKey, descKey, cb)
     rBtn.Size = UDim2.fromOffset(28, 28)
     rBtn.Position = UDim2.new(1, -42, 0.5, -14)
     rBtn.BackgroundColor3 = Color3.fromRGB(30,30,30); rBtn.BorderSizePixel = 0
-    rBtn.Text = "↺"; rBtn.TextColor3 = accentColor
+    rBtn.Text = "R"; rBtn.TextColor3 = accentColor
     rBtn.Font = Enum.Font.GothamBold; rBtn.TextSize = 16; rBtn.AutoButtonColor = false
     local rbs = Instance.new("UIStroke", rBtn); rbs.Color = Color3.fromRGB(58,58,58); rbs.Thickness = 1
     rBtn.MouseEnter:Connect(function() rbs.Color = accentColor end)
@@ -1104,7 +1104,7 @@ local function makeDropdown(parent, titleKey, stateKey, options, cb)
 
     local arrowLbl = Instance.new("TextLabel", row)
     arrowLbl.Size = UDim2.fromOffset(14, 16); arrowLbl.Position = UDim2.new(1, -18, 0, 13)
-    arrowLbl.BackgroundTransparency = 1; arrowLbl.Text = "▾"
+    arrowLbl.BackgroundTransparency = 1; arrowLbl.Text = "v"
     arrowLbl.TextColor3 = Color3.fromRGB(85,85,85); arrowLbl.Font = Enum.Font.GothamBold; arrowLbl.TextSize = 10
 
     local optH = 32
@@ -1128,7 +1128,7 @@ local function makeDropdown(parent, titleKey, stateKey, options, cb)
             end
             TweenService:Create(dropFrame, TIF, {Size=UDim2.new(1,0,0,0)}):Play()
             task.delay(0.25, function() dropFrame.Visible=false end)
-            container.Size = UDim2.new(1,0,0,42); arrowLbl.Text = "▾"
+            container.Size = UDim2.new(1,0,0,42); arrowLbl.Text = "v"
             save(); if cb then cb(opt) end
         end)
     end
@@ -1141,11 +1141,11 @@ local function makeDropdown(parent, titleKey, stateKey, options, cb)
         if open then
             dropFrame.Visible=true; dropFrame.Size=UDim2.new(1,0,0,0)
             TweenService:Create(dropFrame, TIF, {Size=UDim2.new(1,0,0,#options*optH)}):Play()
-            container.Size=UDim2.new(1,0,0,42+#options*optH); arrowLbl.Text="▴"
+            container.Size=UDim2.new(1,0,0,42+#options*optH); arrowLbl.Text="^"
         else
             TweenService:Create(dropFrame, TIF, {Size=UDim2.new(1,0,0,0)}):Play()
             task.delay(0.25, function() dropFrame.Visible=false end)
-            container.Size=UDim2.new(1,0,0,42); arrowLbl.Text="▾"
+            container.Size=UDim2.new(1,0,0,42); arrowLbl.Text="v"
         end
     end)
     return container
@@ -1438,7 +1438,7 @@ makeDropdown(targetCard, "target_part", "TargetPart", {"Head","UpperTorso","Lowe
 
 -- ══ WHITELIST (igual a SyyClient - dropdown con lista del servidor) ══
 local whitelistCard = makeCard(pg_aim)
-makeSecHeader(whitelistCard, "✓", "Whitelist")
+makeSecHeader(whitelistCard, "x", "Whitelist")
 
 do
     -- ── Fila "Jugadores en servidor" + botón Refresh ──────────
@@ -1482,7 +1482,7 @@ do
     -- Header dropdown toggle button (arrow)
     local arrowLbl = Instance.new("TextLabel", headerRow)
     arrowLbl.Size=UDim2.fromOffset(14,WL_ENTRY_H); arrowLbl.Position=UDim2.new(1,-16,0,0)
-    arrowLbl.BackgroundTransparency=1; arrowLbl.Text="▾"
+    arrowLbl.BackgroundTransparency=1; arrowLbl.Text="v"
     arrowLbl.TextColor3=accentColor; arrowLbl.Font=Enum.Font.GothamBold; arrowLbl.TextSize=10
 
     -- ── Lista en whitelist (guardada) ──────────────────────────
@@ -1510,13 +1510,13 @@ do
             local eStroke=Instance.new("UIStroke",e); eStroke.Color=Color3.fromRGB(58,50,80); eStroke.Thickness=1
             local nl=Instance.new("TextLabel",e)
             nl.Size=UDim2.new(1,-38,1,0); nl.Position=UDim2.fromOffset(6,0)
-            nl.BackgroundTransparency=1; nl.Text="✓ "..name
+            nl.BackgroundTransparency=1; nl.Text="+ "..name
             nl.TextColor3=accentColor; nl.Font=Enum.Font.GothamMedium
             nl.TextSize=11; nl.TextXAlignment=Enum.TextXAlignment.Left
             local db=Instance.new("TextButton",e)
             db.Size=UDim2.fromOffset(22,20); db.Position=UDim2.new(1,-26,0.5,-10)
             db.BackgroundColor3=Color3.fromRGB(40,8,8); db.BorderSizePixel=0
-            db.Text="✕"; db.TextColor3=Color3.fromRGB(255,80,80)
+            db.Text="x"; db.TextColor3=Color3.fromRGB(255,80,80)
             db.Font=Enum.Font.GothamBold; db.TextSize=11; db.AutoButtonColor=false
             local dbStroke=Instance.new("UIStroke",db); dbStroke.Color=Color3.fromRGB(100,20,20); dbStroke.Thickness=1
             db.MouseButton1Click:Connect(function()
@@ -1548,7 +1548,7 @@ do
             local function refreshTogBtn()
                 if isWhitelisted(p) then
                     togBtn.BackgroundColor3=Color3.fromRGB(40,8,8)
-                    togBtn.TextColor3=Color3.fromRGB(255,80,80); togBtn.Text="✕ Quitar"
+                    togBtn.TextColor3=Color3.fromRGB(255,80,80); togBtn.Text="x Quitar"
                     local ts=togBtn:FindFirstChildOfClass("UIStroke")
                     if ts then ts.Color=Color3.fromRGB(100,20,20) else
                         local ns=Instance.new("UIStroke",togBtn); ns.Color=Color3.fromRGB(100,20,20); ns.Thickness=1 end
@@ -1587,12 +1587,12 @@ do
             serverDropFrame.Visible = true; serverDropFrame.Size=UDim2.new(1,0,0,0)
             TweenService:Create(serverDropFrame, TIF, {Size=UDim2.new(1,0,0,totalH)}):Play()
             serverContainer.Size = UDim2.new(1,0,0,totalH)
-            arrowLbl.Text = "▴"
+            arrowLbl.Text = "^"
         else
             TweenService:Create(serverDropFrame, TIF, {Size=UDim2.new(1,0,0,0)}):Play()
             task.delay(0.25, function() serverDropFrame.Visible=false end)
             serverContainer.Size = UDim2.new(1,0,0,0)
-            arrowLbl.Text = "▾"
+            arrowLbl.Text = "v"
         end
     end
 
