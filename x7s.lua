@@ -94,7 +94,7 @@ local function mkDefault()
         Whitelist={},
         -- === CAM LOCK ===
         CamLockEnabled = false,
-        CamLockStrength = 10,
+        CamLockStrength = 30,
         CamLockRange = 150,
         CamLockWallCheck = true,
         camlock_key = "F",
@@ -2580,28 +2580,19 @@ local camLockTarget=nil
 
 
 -- ══════════════════════════════════════════════
---  FOV CIRCLE (ImageLabel - siempre funciona)
+--  FOV CIRCLE (igual a SyyClient)
 -- ══════════════════════════════════════════════
-local fovContainer = Instance.new("Frame", gui)
-fovContainer.Name = "x7sFovCircle"
-fovContainer.BackgroundTransparency = 1
-fovContainer.BorderSizePixel = 0
-fovContainer.Size = UDim2.fromOffset(0, 0)
-fovContainer.Position = UDim2.fromOffset(0, 0)
-fovContainer.ZIndex = 998
-fovContainer.Visible = false
-
-local fovImg = Instance.new("ImageLabel", fovContainer)
-fovImg.Name = "FovImg"
-fovImg.BackgroundTransparency = 1
-fovImg.Image = "rbxassetid://2454009026"  -- ring/circulo
-fovImg.ImageTransparency = 0
-fovImg.ScaleType = Enum.ScaleType.Fit
-fovImg.BorderSizePixel = 0
-fovImg.ZIndex = 999
+local fovCircle = Drawing.new("Circle")
+fovCircle.Visible      = false
+fovCircle.Thickness    = 1.5
+fovCircle.Filled       = false
+fovCircle.NumSides     = 64
+fovCircle.Color        = Color3.fromRGB(141, 122, 174)  -- morado acento
 
 local function getFovCenter()
-    return UserInputService:GetMouseLocation()
+    -- Centro de pantalla, igual que SyyClient
+    local vp = camera.ViewportSize
+    return Vector2.new(vp.X * 0.5, vp.Y * 0.5)
 end
 
 local function isInFov(root)
@@ -2615,14 +2606,15 @@ local function isInFov(root)
 end
 
 RunService.RenderStepped:Connect(function()
-    fovContainer.Visible = S.fov_visible
+    -- Visible solo cuando fov_visible está ON (independiente del filtro)
+    fovCircle.Visible = S.fov_visible
     if S.fov_visible then
-        local mp = getFovCenter()
-        local r = S.fov_radius
-        fovContainer.Position = UDim2.fromOffset(mp.X, mp.Y)
-        fovImg.Size = UDim2.fromOffset(r * 2, r * 2)
-        fovImg.Position = UDim2.fromOffset(-r, -r)
-        fovImg.ImageColor3 = S.fov_on and accentColor or Color3.fromRGB(200, 200, 200)
+        fovCircle.Position = getFovCenter()
+        fovCircle.Radius   = S.fov_radius
+        -- Morado cuando filtro ON, gris cuando solo visual
+        fovCircle.Color = S.fov_on
+            and Color3.fromRGB(141, 122, 174)   -- morado
+            or  Color3.fromRGB(110, 110, 110)    -- gris
     end
 end)
 
@@ -2661,7 +2653,7 @@ RunService:BindToRenderStep("x7sCamLock", Enum.RenderPriority.Camera.Value+1, fu
     local targetPos=Vector3.new(bestRoot.Position.X,bestRoot.Position.Y+1.5,bestRoot.Position.Z)
     local rawDir=targetPos-camPos
     if rawDir.Magnitude<0.1 then return end
-    local strength=math.clamp(S.CamLockStrength,1,100)*0.012
+    local strength=math.clamp(S.CamLockStrength,1,100)*0.003
     local newLook=camera.CFrame.LookVector:Lerp(rawDir.Unit,strength)
     if newLook.Magnitude>0.01 then
         camera.CFrame=CFrame.lookAt(camPos,camPos+newLook.Unit)
