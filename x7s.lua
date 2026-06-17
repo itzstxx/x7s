@@ -1882,292 +1882,244 @@ setPage = setPage  -- referencia correcta (definida arriba con forward)
 -- ══════════════════════════════════════════════════════════════
 if isMM2 and pg_mm2 then
 
-    -- Config keys extra
-    if S.mm2_shoot_key == nil then S.mm2_shoot_key = "H" end
-    if S.mm2_esp_key   == nil then S.mm2_esp_key   = "J" end
-    if S.mm2_shoot_offset == nil then S.mm2_shoot_offset = 2.8 end
+    -- ── Estado y lógica ────────────────────────────────────────
+    local mm2ESP_on   = false
+    local mm2EspObjs  = {}
 
-    local mm2LocalPlayer = Players.LocalPlayer
-    local mm2ESP_on      = false
-    local mm2EspObjects  = {}   -- highlights por jugador
-
-    -- ── Funciones internas ─────────────────────────────────────
-    local function mm2_findMurderer()
+    local function mm2_findByTool(toolName)
         for _, p in ipairs(Players:GetPlayers()) do
-            if p.Backpack:FindFirstChild("Knife") then return p end
-        end
-        for _, p in ipairs(Players:GetPlayers()) do
-            if p.Character and p.Character:FindFirstChild("Knife") then return p end
-        end
-        return nil
-    end
-
-    local function mm2_findSheriff()
-        for _, p in ipairs(Players:GetPlayers()) do
-            if p.Backpack:FindFirstChild("Gun") then return p end
-        end
-        for _, p in ipairs(Players:GetPlayers()) do
-            if p.Character and p.Character:FindFirstChild("Gun") then return p end
+            if p.Backpack:FindFirstChild(toolName) then return p end
+            if p.Character and p.Character:FindFirstChild(toolName) then return p end
         end
         return nil
     end
 
     local function mm2_clearESP()
-        for _, hl in pairs(mm2EspObjects) do
-            pcall(function() hl:Destroy() end)
-        end
-        mm2EspObjects = {}
+        for _, hl in pairs(mm2EspObjs) do pcall(function() hl:Destroy() end) end
+        mm2EspObjs = {}
     end
 
     local function mm2_buildESP()
         mm2_clearESP()
         if not mm2ESP_on then return end
-        local murd  = mm2_findMurderer()
-        local sher  = mm2_findSheriff()
+        local murd = mm2_findByTool("Knife")
+        local sher = mm2_findByTool("Gun")
         for _, p in ipairs(Players:GetPlayers()) do
-            if p == mm2LocalPlayer then continue end
+            if p == player then continue end
             if not p.Character then continue end
             local hl = Instance.new("Highlight")
-            hl.DepthMode    = Enum.HighlightDepthMode.AlwaysOnTop
-            hl.FillTransparency = 0.55
-            hl.Adornee      = p.Character
-            hl.Parent       = game:GetService("CoreGui")
+            hl.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+            hl.FillTransparency = 0.5
+            hl.Adornee = p.Character
+            hl.Parent = gui
             if p == murd then
-                hl.FillColor    = Color3.fromRGB(255, 0, 0)
-                hl.OutlineColor = Color3.fromRGB(255, 0, 0)
+                hl.FillColor = Color3.fromRGB(255,30,30)
+                hl.OutlineColor = Color3.fromRGB(255,30,30)
             elseif p == sher then
-                hl.FillColor    = Color3.fromRGB(0, 170, 255)
-                hl.OutlineColor = Color3.fromRGB(0, 170, 255)
+                hl.FillColor = Color3.fromRGB(0,160,255)
+                hl.OutlineColor = Color3.fromRGB(0,160,255)
             else
-                hl.FillColor    = Color3.fromRGB(0, 220, 80)
-                hl.OutlineColor = Color3.fromRGB(0, 220, 80)
+                hl.FillColor = Color3.fromRGB(0,220,80)
+                hl.OutlineColor = Color3.fromRGB(0,220,80)
             end
-            mm2EspObjects[p] = hl
+            mm2EspObjs[p] = hl
         end
     end
 
-    -- Re-build ESP cuando alguien muere o reaparece
     Players.PlayerAdded:Connect(function(p)
-        p.CharacterAdded:Connect(function()
-            task.wait(0.5)
-            if mm2ESP_on then mm2_buildESP() end
-        end)
+        p.CharacterAdded:Connect(function() task.wait(0.5); if mm2ESP_on then mm2_buildESP() end end)
     end)
     for _, p in ipairs(Players:GetPlayers()) do
-        p.CharacterAdded:Connect(function()
-            task.wait(0.5)
-            if mm2ESP_on then mm2_buildESP() end
+        p.CharacterAdded:Connect(function() task.wait(0.5); if mm2ESP_on then mm2_buildESP() end end)
+    end
+
+    local function mm2_shoot()
+        local murd = mm2_findByTool("Knife")
+        if not murd then showNotif("✝  MM2", "No hay asesino.", false); return end
+        local myChar = player.Character
+        if not myChar then return end
+        if not myChar:FindFirstChild("Gun") then
+            local hum = myChar:FindFirstChildOfClass("Humanoid")
+            local g = player.Backpack:FindFirstChild("Gun")
+            if hum and g then hum:EquipTool(g) else showNotif("✝  MM2", "No tienes la pistola.", false); return end
+        end
+        local murdChar = murd.Character; if not murdChar then return end
+        local murdHRP  = murdChar:FindFirstChild("HumanoidRootPart"); if not murdHRP then return end
+        local vel      = murdHRP.AssemblyLinearVelocity
+        local hum2     = murdChar:FindFirstChildOfClass("Humanoid")
+        local moveDir  = hum2 and hum2.MoveDirection or Vector3.zero
+        local off      = S.mm2_shoot_offset or 2.8
+        local pred     = murdHRP.Position + (vel * Vector3.new(0.75,0.5,0.75)) * (off/15) + moveDir * off
+        local gun      = myChar:FindFirstChild("Gun")
+        local remote   = gun and gun:FindFirstChild("Shoot", true)
+        if remote and remote:IsA("RemoteEvent") then
+            local rh = myChar:FindFirstChild("RightHand")
+            remote:FireServer(CFrame.new(rh and rh.Position or murdHRP.Position), CFrame.new(pred))
+            showNotif("✝  MM2", "Disparo enviado.", true)
+        else
+            showNotif("✝  MM2", "No se encontró Remote de disparo.", false)
+        end
+    end
+
+    -- ── Helper: toggle raw sin depender de S ─────────────────
+    local function mm2MakeToggle(parent, labelText, getState, onToggle)
+        local row = Instance.new("Frame", parent)
+        row.Size = UDim2.new(1,0,0,42); row.BackgroundTransparency = 1
+        local tl = Instance.new("TextLabel", row)
+        tl.Size = UDim2.new(1,-90,0,16); tl.Position = UDim2.fromOffset(14,13)
+        tl.BackgroundTransparency=1; tl.Text=labelText
+        tl.TextColor3=Color3.fromRGB(215,215,215); tl.Font=Enum.Font.GothamMedium; tl.TextSize=12
+        tl.TextXAlignment=Enum.TextXAlignment.Left
+        -- track
+        local track = Instance.new("Frame", row)
+        track.Size = UDim2.fromOffset(42,22); track.Position = UDim2.new(1,-56,0.5,-11)
+        track.BackgroundColor3 = Color3.fromRGB(38,32,54); track.BorderSizePixel=0
+        local tc = Instance.new("UICorner", track); tc.CornerRadius = UDim.new(1,0)
+        local thumb = Instance.new("Frame", track)
+        thumb.Size = UDim2.fromOffset(16,16); thumb.Position = UDim2.new(0,3,0.5,-8)
+        thumb.BackgroundColor3 = Color3.fromRGB(180,170,200); thumb.BorderSizePixel=0
+        local thc = Instance.new("UICorner", thumb); thc.CornerRadius = UDim.new(1,0)
+        local function refresh()
+            local on = getState()
+            TweenService:Create(track,TweenInfo.new(0.15),{BackgroundColor3=on and accentColor or Color3.fromRGB(38,32,54)}):Play()
+            TweenService:Create(thumb,TweenInfo.new(0.15),{Position=on and UDim2.new(1,-19,0.5,-8) or UDim2.new(0,3,0.5,-8)}):Play()
+        end
+        refresh()
+        local btn = Instance.new("TextButton", row)
+        btn.Size=UDim2.new(1,0,1,0); btn.BackgroundTransparency=1; btn.Text=""
+        btn.MouseButton1Click:Connect(function() onToggle(not getState()); refresh() end)
+        return refresh
+    end
+
+    -- Helper: keybind raw
+    local function mm2MakeKeybind(parent, labelText, getKey, setKey)
+        local row = Instance.new("Frame", parent)
+        row.Size = UDim2.new(1,0,0,42); row.BackgroundTransparency=1
+        local tl = Instance.new("TextLabel", row)
+        tl.Size=UDim2.new(1,-110,0,16); tl.Position=UDim2.fromOffset(14,13)
+        tl.BackgroundTransparency=1; tl.Text=labelText
+        tl.TextColor3=Color3.fromRGB(215,215,215); tl.Font=Enum.Font.GothamMedium; tl.TextSize=12
+        tl.TextXAlignment=Enum.TextXAlignment.Left
+        local kbBtn = Instance.new("TextButton", row)
+        kbBtn.Size=UDim2.fromOffset(80,26); kbBtn.Position=UDim2.new(1,-94,0.5,-13)
+        kbBtn.BackgroundColor3=Color3.fromRGB(22,18,32); kbBtn.BorderSizePixel=0
+        kbBtn.Text="["..getKey().."]"
+        kbBtn.TextColor3=accentColor; kbBtn.Font=Enum.Font.GothamBold; kbBtn.TextSize=11
+        local ks=Instance.new("UIStroke",kbBtn); ks.Color=accentColor; ks.Thickness=1
+        local listening=false
+        kbBtn.MouseButton1Click:Connect(function()
+            if listening then return end; listening=true; kbBtn.Text="..."
+            local conn; conn=UserInputService.InputBegan:Connect(function(inp,proc)
+                if proc then return end
+                if inp.UserInputType==Enum.UserInputType.Keyboard then
+                    setKey(inp.KeyCode.Name); save()
+                    kbBtn.Text="["..getKey().."]"; listening=false; conn:Disconnect()
+                end
+            end)
         end)
     end
 
-    -- ── Shoot murderer ──────────────────────────────────────────
-    local function mm2_shootMurderer()
-        local murd = mm2_findMurderer()
-        if not murd then
-            showNotif("✝  MM2", "No hay asesino detectado.", false)
-            return
-        end
-        local myChar = mm2LocalPlayer.Character
-        if not myChar then return end
-
-        -- Equipar pistola si está en backpack
-        if not myChar:FindFirstChild("Gun") then
-            local hum = myChar:FindFirstChildOfClass("Humanoid")
-            local gun = mm2LocalPlayer.Backpack:FindFirstChild("Gun")
-            if hum and gun then hum:EquipTool(gun) end
-        end
-
-        if not myChar:FindFirstChild("Gun") then
-            showNotif("✝  MM2", "No tienes la pistola.", false)
-            return
-        end
-
-        local murdChar  = murd.Character
-        if not murdChar then return end
-        local murdHRP   = murdChar:FindFirstChild("HumanoidRootPart")
-        if not murdHRP then return end
-
-        -- Predicción de posición
-        local vel       = murdHRP.AssemblyLinearVelocity
-        local hum2      = murdChar:FindFirstChildOfClass("Humanoid")
-        local moveDir   = hum2 and hum2.MoveDirection or Vector3.zero
-        local offset    = S.mm2_shoot_offset
-        local predicted = murdHRP.Position
-            + (vel * Vector3.new(0.75, 0.5, 0.75)) * (offset / 15)
-            + moveDir * offset
-
-        local gun = myChar:FindFirstChild("Gun")
-        local shootRemote = gun and gun:FindFirstChild("Shoot", true)
-
-        if shootRemote and shootRemote:IsA("RemoteEvent") then
-            shootRemote:FireServer(
-                CFrame.new(myChar:FindFirstChild("RightHand") and myChar.RightHand.Position or murdHRP.Position),
-                CFrame.new(predicted)
-            )
-            showNotif("✝  MM2", "Disparo enviado.", true)
-        else
-            showNotif("✝  MM2", "No se encontró el Remote de disparo.", false)
-        end
+    -- Helper: botón simple
+    local function mm2MakeBtn(parent, labelText, cb)
+        local btn = Instance.new("TextButton", parent)
+        btn.Size=UDim2.new(1,0,0,36); btn.BackgroundColor3=Color3.fromRGB(22,18,28)
+        btn.BorderSizePixel=0; btn.Text=labelText
+        btn.TextColor3=accentColor; btn.Font=Enum.Font.GothamBold; btn.TextSize=12
+        btn.AutoButtonColor=false
+        local bs=Instance.new("UIStroke",btn); bs.Color=accentColor; bs.Thickness=1; bs.Transparency=0.7
+        btn.MouseButton1Click:Connect(cb)
     end
 
-    -- ── UI MM2 ──────────────────────────────────────────────────
+    -- ── UI ────────────────────────────────────────────────────
 
     -- Card ESP
     local mm2EspCard = makeCard(pg_mm2)
-    makeSecHeader(mm2EspCard, "o", "ESP — Murder Mystery 2")
-    makeToggle(mm2EspCard, "mm2_esp", nil, nil, function(on)
-        mm2ESP_on = on
-        mm2_buildESP()
-        if not on then mm2_clearESP() end
-        showNotif("✝  MM2 ESP", on and L("n_on") or L("n_off"), on)
+    makeSecHeader(mm2EspCard, "o", "ESP  —  MM2")
+    mm2MakeToggle(mm2EspCard, "Activar ESP", function() return mm2ESP_on end, function(v)
+        mm2ESP_on = v
+        if v then mm2_buildESP() else mm2_clearESP() end
+        showNotif("✝  MM2 ESP", v and "Activado" or "Desactivado", v)
     end)
-    -- Toggle manual (no usa S, usamos estado local mm2ESP_on)
-    -- El makeToggle necesita una clave de S; lo reemplazamos con un toggle raw:
-    -- (Ya está creado arriba con callback — funciona porque el toggle llama el cb)
-
     makeDivider(mm2EspCard)
-
-    -- Keybind ESP
-    do
-        local row = Instance.new("Frame", mm2EspCard)
-        row.Size = UDim2.new(1, 0, 0, 42); row.BackgroundTransparency = 1
-        local tl = Instance.new("TextLabel", row)
-        tl.Size = UDim2.new(1, -110, 0, 16); tl.Position = UDim2.fromOffset(14, 13)
-        tl.BackgroundTransparency = 1; tl.Text = "Tecla ESP (MM2)"
-        tl.TextColor3 = Color3.fromRGB(215,215,215); tl.Font = Enum.Font.GothamMedium; tl.TextSize = 12
-        tl.TextXAlignment = Enum.TextXAlignment.Left
-        local kbBtn = Instance.new("TextButton", row)
-        kbBtn.Size = UDim2.fromOffset(80, 26); kbBtn.Position = UDim2.new(1, -94, 0.5, -13)
-        kbBtn.BackgroundColor3 = Color3.fromRGB(22,18,32); kbBtn.BorderSizePixel = 0
-        kbBtn.Text = "[" .. S.mm2_esp_key .. "]"
-        kbBtn.TextColor3 = accentColor; kbBtn.Font = Enum.Font.GothamBold; kbBtn.TextSize = 11
-        local kbStroke = Instance.new("UIStroke", kbBtn); kbStroke.Color = accentColor; kbStroke.Thickness = 1
-        local listening = false
-        kbBtn.MouseButton1Click:Connect(function()
-            if listening then return end
-            listening = true
-            kbBtn.Text = "..."
-            local conn
-            conn = UserInputService.InputBegan:Connect(function(inp, proc)
-                if proc then return end
-                if inp.UserInputType == Enum.UserInputType.Keyboard then
-                    S.mm2_esp_key = inp.KeyCode.Name
-                    save()
-                    kbBtn.Text = "[" .. S.mm2_esp_key .. "]"
-                    listening = false
-                    conn:Disconnect()
-                end
-            end)
-        end)
-    end
-
+    mm2MakeKeybind(mm2EspCard, "Tecla ESP",
+        function() return S.mm2_esp_key end,
+        function(k) S.mm2_esp_key = k end)
     makeDivider(mm2EspCard)
+    mm2MakeBtn(mm2EspCard, "⟳  Recargar ESP", function()
+        mm2_buildESP(); showNotif("✝  MM2 ESP", "ESP recargado.", true)
+    end)
 
-    -- Botón Reload ESP
-    do
-        local btn = Instance.new("TextButton", mm2EspCard)
-        btn.Size = UDim2.new(1, 0, 0, 36); btn.BackgroundTransparency = 1; btn.BorderSizePixel = 0
-        btn.Text = "⟳  Recargar ESP"; btn.TextColor3 = accentColor
-        btn.Font = Enum.Font.GothamBold; btn.TextSize = 12; btn.AutoButtonColor = false
-        btn.MouseButton1Click:Connect(function()
-            mm2_buildESP()
-            showNotif("✝  MM2 ESP", "ESP recargado.", true)
-        end)
-    end
-
-    -- Card Shoot Murderer
+    -- Card Disparar
     local mm2ShootCard = makeCard(pg_mm2)
     makeSecHeader(mm2ShootCard, "x", "Disparar al Asesino")
+    mm2MakeKeybind(mm2ShootCard, "Tecla Disparar",
+        function() return S.mm2_shoot_key end,
+        function(k) S.mm2_shoot_key = k end)
+    makeDivider(mm2ShootCard)
 
+    -- Offset slider manual (frame simple)
     do
         local row = Instance.new("Frame", mm2ShootCard)
-        row.Size = UDim2.new(1, 0, 0, 42); row.BackgroundTransparency = 1
-        local tl = Instance.new("TextLabel", row)
-        tl.Size = UDim2.new(1, -110, 0, 16); tl.Position = UDim2.fromOffset(14, 13)
-        tl.BackgroundTransparency = 1; tl.Text = "Tecla Disparar"
-        tl.TextColor3 = Color3.fromRGB(215,215,215); tl.Font = Enum.Font.GothamMedium; tl.TextSize = 12
-        tl.TextXAlignment = Enum.TextXAlignment.Left
-        local kbBtn = Instance.new("TextButton", row)
-        kbBtn.Size = UDim2.fromOffset(80, 26); kbBtn.Position = UDim2.new(1, -94, 0.5, -13)
-        kbBtn.BackgroundColor3 = Color3.fromRGB(22,18,32); kbBtn.BorderSizePixel = 0
-        kbBtn.Text = "[" .. S.mm2_shoot_key .. "]"
-        kbBtn.TextColor3 = accentColor; kbBtn.Font = Enum.Font.GothamBold; kbBtn.TextSize = 11
-        local kbStroke = Instance.new("UIStroke", kbBtn); kbStroke.Color = accentColor; kbStroke.Thickness = 1
-        local listening = false
-        kbBtn.MouseButton1Click:Connect(function()
-            if listening then return end
-            listening = true
-            kbBtn.Text = "..."
-            local conn
-            conn = UserInputService.InputBegan:Connect(function(inp, proc)
-                if proc then return end
-                if inp.UserInputType == Enum.UserInputType.Keyboard then
-                    S.mm2_shoot_key = inp.KeyCode.Name
-                    save()
-                    kbBtn.Text = "[" .. S.mm2_shoot_key .. "]"
-                    listening = false
-                    conn:Disconnect()
-                end
-            end)
+        row.Size=UDim2.new(1,0,0,42); row.BackgroundTransparency=1
+        local tl=Instance.new("TextLabel",row)
+        tl.Size=UDim2.new(1,-110,0,16); tl.Position=UDim2.fromOffset(14,13)
+        tl.BackgroundTransparency=1; tl.Text="Offset predicción"
+        tl.TextColor3=Color3.fromRGB(215,215,215); tl.Font=Enum.Font.GothamMedium; tl.TextSize=12
+        tl.TextXAlignment=Enum.TextXAlignment.Left
+        local valLbl=Instance.new("TextLabel",row)
+        valLbl.Size=UDim2.fromOffset(50,16); valLbl.Position=UDim2.new(1,-64,0,13)
+        valLbl.BackgroundTransparency=1; valLbl.Text=tostring(S.mm2_shoot_offset or 2.8)
+        valLbl.TextColor3=Color3.fromRGB(141,122,174); valLbl.Font=Enum.Font.GothamBold; valLbl.TextSize=11
+        valLbl.TextXAlignment=Enum.TextXAlignment.Right
+        -- botones +/-
+        local minus=Instance.new("TextButton",row)
+        minus.Size=UDim2.fromOffset(22,22); minus.Position=UDim2.new(1,-22,0.5,-11)
+        minus.BackgroundColor3=Color3.fromRGB(22,18,28); minus.BorderSizePixel=0
+        minus.Text="-"; minus.TextColor3=accentColor; minus.Font=Enum.Font.GothamBold; minus.TextSize=14
+        minus.MouseButton1Click:Connect(function()
+            S.mm2_shoot_offset=math.max(0, math.floor((S.mm2_shoot_offset or 2.8)*10-1)/10)
+            valLbl.Text=tostring(S.mm2_shoot_offset); save()
+        end)
+        local plus=Instance.new("TextButton",row)
+        plus.Size=UDim2.fromOffset(22,22); plus.Position=UDim2.new(1,-46,0.5,-11)
+        plus.BackgroundColor3=Color3.fromRGB(22,18,28); plus.BorderSizePixel=0
+        plus.Text="+"; plus.TextColor3=accentColor; plus.Font=Enum.Font.GothamBold; plus.TextSize=14
+        plus.MouseButton1Click:Connect(function()
+            S.mm2_shoot_offset=math.min(10, math.floor((S.mm2_shoot_offset or 2.8)*10+1)/10)
+            valLbl.Text=tostring(S.mm2_shoot_offset); save()
         end)
     end
 
     makeDivider(mm2ShootCard)
-
-    -- Slider offset
-    makeSlider(mm2ShootCard, "mm2_offset", "mm2_shoot_offset", 0, 10)
-    local mm2OffsetNote = Instance.new("TextLabel", mm2ShootCard)
-    mm2OffsetNote.Size = UDim2.new(1, 0, 0, 28); mm2OffsetNote.BackgroundTransparency = 1
-    mm2OffsetNote.Text = "Offset de predicción (default 2.8)"
-    mm2OffsetNote.TextColor3 = Color3.fromRGB(90,80,110); mm2OffsetNote.Font = Enum.Font.Gotham
-    mm2OffsetNote.TextSize = 10; mm2OffsetNote.TextWrapped = true
-    mm2OffsetNote.TextXAlignment = Enum.TextXAlignment.Left
-    local mm2OffsetPad = Instance.new("UIPadding", mm2OffsetNote)
-    mm2OffsetPad.PaddingLeft = UDim.new(0,14)
-
-    makeDivider(mm2ShootCard)
-
-    -- Botón manual
-    do
-        local btn = Instance.new("TextButton", mm2ShootCard)
-        btn.Size = UDim2.new(1, 0, 0, 36); btn.BackgroundTransparency = 1; btn.BorderSizePixel = 0
-        btn.Text = "✝  Disparar ahora"; btn.TextColor3 = accentColor
-        btn.Font = Enum.Font.GothamBold; btn.TextSize = 12; btn.AutoButtonColor = false
-        btn.MouseButton1Click:Connect(mm2_shootMurderer)
-    end
+    mm2MakeBtn(mm2ShootCard, "✝  Disparar ahora", mm2_shoot)
 
     -- Card Info
     local mm2InfoCard = makeCard(pg_mm2)
-    makeSecHeader(mm2InfoCard, "i", "Info Roles")
-
+    makeSecHeader(mm2InfoCard, "i", "Info")
     do
-        local infoLbl = Instance.new("TextLabel", mm2InfoCard)
-        infoLbl.Size = UDim2.new(1, 0, 0, 0); infoLbl.AutomaticSize = Enum.AutomaticSize.Y
-        infoLbl.BackgroundTransparency = 1
-        infoLbl.Text = "Rojo = Asesino   Azul = Sheriff   Verde = Inocente"
-        infoLbl.TextColor3 = Color3.fromRGB(150,140,170); infoLbl.Font = Enum.Font.Gotham
-        infoLbl.TextSize = 11; infoLbl.TextWrapped = true
-        infoLbl.TextXAlignment = Enum.TextXAlignment.Left
-        local pad = Instance.new("UIPadding", infoLbl)
+        local lbl=Instance.new("TextLabel",mm2InfoCard)
+        lbl.Size=UDim2.new(1,0,0,0); lbl.AutomaticSize=Enum.AutomaticSize.Y
+        lbl.BackgroundTransparency=1
+        lbl.Text="🔴 Rojo = Asesino     🔵 Azul = Sheriff     🟢 Verde = Inocente\n\nDefault: [J] ESP  ·  [H] Disparar"
+        lbl.TextColor3=Color3.fromRGB(150,140,170); lbl.Font=Enum.Font.Gotham
+        lbl.TextSize=11; lbl.TextWrapped=true; lbl.RichText=false
+        lbl.TextXAlignment=Enum.TextXAlignment.Left
+        local pad=Instance.new("UIPadding",lbl)
         pad.PaddingLeft=UDim.new(0,14); pad.PaddingRight=UDim.new(0,14)
         pad.PaddingTop=UDim.new(0,10); pad.PaddingBottom=UDim.new(0,10)
     end
 
-    -- ── Keybinds MM2 ────────────────────────────────────────────
+    -- ── Keybinds globales MM2 ─────────────────────────────────
     UserInputService.InputBegan:Connect(function(inp, proc)
         if proc then return end
         if inp.UserInputType ~= Enum.UserInputType.Keyboard then return end
         local kn = inp.KeyCode.Name
-
         if kn == S.mm2_esp_key then
             mm2ESP_on = not mm2ESP_on
             if mm2ESP_on then mm2_buildESP() else mm2_clearESP() end
-            showNotif("✝  MM2 ESP", mm2ESP_on and L("n_on") or L("n_off"), mm2ESP_on)
+            showNotif("✝  MM2 ESP", mm2ESP_on and "Activado" or "Desactivado", mm2ESP_on)
         end
-
-        if kn == S.mm2_shoot_key then
-            mm2_shootMurderer()
-        end
+        if kn == S.mm2_shoot_key then mm2_shoot() end
     end)
 
 end -- fin bloque isMM2
