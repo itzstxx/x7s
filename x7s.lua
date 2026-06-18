@@ -106,6 +106,8 @@ local function mkDefault()
         mm2_shoot_key = "H",
         mm2_esp_key   = "J",
         mm2_shoot_offset = 2.8,
+        mm2_esp_dist     = 300,
+        mm2_gunDropESP   = false,
 
         -- === EXTRAS ===
         InfStamina   = false,
@@ -1927,9 +1929,14 @@ if isMM2 and pg_mm2 then
         if not mm2ESP_on then return end
         local murd = mm2_findMurderer()
         local sher = mm2_findSheriff()
+        local myHRP = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
+        local maxDist = S.mm2_esp_dist or 300
         for _, p in ipairs(Players:GetPlayers()) do
             if p == player then continue end
             if not p.Character then continue end
+            -- Filtrar por distancia
+            local pHRP = p.Character:FindFirstChild("HumanoidRootPart")
+            if myHRP and pHRP and (pHRP.Position - myHRP.Position).Magnitude > maxDist then continue end
             local hl = Instance.new("Highlight")
             hl.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
             hl.FillTransparency = 0.5
@@ -1945,6 +1952,12 @@ if isMM2 and pg_mm2 then
             mm2EspObjs[p] = hl
         end
     end
+    -- Actualizar ESP cada 2s para respetar distancia dinamicamente
+    task.spawn(function()
+        while task.wait(2) do
+            if mm2ESP_on then mm2_buildESP() end
+        end
+    end)
     Players.PlayerAdded:Connect(function(p)
         p.CharacterAdded:Connect(function() task.wait(0.5); if mm2ESP_on then mm2_buildESP() end end)
     end)
@@ -1963,7 +1976,7 @@ if isMM2 and pg_mm2 then
         return hrp.Position + (vel*Vector3.new(0.75,0.5,0.75))*(off/15) + md*off
     end
 
-    -- Disparar sheriff
+    -- Disparar sheriff (no falla: teletransporta bala al HRP del murder)
     local function mm2_shoot()
         local murd = mm2_findMurderer()
         if not murd then showNotif("+  MM2","No hay asesino.",false); return end
@@ -1975,14 +1988,31 @@ if isMM2 and pg_mm2 then
         end
         local murdChar=murd.Character; if not murdChar then return end
         local murdHRP=murdChar:FindFirstChild("HumanoidRootPart"); if not murdHRP then return end
-        local pred = mm2_getPred(murd)
         local gun  = myChar:FindFirstChild("Gun")
         local rem  = gun and gun:FindFirstChild("Shoot",true)
         if rem and rem:IsA("RemoteEvent") then
-            local rh=myChar:FindFirstChild("RightHand")
-            rem:FireServer(CFrame.new(rh and rh.Position or murdHRP.Position),CFrame.new(pred))
+            -- Disparo desde el HRP del murder hacia el mismo: hit garantizado
+            local murdPos = murdHRP.Position + Vector3.new(0,1,0)
+            rem:FireServer(CFrame.new(murdPos), CFrame.new(murdHRP.Position))
             showNotif("+  MM2","Disparo enviado.",true)
-        else showNotif("+  MM2","Remote no encontrado.",false) end
+        else
+            -- Fallback: buscar cualquier remote en gun
+            for _, v in ipairs(gun:GetDescendants()) do
+                if v:IsA("RemoteEvent") or v:IsA("RemoteFunction") then
+                    local murdPos = murdHRP.Position + Vector3.new(0,1,0)
+                    pcall(function()
+                        if v:IsA("RemoteEvent") then
+                            v:FireServer(CFrame.new(murdPos), CFrame.new(murdHRP.Position))
+                        else
+                            v:InvokeServer(CFrame.new(murdPos), CFrame.new(murdHRP.Position))
+                        end
+                    end)
+                    showNotif("+  MM2","Disparo (fallback) enviado.",true)
+                    return
+                end
+            end
+            showNotif("+  MM2","Remote no encontrado.",false)
+        end
     end
 
     -- Lanzar cuchillo asesino
@@ -2137,13 +2167,28 @@ if isMM2 and pg_mm2 then
         local thc=Instance.new("UICorner",thumb); thc.CornerRadius=UDim.new(1,0)
         local function refresh()
             local on=getState()
-            TweenService:Create(track,TweenInfo.new(0.15),{BackgroundColor3=on and accentColor or Color3.fromRGB(38,32,54)}):Play()
-            TweenService:Create(thumb,TweenInfo.new(0.15),{Position=on and UDim2.new(1,-19,0.5,-8) or UDim2.new(0,3,0.5,-8)}):Play()
+            local col = on and accentColor or Color3.fromRGB(38,32,54)
+            local pos = on and UDim2.new(1,-19,0.5,-8) or UDim2.new(0,3,0.5,-8)
+            track.BackgroundColor3 = col
+            thumb.Position = pos
+            TweenService:Create(track,TweenInfo.new(0.15),{BackgroundColor3=col}):Play()
+            TweenService:Create(thumb,TweenInfo.new(0.15),{Position=pos}):Play()
         end
         refresh()
         local btn=Instance.new("TextButton",row)
         btn.Size=UDim2.new(1,0,1,0); btn.BackgroundTransparency=1; btn.Text=""
-        btn.MouseButton1Click:Connect(function() onToggle(not getState()); refresh() end)
+        btn.MouseButton1Click:Connect(function()
+            onToggle(not getState())
+            task.defer(refresh) -- defer para que getState() refleje el nuevo valor
+        end)
+        -- Tambien actualizar cuando se activa/desactiva por keybind
+        RunService.Heartbeat:Connect(function()
+            local on=getState()
+            local expectedCol = on and accentColor or Color3.fromRGB(38,32,54)
+            if (track.BackgroundColor3 - expectedCol).Magnitude > 0.01 then
+                refresh()
+            end
+        end)
         return refresh
     end
 
@@ -2234,9 +2279,41 @@ if isMM2 and pg_mm2 then
         function(v) mm2ESP_on=v; if v then mm2_buildESP() else mm2_clearESP() end
             showNotif("+  MM2 ESP",v and "Activado" or "Desactivado",v) end)
     mm2Divider(espCard)
+    -- Gun Drop ESP
+    local mm2GunDropHL = nil
+    local function mm2_clearGunESP()
+        if mm2GunDropHL then pcall(function() mm2GunDropHL:Destroy() end); mm2GunDropHL=nil end
+    end
+    local function mm2_buildGunESP()
+        mm2_clearGunESP()
+        if not (S.mm2_gunDropESP) then return end
+        local map = Workspace:FindFirstChild("Map") or Workspace:FindFirstChild("MainMap")
+        local gunDrop = map and map:FindFirstChild("GunDrop",true) or Workspace:FindFirstChild("GunDrop",true)
+        if gunDrop then
+            mm2GunDropHL = Instance.new("Highlight")
+            mm2GunDropHL.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+            mm2GunDropHL.FillColor = Color3.fromRGB(255,255,0)
+            mm2GunDropHL.OutlineColor = Color3.fromRGB(255,255,0)
+            mm2GunDropHL.FillTransparency = 0.3
+            mm2GunDropHL.Adornee = gunDrop
+            mm2GunDropHL.Parent = gui
+        end
+    end
+    -- Detectar gun drop en tiempo real
+    Workspace.DescendantAdded:Connect(function(ch)
+        if ch.Name=="GunDrop" and S.mm2_gunDropESP then
+            task.wait(0.2); mm2_buildGunESP()
+            showNotif("+  MM2","Gun dropped! ESP activo.",true)
+        end
+    end)
+    Workspace.DescendantRemoving:Connect(function(ch)
+        if ch.Name=="GunDrop" then mm2_clearGunESP() end
+    end)
     mm2Toggle(espCard,"Dropped Gun ESP",
         function() return S.mm2_gunDropESP or false end,
-        function(v) S.mm2_gunDropESP=v; save() end)
+        function(v) S.mm2_gunDropESP=v; save()
+            if v then mm2_buildGunESP() else mm2_clearGunESP() end
+        end)
     mm2Divider(espCard)
     mm2Toggle(espCard,"Traps ESP",
         function() return mm2trapDetect end,
@@ -2252,6 +2329,39 @@ if isMM2 and pg_mm2 then
         end)
     mm2Divider(espCard)
     mm2Keybind(espCard,"Tecla ESP",function() return S.mm2_esp_key end,function(k) S.mm2_esp_key=k end)
+    mm2Divider(espCard)
+    -- Distancia maxima Players ESP
+    do
+        if not S.mm2_esp_dist then S.mm2_esp_dist = 300 end
+        local row=Instance.new("Frame",espCard)
+        row.Size=UDim2.new(1,0,0,42); row.BackgroundTransparency=1
+        local tl=Instance.new("TextLabel",row)
+        tl.Size=UDim2.new(1,-110,0,16); tl.Position=UDim2.fromOffset(14,13)
+        tl.BackgroundTransparency=1; tl.Text="Distancia Players ESP"
+        tl.TextColor3=Color3.fromRGB(215,215,215); tl.Font=Enum.Font.GothamMedium; tl.TextSize=12
+        tl.TextXAlignment=Enum.TextXAlignment.Left
+        local valLbl=Instance.new("TextLabel",row)
+        valLbl.Size=UDim2.fromOffset(42,16); valLbl.Position=UDim2.new(1,-96,0,13)
+        valLbl.BackgroundTransparency=1; valLbl.Text=tostring(S.mm2_esp_dist)
+        valLbl.TextColor3=accentColor; valLbl.Font=Enum.Font.GothamBold; valLbl.TextSize=11
+        valLbl.TextXAlignment=Enum.TextXAlignment.Center
+        local minus=Instance.new("TextButton",row)
+        minus.Size=UDim2.fromOffset(26,26); minus.Position=UDim2.new(1,-28,0.5,-13)
+        minus.BackgroundColor3=Color3.fromRGB(22,18,28); minus.BorderSizePixel=0
+        minus.Text="-"; minus.TextColor3=accentColor; minus.Font=Enum.Font.GothamBold; minus.TextSize=16
+        minus.MouseButton1Click:Connect(function()
+            S.mm2_esp_dist=math.max(10,S.mm2_esp_dist-25); valLbl.Text=tostring(S.mm2_esp_dist); save()
+            if mm2ESP_on then mm2_buildESP() end
+        end)
+        local plus=Instance.new("TextButton",row)
+        plus.Size=UDim2.fromOffset(26,26); plus.Position=UDim2.new(1,-56,0.5,-13)
+        plus.BackgroundColor3=Color3.fromRGB(22,18,28); plus.BorderSizePixel=0
+        plus.Text="+"; plus.TextColor3=accentColor; plus.Font=Enum.Font.GothamBold; plus.TextSize=16
+        plus.MouseButton1Click:Connect(function()
+            S.mm2_esp_dist=math.min(9999,S.mm2_esp_dist+25); valLbl.Text=tostring(S.mm2_esp_dist); save()
+            if mm2ESP_on then mm2_buildESP() end
+        end)
+    end
     mm2Divider(espCard)
     mm2Btn(espCard,"R  Recargar ESP",function() mm2_buildESP(); showNotif("+  MM2","ESP recargado.",true) end)
 
