@@ -108,6 +108,11 @@ local function mkDefault()
         mm2_shoot_offset = 2.8,
         mm2_esp_dist     = 300,
         mm2_gunDropESP   = false,
+        mm2_murdLockEnabled = false,
+        mm2_murdLockKey     = "K",
+        mm2_murdLockStrength = 30,
+        mm2_murdLockFov       = 120,
+        mm2_murdLockWallCheck = true,
 
         -- === EXTRAS ===
         InfStamina   = false,
@@ -2015,6 +2020,65 @@ if isMM2 and pg_mm2 then
         end
     end
 
+    -- ===========================================
+    --  MM2 - CAM LOCK AL MURDERER (solo con Gun equipada)
+    -- ===========================================
+    local mm2MurdLockTarget = nil
+
+    local function mm2_hasGunEquipped()
+        local myChar = player.Character
+        if not myChar then return false end
+        local tool = myChar:FindFirstChildOfClass("Tool")
+        return tool ~= nil and tool.Name == "Gun"
+    end
+
+    RunService:BindToRenderStep("x7sMM2MurdLock", Enum.RenderPriority.Camera.Value + 1, function()
+        pcall(function()
+            if not S.mm2_murdLockEnabled then mm2MurdLockTarget = nil; return end
+            if not mm2_hasGunEquipped() then mm2MurdLockTarget = nil; return end
+
+            local murd = mm2_findMurderer()
+            if not murd or murd == player or not murd.Character then mm2MurdLockTarget = nil; return end
+
+            local murdChar = murd.Character
+            local murdHum  = murdChar:FindFirstChildOfClass("Humanoid")
+            local murdRoot = murdChar:FindFirstChild("HumanoidRootPart")
+            if not murdHum or murdHum.Health <= 0 or not murdRoot then mm2MurdLockTarget = nil; return end
+
+            local myChar = player.Character
+
+            -- Wall check opcional
+            if S.mm2_murdLockWallCheck and myChar then
+                local ok, obs = pcall(function()
+                    return camera:GetPartsObscuringTarget({murdRoot.Position}, {myChar, murdChar})
+                end)
+                if ok and #obs > 0 then mm2MurdLockTarget = nil; return end
+            end
+
+            -- FOV check (radio en pantalla, igual al sistema general de FOV)
+            local sp, onScreen = camera:WorldToViewportPoint(murdRoot.Position)
+            if not onScreen then mm2MurdLockTarget = nil; return end
+            local vp = camera.ViewportSize
+            local center = Vector2.new(vp.X * 0.5, vp.Y * 0.5)
+            local dx, dy = sp.X - center.X, sp.Y - center.Y
+            if (dx*dx + dy*dy) > (S.mm2_murdLockFov * S.mm2_murdLockFov) then
+                mm2MurdLockTarget = nil; return
+            end
+
+            mm2MurdLockTarget = murdRoot
+
+            local camPos = camera.CFrame.Position
+            local targetPos = Vector3.new(murdRoot.Position.X, murdRoot.Position.Y + 1.5, murdRoot.Position.Z)
+            local rawDir = targetPos - camPos
+            if rawDir.Magnitude < 0.1 then return end
+            local strength = math.clamp(S.mm2_murdLockStrength, 1, 100) * 0.003
+            local newLook = camera.CFrame.LookVector:Lerp(rawDir.Unit, strength)
+            if newLook.Magnitude > 0.01 then
+                camera.CFrame = CFrame.lookAt(camPos, camPos + newLook.Unit)
+            end
+        end)
+    end)
+
     -- Lanzar cuchillo asesino
     local function mm2_knifeThrow(silent)
         local murd=mm2_findMurderer()
@@ -2365,6 +2429,80 @@ if isMM2 and pg_mm2 then
     mm2Divider(espCard)
     mm2Btn(espCard,"R  Recargar ESP",function() mm2_buildESP(); showNotif("+  MM2","ESP recargado.",true) end)
 
+    -- -- Cam Lock Murderer (Sheriff con Gun) ------
+    local murdLockCard=makeCard(pg_mm2)
+    makeSecHeader(murdLockCard,"x","Cam Lock Murderer")
+    mm2Label(murdLockCard,"Bloquea la camara automaticamente en el asesino mientras tengas la Gun equipada (Sheriff).")
+    mm2Divider(murdLockCard)
+    mm2Toggle(murdLockCard,"Activar Cam Lock Murderer",
+        function() return S.mm2_murdLockEnabled end,
+        function(v) S.mm2_murdLockEnabled=v; save()
+            showNotif("+  MM2 Cam Lock",v and "Activado" or "Desactivado",v) end)
+    mm2Divider(murdLockCard)
+    mm2Keybind(murdLockCard,"Tecla Activar/Desactivar",function() return S.mm2_murdLockKey end,function(k) S.mm2_murdLockKey=k; save() end)
+    mm2Divider(murdLockCard)
+    do
+        local row=Instance.new("Frame",murdLockCard)
+        row.Size=UDim2.new(1,0,0,42); row.BackgroundTransparency=1
+        local tl=Instance.new("TextLabel",row)
+        tl.Size=UDim2.new(1,-110,0,16); tl.Position=UDim2.fromOffset(14,13)
+        tl.BackgroundTransparency=1; tl.Text="Fuerza (suavidad)"
+        tl.TextColor3=Color3.fromRGB(215,215,215); tl.Font=Enum.Font.GothamMedium; tl.TextSize=12
+        tl.TextXAlignment=Enum.TextXAlignment.Left
+        local valLbl=Instance.new("TextLabel",row)
+        valLbl.Size=UDim2.fromOffset(42,16); valLbl.Position=UDim2.new(1,-96,0,13)
+        valLbl.BackgroundTransparency=1; valLbl.Text=tostring(S.mm2_murdLockStrength)
+        valLbl.TextColor3=accentColor; valLbl.Font=Enum.Font.GothamBold; valLbl.TextSize=11
+        valLbl.TextXAlignment=Enum.TextXAlignment.Center
+        local minus=Instance.new("TextButton",row)
+        minus.Size=UDim2.fromOffset(26,26); minus.Position=UDim2.new(1,-28,0.5,-13)
+        minus.BackgroundColor3=Color3.fromRGB(22,18,28); minus.BorderSizePixel=0
+        minus.Text="-"; minus.TextColor3=accentColor; minus.Font=Enum.Font.GothamBold; minus.TextSize=16
+        minus.MouseButton1Click:Connect(function()
+            S.mm2_murdLockStrength=math.max(1,S.mm2_murdLockStrength-5); valLbl.Text=tostring(S.mm2_murdLockStrength); save()
+        end)
+        local plus=Instance.new("TextButton",row)
+        plus.Size=UDim2.fromOffset(26,26); plus.Position=UDim2.new(1,-56,0.5,-13)
+        plus.BackgroundColor3=Color3.fromRGB(22,18,28); plus.BorderSizePixel=0
+        plus.Text="+"; plus.TextColor3=accentColor; plus.Font=Enum.Font.GothamBold; plus.TextSize=16
+        plus.MouseButton1Click:Connect(function()
+            S.mm2_murdLockStrength=math.min(100,S.mm2_murdLockStrength+5); valLbl.Text=tostring(S.mm2_murdLockStrength); save()
+        end)
+    end
+    mm2Divider(murdLockCard)
+    do
+        local row=Instance.new("Frame",murdLockCard)
+        row.Size=UDim2.new(1,0,0,42); row.BackgroundTransparency=1
+        local tl=Instance.new("TextLabel",row)
+        tl.Size=UDim2.new(1,-110,0,16); tl.Position=UDim2.fromOffset(14,13)
+        tl.BackgroundTransparency=1; tl.Text="FOV (radio en pantalla)"
+        tl.TextColor3=Color3.fromRGB(215,215,215); tl.Font=Enum.Font.GothamMedium; tl.TextSize=12
+        tl.TextXAlignment=Enum.TextXAlignment.Left
+        local valLbl=Instance.new("TextLabel",row)
+        valLbl.Size=UDim2.fromOffset(42,16); valLbl.Position=UDim2.new(1,-96,0,13)
+        valLbl.BackgroundTransparency=1; valLbl.Text=tostring(S.mm2_murdLockFov)
+        valLbl.TextColor3=accentColor; valLbl.Font=Enum.Font.GothamBold; valLbl.TextSize=11
+        valLbl.TextXAlignment=Enum.TextXAlignment.Center
+        local minus=Instance.new("TextButton",row)
+        minus.Size=UDim2.fromOffset(26,26); minus.Position=UDim2.new(1,-28,0.5,-13)
+        minus.BackgroundColor3=Color3.fromRGB(22,18,28); minus.BorderSizePixel=0
+        minus.Text="-"; minus.TextColor3=accentColor; minus.Font=Enum.Font.GothamBold; minus.TextSize=16
+        minus.MouseButton1Click:Connect(function()
+            S.mm2_murdLockFov=math.max(20,S.mm2_murdLockFov-10); valLbl.Text=tostring(S.mm2_murdLockFov); save()
+        end)
+        local plus=Instance.new("TextButton",row)
+        plus.Size=UDim2.fromOffset(26,26); plus.Position=UDim2.new(1,-56,0.5,-13)
+        plus.BackgroundColor3=Color3.fromRGB(22,18,28); plus.BorderSizePixel=0
+        plus.Text="+"; plus.TextColor3=accentColor; plus.Font=Enum.Font.GothamBold; plus.TextSize=16
+        plus.MouseButton1Click:Connect(function()
+            S.mm2_murdLockFov=math.min(500,S.mm2_murdLockFov+10); valLbl.Text=tostring(S.mm2_murdLockFov); save()
+        end)
+    end
+    mm2Divider(murdLockCard)
+    mm2Toggle(murdLockCard,"Wall Check",
+        function() return S.mm2_murdLockWallCheck end,
+        function(v) S.mm2_murdLockWallCheck=v; save() end)
+
     -- -- Herramientas ----------------------------
     local toolCard=makeCard(pg_mm2)
     makeSecHeader(toolCard,"+","Herramientas")
@@ -2490,6 +2628,10 @@ if isMM2 and pg_mm2 then
             showNotif("+  MM2 ESP",mm2ESP_on and "Activado" or "Desactivado",mm2ESP_on)
         end
         if kn==S.mm2_shoot_key then mm2_shoot() end
+        if kn==S.mm2_murdLockKey then
+            S.mm2_murdLockEnabled = not S.mm2_murdLockEnabled; save()
+            showNotif("+  MM2 Cam Lock",S.mm2_murdLockEnabled and "Activado" or "Desactivado",S.mm2_murdLockEnabled)
+        end
     end)
 
 end -- fin bloque isMM2
