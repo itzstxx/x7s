@@ -2383,7 +2383,6 @@ if isMM2 and pg_mm2 then
     end)
 
 end -- fin bloque isMM2
-\n
 pages[1].Visible = true
 navBtns[1].BackgroundColor3 = Color3.fromRGB(36,30,46)
 navBtns[1].BackgroundTransparency = 0.5
