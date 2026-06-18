@@ -1882,9 +1882,9 @@ setPage = setPage  -- referencia correcta (definida arriba con forward)
 -- ══════════════════════════════════════════════════════════════
 if isMM2 and pg_mm2 then
 
-    -- ═══════════════════════════════════════════
-    --  MM2 — LÓGICA
-    -- ═══════════════════════════════════════════
+    -- ===========================================
+    --  MM2 - LOGICA
+    -- ===========================================
     local mm2ESP_on      = false
     local mm2EspObjs     = {}
     local mm2loopThrow   = false
@@ -1952,7 +1952,7 @@ if isMM2 and pg_mm2 then
         p.CharacterAdded:Connect(function() task.wait(0.5); if mm2ESP_on then mm2_buildESP() end end)
     end
 
-    -- Predicción de posición
+    -- Prediccion de posicion
     local function mm2_getPred(target)
         local tc = target.Character; if not tc then return Vector3.zero end
         local hrp = tc:FindFirstChild("HumanoidRootPart"); if not hrp then return Vector3.zero end
@@ -1966,12 +1966,12 @@ if isMM2 and pg_mm2 then
     -- Disparar sheriff
     local function mm2_shoot()
         local murd = mm2_findMurderer()
-        if not murd then showNotif("✝  MM2","No hay asesino.",false); return end
+        if not murd then showNotif("+  MM2","No hay asesino.",false); return end
         local myChar = player.Character; if not myChar then return end
         if not myChar:FindFirstChild("Gun") then
             local hum=myChar:FindFirstChildOfClass("Humanoid")
             local g=player.Backpack:FindFirstChild("Gun")
-            if hum and g then hum:EquipTool(g) else showNotif("✝  MM2","No tienes pistola.",false); return end
+            if hum and g then hum:EquipTool(g) else showNotif("+  MM2","No tienes pistola.",false); return end
         end
         local murdChar=murd.Character; if not murdChar then return end
         local murdHRP=murdChar:FindFirstChild("HumanoidRootPart"); if not murdHRP then return end
@@ -1981,26 +1981,26 @@ if isMM2 and pg_mm2 then
         if rem and rem:IsA("RemoteEvent") then
             local rh=myChar:FindFirstChild("RightHand")
             rem:FireServer(CFrame.new(rh and rh.Position or murdHRP.Position),CFrame.new(pred))
-            showNotif("✝  MM2","Disparo enviado.",true)
-        else showNotif("✝  MM2","Remote no encontrado.",false) end
+            showNotif("+  MM2","Disparo enviado.",true)
+        else showNotif("+  MM2","Remote no encontrado.",false) end
     end
 
     -- Lanzar cuchillo asesino
     local function mm2_knifeThrow(silent)
         local murd=mm2_findMurderer()
         if murd ~= player then
-            if not silent then showNotif("✝  MM2","No eres el asesino.",false) end; return
+            if not silent then showNotif("+  MM2","No eres el asesino.",false) end; return
         end
         local myChar=player.Character; if not myChar then return end
         if not myChar:FindFirstChild("Knife") then
             local hum=myChar:FindFirstChildOfClass("Humanoid")
             local k=player.Backpack:FindFirstChild("Knife")
             if hum and k then hum:EquipTool(k) else
-                if not silent then showNotif("✝  MM2","No tienes cuchillo.",false) end; return
+                if not silent then showNotif("+  MM2","No tienes cuchillo.",false) end; return
             end
         end
         local tgt=mm2_findNearest(); if not tgt or not tgt.Character then
-            if not silent then showNotif("✝  MM2","No hay jugador cercano.",false) end; return
+            if not silent then showNotif("+  MM2","No hay jugador cercano.",false) end; return
         end
         local tgtHRP=tgt.Character:FindFirstChild("HumanoidRootPart"); if not tgtHRP then return end
         local knife=myChar:FindFirstChild("Knife"); if not knife then return end
@@ -2008,21 +2008,21 @@ if isMM2 and pg_mm2 then
         if throwEv then
             local myHRP=myChar:FindFirstChild("HumanoidRootPart")
             throwEv:FireServer(CFrame.new(myHRP and myHRP.Position or tgtHRP.Position),CFrame.new(mm2_getPred(tgt)))
-            if not silent then showNotif("✝  MM2","Cuchillo lanzado.",true) end
+            if not silent then showNotif("+  MM2","Cuchillo lanzado.",true) end
         end
     end
 
     -- Matar cercano como asesino (slash)
     local function mm2_killNearest()
         local murd=mm2_findMurderer()
-        if murd ~= player then showNotif("✝  MM2","No eres el asesino.",false); return end
+        if murd ~= player then showNotif("+  MM2","No eres el asesino.",false); return end
         local myChar=player.Character; if not myChar then return end
         if not myChar:FindFirstChild("Knife") then
             local hum=myChar:FindFirstChildOfClass("Humanoid")
             local k=player.Backpack:FindFirstChild("Knife")
-            if hum and k then hum:EquipTool(k) else showNotif("✝  MM2","No tienes cuchillo.",false); return end
+            if hum and k then hum:EquipTool(k) else showNotif("+  MM2","No tienes cuchillo.",false); return end
         end
-        local tgt=mm2_findNearest(); if not tgt or not tgt.Character then showNotif("✝  MM2","Nadie cerca.",false); return end
+        local tgt=mm2_findNearest(); if not tgt or not tgt.Character then showNotif("+  MM2","Nadie cerca.",false); return end
         local tgtHRP=tgt.Character:FindFirstChild("HumanoidRootPart"); if not tgtHRP then return end
         local myHRP=myChar:FindFirstChild("HumanoidRootPart"); if not myHRP then return end
         tgtHRP.Anchored=true
@@ -2030,18 +2030,18 @@ if isMM2 and pg_mm2 then
         task.wait(0.1)
         local knife=myChar:FindFirstChild("Knife")
         local stab=knife and knife:FindFirstChild("Stab",true)
-        if stab then stab:FireServer("Slash"); showNotif("✝  MM2","Kill enviado.",true) end
+        if stab then stab:FireServer("Slash"); showNotif("+  MM2","Kill enviado.",true) end
     end
 
     -- Matar a todos como asesino
     local function mm2_killAll()
         local murd=mm2_findMurderer()
-        if murd ~= player then showNotif("✝  MM2","No eres el asesino.",false); return end
+        if murd ~= player then showNotif("+  MM2","No eres el asesino.",false); return end
         local myChar=player.Character; if not myChar then return end
         if not myChar:FindFirstChild("Knife") then
             local hum=myChar:FindFirstChildOfClass("Humanoid")
             local k=player.Backpack:FindFirstChild("Knife")
-            if hum and k then hum:EquipTool(k) else showNotif("✝  MM2","No tienes cuchillo.",false); return end
+            if hum and k then hum:EquipTool(k) else showNotif("+  MM2","No tienes cuchillo.",false); return end
         end
         local myHRP=myChar:FindFirstChild("HumanoidRootPart"); if not myHRP then return end
         for _, p in ipairs(Players:GetPlayers()) do
@@ -2053,12 +2053,12 @@ if isMM2 and pg_mm2 then
         end
         local knife=myChar:FindFirstChild("Knife")
         local stab=knife and knife:FindFirstChild("Stab",true)
-        if stab then stab:FireServer("Slash"); showNotif("✝  MM2","Kill all enviado.",true) end
+        if stab then stab:FireServer("Slash"); showNotif("+  MM2","Kill all enviado.",true) end
     end
 
     -- Fling
     local function mm2_fling(tgt)
-        if not tgt or not tgt.Character then showNotif("✝  MM2","Objetivo inválido.",false); return end
+        if not tgt or not tgt.Character then showNotif("+  MM2","Objetivo invalido.",false); return end
         local myChar=player.Character; if not myChar then return end
         local myHRP=myChar:FindFirstChild("HumanoidRootPart"); if not myHRP then return end
         local tgtHRP=tgt.Character:FindFirstChild("HumanoidRootPart"); if not tgtHRP then return end
@@ -2077,7 +2077,7 @@ if isMM2 and pg_mm2 then
         bv:Destroy()
         myHum:SetStateEnabled(Enum.HumanoidStateType.Seated,true)
         myHRP.CFrame=oldPos
-        showNotif("✝  MM2","Fling enviado.",true)
+        showNotif("+  MM2","Fling enviado.",true)
     end
 
     -- Loop knife throw
@@ -2111,9 +2111,9 @@ if isMM2 and pg_mm2 then
         end)
     end
 
-    -- ═══════════════════════════════════════════
-    --  MM2 — HELPERS UI
-    -- ═══════════════════════════════════════════
+    -- ===========================================
+    --  MM2 - HELPERS UI
+    -- ===========================================
     local function mm2Divider(parent)
         local d=Instance.new("Frame",parent)
         d.Size=UDim2.new(1,0,0,1); d.BackgroundColor3=Color3.fromRGB(38,32,50); d.BorderSizePixel=0
@@ -2222,17 +2222,17 @@ if isMM2 and pg_mm2 then
         return grid
     end
 
-    -- ═══════════════════════════════════════════
-    --  MM2 — UI CARDS
-    -- ═══════════════════════════════════════════
+    -- ===========================================
+    --  MM2 - UI CARDS
+    -- ===========================================
 
-    -- ── ESP ────────────────────────────────────
+    -- -- ESP ------------------------------------
     local espCard=makeCard(pg_mm2)
     makeSecHeader(espCard,"o","ESPs")
     mm2Toggle(espCard,"Players (Rojo=Asesino / Azul=Sheriff / Verde=Inocente)",
         function() return mm2ESP_on end,
         function(v) mm2ESP_on=v; if v then mm2_buildESP() else mm2_clearESP() end
-            showNotif("✝  MM2 ESP",v and "Activado" or "Desactivado",v) end)
+            showNotif("+  MM2 ESP",v and "Activado" or "Desactivado",v) end)
     mm2Divider(espCard)
     mm2Toggle(espCard,"Dropped Gun ESP",
         function() return S.mm2_gunDropESP or false end,
@@ -2253,9 +2253,9 @@ if isMM2 and pg_mm2 then
     mm2Divider(espCard)
     mm2Keybind(espCard,"Tecla ESP",function() return S.mm2_esp_key end,function(k) S.mm2_esp_key=k end)
     mm2Divider(espCard)
-    mm2Btn(espCard,"⟳  Recargar ESP",function() mm2_buildESP(); showNotif("✝  MM2","ESP recargado.",true) end)
+    mm2Btn(espCard,"R  Recargar ESP",function() mm2_buildESP(); showNotif("+  MM2","ESP recargado.",true) end)
 
-    -- ── Herramientas ────────────────────────────
+    -- -- Herramientas ----------------------------
     local toolCard=makeCard(pg_mm2)
     makeSecHeader(toolCard,"+","Herramientas")
     mm2Btn(toolCard,"Shoot murderer",mm2_shoot)
@@ -2293,7 +2293,7 @@ if isMM2 and pg_mm2 then
         end)
     end
     mm2Divider(toolCard)
-    mm2Btn(toolCard,"Knife throw (al más cercano)",function() mm2_knifeThrow(false) end)
+    mm2Btn(toolCard,"Knife throw (al mas cercano)",function() mm2_knifeThrow(false) end)
     mm2Divider(toolCard)
     mm2Toggle(toolCard,"Auto knife throw",
         function() return mm2loopThrow end,
@@ -2302,27 +2302,27 @@ if isMM2 and pg_mm2 then
     mm2GridBtns(toolCard,{
         {"Teleport to map", function()
             local map=Workspace:FindFirstChild("Map") or Workspace:FindFirstChild("MainMap")
-            if map then player.Character:MoveTo(map:GetPivot().Position) else showNotif("✝  MM2","No se encontró el mapa.",false) end
+            if map then player.Character:MoveTo(map:GetPivot().Position) else showNotif("+  MM2","No se encontro el mapa.",false) end
         end},
         {"Teleport to lobby", function()
             local lobby=Workspace:FindFirstChild("Lobby")
-            if lobby then player.Character:MoveTo(lobby:GetPivot().Position) else showNotif("✝  MM2","No se encontró lobby.",false) end
+            if lobby then player.Character:MoveTo(lobby:GetPivot().Position) else showNotif("+  MM2","No se encontro lobby.",false) end
         end},
         {"Fling Murderer", function()
-            local m=mm2_findMurderer(); if m then mm2_fling(m) else showNotif("✝  MM2","No hay asesino.",false) end
+            local m=mm2_findMurderer(); if m then mm2_fling(m) else showNotif("+  MM2","No hay asesino.",false) end
         end},
         {"Fling Sheriff", function()
-            local s=mm2_findSheriff(); if s then mm2_fling(s) else showNotif("✝  MM2","No hay sheriff.",false) end
+            local s=mm2_findSheriff(); if s then mm2_fling(s) else showNotif("+  MM2","No hay sheriff.",false) end
         end},
         {"Copy murderer name", function()
             local m=mm2_findMurderer()
-            if m then pcall(function() setclipboard(m.Name) end); showNotif("✝  MM2","Copiado: "..m.Name,true)
-            else showNotif("✝  MM2","No hay asesino.",false) end
+            if m then pcall(function() setclipboard(m.Name) end); showNotif("+  MM2","Copiado: "..m.Name,true)
+            else showNotif("+  MM2","No hay asesino.",false) end
         end},
         {"Copy sheriff name", function()
             local s=mm2_findSheriff()
-            if s then pcall(function() setclipboard(s.Name) end); showNotif("✝  MM2","Copiado: "..s.Name,true)
-            else showNotif("✝  MM2","No hay sheriff.",false) end
+            if s then pcall(function() setclipboard(s.Name) end); showNotif("+  MM2","Copiado: "..s.Name,true)
+            else showNotif("+  MM2","No hay sheriff.",false) end
         end},
     })
     mm2Divider(toolCard)
@@ -2339,7 +2339,7 @@ if isMM2 and pg_mm2 then
         end
     end)
 
-    -- ── Detectables ─────────────────────────────
+    -- -- Detectables -----------------------------
     local detCard=makeCard(pg_mm2)
     makeSecHeader(detCard,"!","Detectables")
     mm2Label(detCard,"Las siguientes opciones pueden ser detectadas por el juego.")
@@ -2349,9 +2349,9 @@ if isMM2 and pg_mm2 then
         function() return mm2killAuraCon ~= nil end,
         function(v)
             local murd=mm2_findMurderer()
-            if v and murd ~= player then showNotif("✝  MM2","No eres el asesino.",false); return end
+            if v and murd ~= player then showNotif("+  MM2","No eres el asesino.",false); return end
             mm2_setKillAura(v)
-            showNotif("✝  MM2 Kill Aura",v and "Activado" or "Desactivado",v)
+            showNotif("+  MM2 Kill Aura",v and "Activado" or "Desactivado",v)
         end)
     mm2Divider(detCard)
     mm2BtnRed(detCard,"Kill EVERYONE as murderer",mm2_killAll)
@@ -2366,10 +2366,10 @@ if isMM2 and pg_mm2 then
                 p.Character.HumanoidRootPart.CFrame=myHRP.CFrame+myHRP.CFrame.LookVector*5
             end
         end
-        showNotif("✝  MM2","Todos detenidos.",true)
+        showNotif("+  MM2","Todos detenidos.",true)
     end)
 
-    -- ── Keybinds globales MM2 ─────────────────
+    -- -- Keybinds globales MM2 -----------------
     UserInputService.InputBegan:Connect(function(inp,proc)
         if proc then return end
         if inp.UserInputType~=Enum.UserInputType.Keyboard then return end
@@ -2377,7 +2377,7 @@ if isMM2 and pg_mm2 then
         if kn==S.mm2_esp_key then
             mm2ESP_on=not mm2ESP_on
             if mm2ESP_on then mm2_buildESP() else mm2_clearESP() end
-            showNotif("✝  MM2 ESP",mm2ESP_on and "Activado" or "Desactivado",mm2ESP_on)
+            showNotif("+  MM2 ESP",mm2ESP_on and "Activado" or "Desactivado",mm2ESP_on)
         end
         if kn==S.mm2_shoot_key then mm2_shoot() end
     end)
