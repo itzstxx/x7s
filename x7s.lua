@@ -190,6 +190,11 @@ local function shouldSkipPlayer(p)
     if not p or not p.Parent then return true end  -- Validación
     if p == player then return true end            -- Tu personaje
     if isWhitelisted(p) then return true end       -- En whitelist
+    local char = p.Character
+    if not char then return true end
+    local root = char:FindFirstChild("HumanoidRootPart")
+    local hum = char:FindFirstChildOfClass("Humanoid")
+    if not root or not hum or hum.Health <= 1 then return true end
     return false
 end
 
@@ -2648,6 +2653,12 @@ end
 applyHitbox = function(p, on)
     if not p.Character then return end
     local root = p.Character:FindFirstChild("HumanoidRootPart"); if not root then return end
+    if on then
+        local hum = p.Character:FindFirstChildOfClass("Humanoid")
+        if not hum or hum.Health <= 1 then
+            on = false
+        end
+    end
     
     if on then
         -- NO tocar root.Size (congela al jugador)
