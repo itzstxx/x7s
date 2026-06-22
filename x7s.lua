@@ -66,6 +66,10 @@ local UserInputService = game:GetService("UserInputService")
 local RunService       = game:GetService("RunService")
 local Workspace        = game:GetService("Workspace")
 local HttpService      = game:GetService("HttpService")
+local _vimOk, VirtualInputManager = pcall(function()
+    return game:GetService("VirtualInputManager")
+end)
+if not _vimOk then VirtualInputManager = nil end
 
 local player    = Players.LocalPlayer
 local playerGui = player:WaitForChild("PlayerGui")
@@ -2010,7 +2014,7 @@ do
     local _soruZ_lastTpTime = 0         -- timestamp del último TP detectado
     local _soruZ_cooldown   = 0.35      -- cooldown mínimo entre activaciones (s)
     local _soruZ_tpThresh   = 8         -- studs mínimos para considerar un TP (Soru)
-    local _soruZ_tpMaxDist  = 80        -- studs máximos de un Soru (filtra teleports largos de mapa)
+    local _soruZ_tpMaxDist  = 80        -- fallback; el límite real sigue PlayerSoruZRange
     local _soruZ_lastPos    = nil       -- última posición conocida del LocalPlayer
 
     -- Función auxiliar: obtener el enemigo más cercano dentro del rango
@@ -2169,8 +2173,10 @@ do
             if _soruZ_lastPos then
                 local delta = (currentPos - _soruZ_lastPos).Magnitude
 
-                -- Detectar Soru: movimiento brusco entre tpThresh y tpMaxDist studs en 1 frame
-                if delta >= _soruZ_tpThresh and delta <= _soruZ_tpMaxDist then
+                local tpMaxDist = math.max(_soruZ_tpMaxDist, S.PlayerSoruZRange or _soruZ_tpMaxDist)
+
+                -- Detectar Soru: movimiento brusco dentro del rango configurado
+                if delta >= _soruZ_tpThresh and delta <= tpMaxDist then
                     local now = os.clock()
                     if now - _soruZ_lastTpTime >= _soruZ_cooldown then
                         _soruZ_lastTpTime = now
