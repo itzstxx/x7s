@@ -103,6 +103,16 @@ local function mkDefault()
         -- === TARGET ===
         TargetPart = "Random",
 
+        -- === TELEPORT ===
+        AutoTeleportMain = false,
+        AutoTeleportAlt = false,
+        TeleportDuelType = "1v1",
+        TeleportPlatformRow = "Right Platforms",
+        TeleportLowerKD = false,
+        TeleportKDTargetKills = 2,
+        TeleportBreakStreak = false,
+        TeleportBreakStreakTarget = 1,
+
         -- === EXTRAS ===
         InfStamina   = false,
         EspHealthBar = false,
@@ -213,7 +223,15 @@ local Locale = {
         ext_distance="Distance",              ext_distance_d="Shows the distance to each enemy in meters.",
         ext_item_hand="Item in Hand",         ext_item_hand_d="Shows what item the enemy is holding.",
 
-        summer_on="Summer 2026",    summer_on_d="Collects Summer 2026 drops automatically. Only in matches.",
+        summer_on="Summer 2026",    summer_on_d="Tracks active Summer 2026 drops without forcing collection.",
+        teleport_main="Auto Teleport Main", teleport_main_d="Stores the main teleport role for private-match routing.",
+        teleport_alt="Auto Teleport Alt", teleport_alt_d="Stores the alternate teleport role for private-match routing.",
+        teleport_duel_type="Duel Type",
+        teleport_platform_row="Platform Row",
+        teleport_lower_kd="Lower KD", teleport_lower_kd_d="Uses Main or Alt based on the active teleport role.",
+        teleport_kd_target="KD Target Kills",
+        teleport_break_streak="Break Streak", teleport_break_streak_d="Uses Main or Alt based on the active teleport role.",
+        teleport_streak_target="Break Streak Target",
 
         st_bg="Toggle Panel Background",
         st_notif="Enable Notifications",
@@ -259,7 +277,15 @@ local Locale = {
         ext_health_bar="Barra de Salud",      ext_health_bar_d="Dibuja una barra de vida junto a cada enemigo.",
         ext_distance="Distancia",             ext_distance_d="Muestra la distancia a cada enemigo en metros.",
         ext_item_hand="Ítem en la Mano",      ext_item_hand_d="Muestra qué ítem sostiene el enemigo.",
-        summer_on="Summer 2026",     summer_on_d="Recolecta los drops del Summer 2026 automáticamente. Solo en partidas.",
+        summer_on="Summer 2026",     summer_on_d="Detecta drops activos del Summer 2026 sin forzar recolección.",
+        teleport_main="Auto Teleport Main", teleport_main_d="Guarda el rol principal de teleport para rutas privadas.",
+        teleport_alt="Auto Teleport Alt", teleport_alt_d="Guarda el rol alterno de teleport para rutas privadas.",
+        teleport_duel_type="Tipo de Duelo",
+        teleport_platform_row="Fila de Plataforma",
+        teleport_lower_kd="Lower KD", teleport_lower_kd_d="Usa Main o Alt según el rol de Auto Teleport activo.",
+        teleport_kd_target="KD Target Kills",
+        teleport_break_streak="Break Streak", teleport_break_streak_d="Usa Main o Alt según el rol de Auto Teleport activo.",
+        teleport_streak_target="Break Streak Target",
         st_bg="Fondo del Panel",
         st_notif="Activar Notificaciones",
         st_lang="Idioma",
@@ -613,6 +639,7 @@ local NAV_DATA = {
     { icon = "*", label = "Inicio" },
     { icon = "o", label = "Aim" },
     { icon = "+", label = "Extras" },
+    { icon = ">", label = "Teleport" },
     { icon = "#", label = "Ajustes" },
 }
 
@@ -1266,11 +1293,12 @@ local function makeColorPicker(parent, label, getR, getG, getB, setRGB)
     return row, popup
 end
 
--- Páginas: 1 = Inicio, 2 = Aim, 3 = Extras, 4 = Ajustes
+-- Páginas: 1 = Inicio, 2 = Aim, 3 = Extras, 4 = Teleport, 5 = Ajustes
 local pg_inicio   = pages[1]
 local pg_aim      = pages[2]
 local pg_extras   = pages[3]
-local pg_ajustes  = pages[4]
+local pg_teleport = pages[4]
+local pg_ajustes  = pages[5]
 
 -- ══ INICIO PAGE ══════════════════════════════════
 
@@ -1472,6 +1500,27 @@ local targetCard = makeCard(pg_aim)
 makeSecHeader(targetCard, "+", "Target")
 makeDivider(targetCard)
 makeDropdown(targetCard, "target_part", "TargetPart", {"Head","UpperTorso","LowerTorso","Pierna","Pecho","Combo","Random"})
+
+-- ══ TELEPORT PAGE ═════════════════════════════════════════════
+local teleportCard = makeCard(pg_teleport)
+makeSecHeader(teleportCard, ">", "Teleport")
+makeToggle(teleportCard, "teleport_main", "teleport_main_d", "AutoTeleportMain")
+makeDivider(teleportCard)
+makeToggle(teleportCard, "teleport_alt", "teleport_alt_d", "AutoTeleportAlt")
+makeDivider(teleportCard)
+makeDropdown(teleportCard, "teleport_duel_type", "TeleportDuelType", {"1v1","2v2","3v3","4v4","5v5"})
+makeDivider(teleportCard)
+makeDropdown(teleportCard, "teleport_platform_row", "TeleportPlatformRow", {"Right Platforms","Left Platforms"})
+
+local teleportLogicCard = makeCard(pg_teleport)
+makeSecHeader(teleportLogicCard, "+", "Logic")
+makeToggle(teleportLogicCard, "teleport_lower_kd", "teleport_lower_kd_d", "TeleportLowerKD")
+makeDivider(teleportLogicCard)
+makeSlider(teleportLogicCard, "teleport_kd_target", "TeleportKDTargetKills", 1, 20)
+makeDivider(teleportLogicCard)
+makeToggle(teleportLogicCard, "teleport_break_streak", "teleport_break_streak_d", "TeleportBreakStreak")
+makeDivider(teleportLogicCard)
+makeSlider(teleportLogicCard, "teleport_streak_target", "TeleportBreakStreakTarget", 1, 20)
 
 -- ══ WHITELIST (igual a SyyClient - dropdown con lista del servidor) ══
 local whitelistCard = makeCard(pg_aim)
@@ -1875,7 +1924,7 @@ for _, ch in ipairs(navBtns[1]:GetChildren()) do
 end
 
 -- Expose tabPages alias para compatibilidad con keybinds toggle
-local tabPages = {pages[1], pages[2], pages[3], pages[4]}  -- dummy, no se usa con tabs
+local tabPages = {pages[1], pages[2], pages[3], pages[4], pages[5]}  -- dummy, no se usa con tabs
 
 -- ══════════════════════════════════════════════
 --  DRAG — mover panel (por el header)
@@ -2767,23 +2816,19 @@ end)
 
 
 task.spawn(function()
-    local remote = game:GetService("ReplicatedStorage").Packages.Networking:WaitForChild("RE/Events/CollectEventSpawnable")
     local folder = workspace:WaitForChild("Spawnables"):WaitForChild("SpawnablesClient")
-    while task.wait(0.3) do
+    local lastSeen = 0
+    while task.wait(1.0) do
         if not S.summer_on then continue end
+        local count = 0
         for _, spawn in ipairs(folder:GetChildren()) do
-            -- Intenta con "Touch", si no existe usa cualquier BasePart del modelo
-            local touch = spawn:FindFirstChild("Touch")
-                       or spawn:FindFirstChildOfClass("Part")
-                       or spawn:FindFirstChildOfClass("MeshPart")
-                       or (spawn:IsA("BasePart") and spawn)
-            if touch then
-                pcall(function()
-                    remote:FireServer(touch)
-                    spawn:Destroy()
-                end)
-                task.wait(0.05)
+            if spawn:IsA("BasePart") or spawn.PrimaryPart or spawn:FindFirstChildWhichIsA("BasePart", true) then
+                count += 1
             end
+        end
+        if count > 0 and os.clock() - lastSeen > 5 then
+            lastSeen = os.clock()
+            showNotif("✝  Summer 2026", tostring(count).." drop(s) active", true)
         end
     end
 end)
