@@ -118,6 +118,16 @@ local function mkDefault()
         EspHealthBar = false,
         EspDistance  = false,
         ItemInHand   = false,
+
+        -- === PLAYER (Soru + Z-Attack) ===
+        PlayerSoruZEnabled  = false,   -- Auto-dispara Z al hacer Soru a hitbox
+        PlayerSoruZKey      = "Z",     -- Tecla a disparar
+        PlayerSoruZDelay    = 0.08,    -- Delay tras el TP antes de disparar (segundos)
+        PlayerSoruZAutoDir  = true,    -- Auto-dirigir al enemigo al disparar
+        PlayerSoruZCamSnap  = true,    -- Snap de cámara instantáneo al enemigo antes de Z
+        PlayerSoruZRange    = 120,     -- Rango máximo para detectar objetivo (studs)
+        PlayerSoruZRepeat   = 1,       -- Cuántas veces disparar Z por Soru
+        PlayerSoruZInterval = 0.06,    -- Intervalo entre disparos repetidos
     }
 end
 local S = mkDefault()
@@ -640,6 +650,7 @@ local NAV_DATA = {
     { icon = "o", label = "Aim" },
     { icon = "+", label = "Extras" },
     { icon = ">", label = "Teleport" },
+    { icon = "P", label = "Player" },
     { icon = "#", label = "Ajustes" },
 }
 
@@ -1293,12 +1304,13 @@ local function makeColorPicker(parent, label, getR, getG, getB, setRGB)
     return row, popup
 end
 
--- Páginas: 1 = Inicio, 2 = Aim, 3 = Extras, 4 = Teleport, 5 = Ajustes
+-- Páginas: 1 = Inicio, 2 = Aim, 3 = Extras, 4 = Teleport, 5 = Player, 6 = Ajustes
 local pg_inicio   = pages[1]
 local pg_aim      = pages[2]
 local pg_extras   = pages[3]
 local pg_teleport = pages[4]
-local pg_ajustes  = pages[5]
+local pg_player   = pages[5]
+local pg_ajustes  = pages[6]
 
 -- ══ INICIO PAGE ══════════════════════════════════
 
@@ -1866,7 +1878,331 @@ makeDivider(extrasCard)
 -- Item in Hand Drawing
 makeToggle(extrasCard, "ext_item_hand", "ext_item_hand_d", "ItemInHand")
 
--- ══ AJUSTES PAGE ══════════════════════════════════
+-- ══════════════════════════════════════════════════════════════════════════════
+--  PLAYER PAGE  —  Soru → Hitbox → Auto Z-Attack  (Blox Fruits)
+--  Lógica:
+--    1. Se detecta cuándo el LocalPlayer hace un TP (Soru) hacia la hitbox de un
+--       enemigo monitorizando el delta de posición del HumanoidRootPart.
+--    2. Inmediatamente después del TP se snapea la cámara al enemigo más cercano
+--       dentro del rango configurado (PlayerSoruZRange).
+--    3. Se dispara la tecla Z (o la tecla configurada) N veces con el intervalo
+--       configurado usando keypress() / mouse1press() del executor.
+--    4. Si PlayerSoruZAutoDir está ON, el CFrame del HumanoidRootPart se orienta
+--       hacia el objetivo para que el ataque conecte sin importar el ángulo.
+--
+--  NOTA sobre Silent Aim en PC:
+--    El silent aim clásico (manipular el ángulo del rayo de la bala en el cliente)
+--    no funciona en Blox Fruits PC porque el servidor valida la dirección del ataque
+--    contra la posición del HumanoidRootPart. Lo que SÍ funciona es:
+--      a) Expandir la hitbox (ya tienes HBX).
+--      b) Snapear la cámara + orientar el personaje al objetivo antes del ataque.
+--    Este módulo implementa (b) de forma automática en el momento del Soru.
+-- ══════════════════════════════════════════════════════════════════════════════
+
+-- ── Referencia a la página ──────────────────────────────────────────────────
+local plrCard = makeCard(pg_player)
+makeSecHeader(plrCard, "P", "Player")
+makeDivider(plrCard)
+
+-- ── Locale entries (añadidas inline porque el Locale está fijo arriba) ──────
+-- Usamos claves directas en inglés/español según S.lang
+local function LP(en, es)
+    return (S.lang == "Español") and es or en
+end
+
+-- ── Sección: Soru → Z ───────────────────────────────────────────────────────
+secLabel(plrCard, "· · · SORU → Z ATTACK · · ·")
+
+-- Toggle principal
+makeToggle(plrCard,
+    "Soru Z Attack",
+    "Auto-fires Z key when you Soru to an enemy hitbox.",
+    "PlayerSoruZEnabled"
+)
+makeDivider(plrCard)
+
+-- Tecla a disparar (keybind custom)
+do
+    local row, _ = makeRow(plrCard, "Z Key to Fire", "Key fired after Soru TP.")
+    row.Size = UDim2.new(1, 0, 0, 56)
+
+    local kbBtn = Instance.new("TextButton", row)
+    kbBtn.Size = UDim2.fromOffset(44, 28)
+    kbBtn.Position = UDim2.new(1, -(44+14), 0.5, -14)
+    kbBtn.BackgroundColor3 = Color3.fromRGB(22, 18, 32)
+    kbBtn.BorderSizePixel = 0; kbBtn.AutoButtonColor = false
+    kbBtn.Font = Enum.Font.GothamBold; kbBtn.TextSize = 12
+    kbBtn.TextColor3 = accentColor
+    local kbs2 = Instance.new("UIStroke", kbBtn); kbs2.Color = accentColor; kbs2.Thickness = 1
+    Instance.new("UICorner", kbBtn).CornerRadius = UDim.new(0, 6)
+
+    local waiting = false
+    local function refreshZKey()
+        kbBtn.Text = S.PlayerSoruZKey
+    end
+    refreshZKey()
+    refreshers["PlayerSoruZKey"] = refreshZKey
+
+    kbBtn.MouseButton1Click:Connect(function()
+        if waiting then return end
+        waiting = true
+        kbBtn.Text = "..."
+        local conn
+        conn = UserInputService.InputBegan:Connect(function(inp, proc)
+            if proc then return end
+            if inp.UserInputType == Enum.UserInputType.Keyboard then
+                S.PlayerSoruZKey = inp.KeyCode.Name
+                save(); refreshZKey()
+                conn:Disconnect(); waiting = false
+                showNotif("✝  Z Key", "Set to: "..S.PlayerSoruZKey, true)
+            end
+        end)
+    end)
+end
+makeDivider(plrCard)
+
+-- Repeticiones de Z
+makeSlider(plrCard, "Z Repeat Count", "PlayerSoruZRepeat", 1, 5)
+makeDivider(plrCard)
+
+-- Delay antes del primer disparo
+makeSlider(plrCard, "Pre-fire Delay (x10ms)", "PlayerSoruZDelay", 0, 30, function(v)
+    S.PlayerSoruZDelay = v * 0.01   -- convertir a segundos
+    save()
+end)
+makeDivider(plrCard)
+
+-- Intervalo entre disparos repetidos
+makeSlider(plrCard, "Repeat Interval (x10ms)", "PlayerSoruZInterval", 1, 20, function(v)
+    S.PlayerSoruZInterval = v * 0.01
+    save()
+end)
+makeDivider(plrCard)
+
+-- Rango de detección
+makeSlider(plrCard, "Detection Range (studs)", "PlayerSoruZRange", 20, 300)
+makeDivider(plrCard)
+
+-- Toggle Auto-dirección
+makeToggle(plrCard,
+    "Auto Direction",
+    "Orients your character toward the enemy before firing Z.",
+    "PlayerSoruZAutoDir"
+)
+makeDivider(plrCard)
+
+-- Toggle Cam Snap
+makeToggle(plrCard,
+    "Camera Snap",
+    "Instantly snaps camera to enemy before firing Z.",
+    "PlayerSoruZCamSnap"
+)
+
+-- ── LÓGICA INTERNA del módulo Soru→Z ────────────────────────────────────────
+do
+    -- Variables de estado internas
+    local _soruZ_firing     = false     -- mutex: evita doble disparo simultáneo
+    local _soruZ_lastTpTime = 0         -- timestamp del último TP detectado
+    local _soruZ_cooldown   = 0.35      -- cooldown mínimo entre activaciones (s)
+    local _soruZ_tpThresh   = 8         -- studs mínimos para considerar un TP (Soru)
+    local _soruZ_tpMaxDist  = 80        -- studs máximos de un Soru (filtra teleports largos de mapa)
+    local _soruZ_lastPos    = nil       -- última posición conocida del LocalPlayer
+
+    -- Función auxiliar: obtener el enemigo más cercano dentro del rango
+    local function getSoruTarget()
+        local myChar = player.Character
+        local myRoot = myChar and myChar:FindFirstChild("HumanoidRootPart")
+        if not myRoot then return nil end
+
+        local best     = nil
+        local bestDist = math.huge
+
+        for _, p in ipairs(Players:GetPlayers()) do
+            if shouldSkipPlayer(p) then continue end
+            local char = p.Character; if not char then continue end
+            local hum  = char:FindFirstChildOfClass("Humanoid")
+            local root = char:FindFirstChild("HumanoidRootPart")
+            if not hum or hum.Health <= 0 or not root then continue end
+            -- Excluir SafeZone
+            if char:FindFirstChild("SafeZoneShield") then continue end
+            local dist = (root.Position - myRoot.Position).Magnitude
+            if dist < S.PlayerSoruZRange and dist < bestDist then
+                bestDist = dist
+                best     = root
+            end
+        end
+        return best
+    end
+
+    -- Función auxiliar: orientar personaje hacia un punto
+    local function faceTarget(myRoot, targetRoot)
+        if not myRoot or not targetRoot then return end
+        pcall(function()
+            local dir = (targetRoot.Position - myRoot.Position) * Vector3.new(1, 0, 1)
+            if dir.Magnitude < 0.1 then return end
+            myRoot.CFrame = CFrame.new(myRoot.Position, myRoot.Position + dir.Unit)
+        end)
+    end
+
+    -- Función auxiliar: snapear cámara hacia el objetivo
+    local function snapCameraToTarget(targetRoot)
+        if not targetRoot then return end
+        pcall(function()
+            local camPos = camera.CFrame.Position
+            local targetPos = Vector3.new(
+                targetRoot.Position.X,
+                targetRoot.Position.Y + 1.5,
+                targetRoot.Position.Z
+            )
+            local dir = (targetPos - camPos)
+            if dir.Magnitude < 0.1 then return end
+            camera.CFrame = CFrame.lookAt(camPos, camPos + dir.Unit)
+        end)
+    end
+
+    -- Función principal: disparar la tecla Z (y repetirla si está configurado)
+    local function fireZKey()
+        if _soruZ_firing then return end
+        _soruZ_firing = true
+
+        local keyName = S.PlayerSoruZKey or "Z"
+        local repeatCount = math.clamp(math.floor(S.PlayerSoruZRepeat or 1), 1, 5)
+        local interval    = math.clamp(S.PlayerSoruZInterval or 0.06, 0.01, 1)
+
+        -- Intentar con la API del executor (keypress / keyrelease)
+        local function pressKey()
+            local pressed = false
+            -- Método 1: keypress (Synapse X / KRNL / Fluxus)
+            pcall(function()
+                if keypress and keyrelease then
+                    local kc = Enum.KeyCode[keyName]
+                    if kc then
+                        keypress(kc.Value)
+                        task.wait(0.04)
+                        keyrelease(kc.Value)
+                        pressed = true
+                    end
+                end
+            end)
+            if pressed then return end
+            -- Método 2: simulateKeyPress (algunas APIs alternativas)
+            pcall(function()
+                if VirtualInputManager then
+                    VirtualInputManager:SendKeyEvent(true,  Enum.KeyCode[keyName], false, game)
+                    task.wait(0.04)
+                    VirtualInputManager:SendKeyEvent(false, Enum.KeyCode[keyName], false, game)
+                    pressed = true
+                end
+            end)
+            if pressed then return end
+            -- Método 3: UserInputService simulado (Fluxus Mobile / Wave)
+            pcall(function()
+                local uis = game:GetService("UserInputService")
+                local fakeInput = {
+                    UserInputType = Enum.UserInputType.Keyboard,
+                    KeyCode       = Enum.KeyCode[keyName],
+                    Delta         = Vector3.zero,
+                    Position      = Vector3.zero,
+                }
+                uis:simulateEvent(Enum.UserInputType.Keyboard, fakeInput)
+            end)
+        end
+
+        task.spawn(function()
+            for i = 1, repeatCount do
+                -- Antes de cada disparo: re-orientar y snapear cámara
+                local myChar = player.Character
+                local myRoot = myChar and myChar:FindFirstChild("HumanoidRootPart")
+                local target = getSoruTarget()
+
+                if target then
+                    if S.PlayerSoruZCamSnap  then snapCameraToTarget(target)         end
+                    if S.PlayerSoruZAutoDir  then faceTarget(myRoot, target)          end
+                end
+
+                pressKey()
+
+                if i < repeatCount then
+                    task.wait(interval)
+                end
+            end
+            _soruZ_firing = false
+        end)
+    end
+
+    -- Loop de detección de Soru (monitorea delta de posición)
+    task.spawn(function()
+        -- Esperar a que el personaje cargue
+        local char = player.Character or player.CharacterAdded:Wait()
+        local root = char:WaitForChild("HumanoidRootPart", 10)
+        if not root then return end
+        _soruZ_lastPos = root.Position
+
+        -- Re-inicializar al respawn
+        player.CharacterAdded:Connect(function(newChar)
+            local newRoot = newChar:WaitForChild("HumanoidRootPart", 10)
+            if newRoot then
+                _soruZ_lastPos = newRoot.Position
+                root = newRoot
+            end
+        end)
+
+        -- Conectar al RenderStepped para detección frame-a-frame
+        RunService.RenderStepped:Connect(function()
+            -- Sólo activo si el toggle está ON
+            if not S.PlayerSoruZEnabled then
+                _soruZ_lastPos = nil
+                return
+            end
+
+            local myChar2 = player.Character
+            local myRoot2 = myChar2 and myChar2:FindFirstChild("HumanoidRootPart")
+            if not myRoot2 then _soruZ_lastPos = nil; return end
+
+            local currentPos = myRoot2.Position
+
+            if _soruZ_lastPos then
+                local delta = (currentPos - _soruZ_lastPos).Magnitude
+
+                -- Detectar Soru: movimiento brusco entre tpThresh y tpMaxDist studs en 1 frame
+                if delta >= _soruZ_tpThresh and delta <= _soruZ_tpMaxDist then
+                    local now = os.clock()
+                    if now - _soruZ_lastTpTime >= _soruZ_cooldown then
+                        _soruZ_lastTpTime = now
+
+                        -- Verificar si hay un enemigo cercano tras el TP
+                        local target2 = getSoruTarget()
+                        if target2 then
+                            -- Delay configurable antes de disparar
+                            local preDelay = math.clamp(S.PlayerSoruZDelay or 0.08, 0, 0.5)
+                            if preDelay > 0 then
+                                task.delay(preDelay, fireZKey)
+                            else
+                                task.spawn(fireZKey)
+                            end
+
+                            -- Notificación visual discreta
+                            showNotif("✝  Soru Z", "Fired "..tostring(math.floor(S.PlayerSoruZRepeat or 1)).."x "..S.PlayerSoruZKey, true)
+                        end
+                    end
+                end
+            end
+
+            _soruZ_lastPos = currentPos
+        end)
+    end)
+
+    -- Guardar estado al cambiar toggles relevantes
+    refreshers["PlayerSoruZEnabled"] = function()
+        if not S.PlayerSoruZEnabled then
+            _soruZ_firing   = false
+            _soruZ_lastPos  = nil
+        end
+        save()
+    end
+end
+
+-- ── AJUSTES PAGE ══════════════════════════════════
 local cfgCard = makeCard(pg_ajustes)
 makeSecHeader(cfgCard, "†", "Settings")
 
@@ -1924,7 +2260,7 @@ for _, ch in ipairs(navBtns[1]:GetChildren()) do
 end
 
 -- Expose tabPages alias para compatibilidad con keybinds toggle
-local tabPages = {pages[1], pages[2], pages[3], pages[4], pages[5]}  -- dummy, no se usa con tabs
+local tabPages = {pages[1], pages[2], pages[3], pages[4], pages[5], pages[6]}  -- dummy, no se usa con tabs
 
 -- ══════════════════════════════════════════════
 --  DRAG — mover panel (por el header)
