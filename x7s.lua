@@ -94,11 +94,15 @@ local function mkDefault()
         Whitelist={},
         -- === CAM LOCK ===
         CamLockEnabled = false,
-        CamLockStrength = 10,
+        CamLockStrength = 30,
         CamLockRange = 150,
         CamLockWallCheck = true,
+        camlock_key = "F",
+        fov_on = false, fov_visible = true, fov_radius = 120,
+        CamLockSafeZone = true,
         -- === TARGET ===
         TargetPart = "Random",
+
         -- === EXTRAS ===
         InfStamina   = false,
         EspHealthBar = false,
@@ -189,9 +193,16 @@ local Locale = {
         hbx_vis="Visible Check",    hbx_vis_d="Only register hits when the enemy is actually visible. Prevents kills through walls.",
 
         camlock_on="Enable Cam Lock",      camlock_on_d="Automatically locks camera on the closest enemy.",
+        camlock_key="Cam Lock Keybind",
+
+        fov_on="Enable FOV Circle",    fov_on_d="Only lock enemies inside the FOV circle.",
+        fov_visible="Show FOV Circle",  fov_visible_d="Draw the FOV circle on screen.",
+        fov_radius="FOV Radius",        fov_radius_d="Size of the FOV circle in pixels.",
+
         camlock_strength="Cam Lock Strength", camlock_strength_d="How smoothly the camera follows (1-100).",
         camlock_range="Cam Lock Range",     camlock_range_d="Maximum distance to target (50-500).",
         camlock_wallcheck="Wall Check",     camlock_wallcheck_d="Only lock on visible enemies.",
+        camlock_safezone="Safe Zone",       camlock_safezone_d="Don't lock on players inside a safe zone.",
         
         whitelist_title="Whitelist Manager", whitelist_add="Add Player", whitelist_remove="Remove",
 
@@ -230,9 +241,16 @@ local Locale = {
         hbx_key="Tecla Hitbox",
         hbx_vis="Visible Check",    hbx_vis_d="Solo registra el hit si el enemigo está a la vista. Evita matar a través de paredes.",
         camlock_on="Activar Cam Lock",      camlock_on_d="Bloquea automáticamente la cámara en el enemigo más cercano.",
+        camlock_key="Tecla Cam Lock",
+
+        fov_on="Activar Círculo FOV",   fov_on_d="Solo bloquea enemigos dentro del círculo FOV.",
+        fov_visible="Mostrar Círculo",   fov_visible_d="Dibuja el círculo FOV en pantalla.",
+        fov_radius="Radio FOV",          fov_radius_d="Tamaño del círculo FOV en píxeles.",
+
         camlock_strength="Fuerza Cam Lock", camlock_strength_d="Qué tan suavemente sigue la cámara (1-100).",
         camlock_range="Rango Cam Lock",     camlock_range_d="Distancia máxima al objetivo (50-500).",
         camlock_wallcheck="Wall Check",     camlock_wallcheck_d="Solo bloquea enemigos visibles.",
+        camlock_safezone="Safe Zone",       camlock_safezone_d="No bloquea a jugadores dentro de una zona segura.",
         
         whitelist_title="Gestor de Whitelist", whitelist_add="Añadir Jugador", whitelist_remove="Eliminar",
         target_part="Parte Objetivo",
@@ -560,7 +578,7 @@ makeSBChain(sidebar, 88)
 
 -- Nav buttons (paginas)
 local navArea = Instance.new("Frame", sidebar)
-navArea.Size = UDim2.new(1, -16, 0, 200); navArea.Position = UDim2.fromOffset(8, 100)
+navArea.Size = UDim2.new(1, -16, 0, 300); navArea.Position = UDim2.fromOffset(8, 100)
 navArea.BackgroundTransparency = 1; navArea.BorderSizePixel = 0
 local navLayout = Instance.new("UIListLayout", navArea)
 navLayout.SortOrder = Enum.SortOrder.LayoutOrder; navLayout.Padding = UDim.new(0, 3)
@@ -1433,6 +1451,21 @@ makeDivider(camLockCard)
 makeSlider(camLockCard, "camlock_range", "CamLockRange", 50, 500)
 makeDivider(camLockCard)
 makeToggle(camLockCard, "camlock_wallcheck", "camlock_wallcheck_d", "CamLockWallCheck")
+makeDivider(camLockCard)
+makeToggle(camLockCard, "camlock_safezone", "camlock_safezone_d", "CamLockSafeZone")
+makeDivider(camLockCard)
+makeKeybind(camLockCard, "camlock_key", "camlock_key")
+
+-- ══ FOV CIRCLE CARD ═══════════════════════════════════════════
+local fovCard = makeCard(pg_aim)
+makeSecHeader(fovCard, "o", "FOV Circle")
+makeToggle(fovCard, "fov_on", "fov_on_d", "fov_on", function(on)
+    showNotif("✝  FOV Circle", on and L("n_on") or L("n_off"), on)
+end)
+makeDivider(fovCard)
+makeToggle(fovCard, "fov_visible", "fov_visible_d", "fov_visible")
+makeDivider(fovCard)
+makeSlider(fovCard, "fov_radius", "fov_radius", 20, 400)
 
 -- ══ TARGET (igual a SyyClient - dropdown desplegable) ═════════
 local targetCard = makeCard(pg_aim)
@@ -1831,6 +1864,7 @@ local guiColorRow, guiColorPop = makeColorPicker(cfgCard, "GUI Accent Color",
 
 -- Activar página 1 por defecto
 setPage = setPage  -- referencia correcta (definida arriba con forward)
+
 pages[1].Visible = true
 navBtns[1].BackgroundColor3 = Color3.fromRGB(36,30,46)
 navBtns[1].BackgroundTransparency = 0.5
@@ -2548,6 +2582,47 @@ end)
 -- ══════════════════════════════════════════════
 local camLockTarget=nil
 
+
+-- ══════════════════════════════════════════════
+--  FOV CIRCLE (igual a SyyClient)
+-- ══════════════════════════════════════════════
+local fovCircle = Drawing.new("Circle")
+fovCircle.Visible      = false
+fovCircle.Thickness    = 1.5
+fovCircle.Filled       = false
+fovCircle.NumSides     = 64
+fovCircle.Color        = Color3.fromRGB(141, 122, 174)  -- morado acento
+
+local function getFovCenter()
+    -- Centro de pantalla, igual que SyyClient
+    local vp = camera.ViewportSize
+    return Vector2.new(vp.X * 0.5, vp.Y * 0.5)
+end
+
+local function isInFov(root)
+    if not S.fov_on then return true end
+    local sp, onScreen = camera:WorldToViewportPoint(root.Position)
+    if not onScreen then return false end
+    local center = getFovCenter()
+    local dx = sp.X - center.X
+    local dy = sp.Y - center.Y
+    return (dx*dx + dy*dy) <= (S.fov_radius * S.fov_radius)
+end
+
+RunService.RenderStepped:Connect(function()
+    -- Visible solo cuando fov_visible está ON (independiente del filtro)
+    fovCircle.Visible = S.fov_visible
+    if S.fov_visible then
+        fovCircle.Position = getFovCenter()
+        fovCircle.Radius   = S.fov_radius
+        -- Morado cuando filtro ON, gris cuando solo visual
+        fovCircle.Color = S.fov_on
+            and Color3.fromRGB(141, 122, 174)   -- morado
+            or  Color3.fromRGB(110, 110, 110)    -- gris
+    end
+end)
+
+
 RunService:BindToRenderStep("x7sCamLock", Enum.RenderPriority.Camera.Value+1, function()
     pcall(function()
     if not S.CamLockEnabled then camLockTarget=nil; return end
@@ -2562,6 +2637,7 @@ RunService:BindToRenderStep("x7sCamLock", Enum.RenderPriority.Camera.Value+1, fu
         local hum=char:FindFirstChildOfClass("Humanoid")
         local root=char:FindFirstChild("HumanoidRootPart")
         if not hum or hum.Health<=0 or not root then continue end
+        if S.CamLockSafeZone and char:FindFirstChild("SafeZoneShield") then continue end
         local dist3D=myRoot and (root.Position-myRoot.Position).Magnitude or math.huge
         if dist3D>S.CamLockRange then continue end
         if S.CamLockWallCheck and myChar then
@@ -2570,6 +2646,8 @@ RunService:BindToRenderStep("x7sCamLock", Enum.RenderPriority.Camera.Value+1, fu
             end)
             if ok and #obs>0 then continue end
         end
+        -- FOV check
+        if not isInFov(root) then continue end
         if dist3D<bestDist then bestDist=dist3D; bestRoot=root end
     end
 
@@ -2580,13 +2658,14 @@ RunService:BindToRenderStep("x7sCamLock", Enum.RenderPriority.Camera.Value+1, fu
     local targetPos=Vector3.new(bestRoot.Position.X,bestRoot.Position.Y+1.5,bestRoot.Position.Z)
     local rawDir=targetPos-camPos
     if rawDir.Magnitude<0.1 then return end
-    local strength=math.clamp(S.CamLockStrength,1,100)*0.012
+    local strength=math.clamp(S.CamLockStrength,1,100)*0.003
     local newLook=camera.CFrame.LookVector:Lerp(rawDir.Unit,strength)
     if newLook.Magnitude>0.01 then
         camera.CFrame=CFrame.lookAt(camPos,camPos+newLook.Unit)
     end
     end)
 end)
+
 
 -- ══════════════════════════════════════════════
 --  KEYBINDS globales
@@ -2637,6 +2716,14 @@ UserInputService.InputBegan:Connect(function(inp, proc)
                 if obj.selBox then obj.selBox.Visible = false end
             end
         end
+        return
+    end
+
+    -- Toggle Cam Lock
+    if kn == S.camlock_key then
+        S.CamLockEnabled = not S.CamLockEnabled; save()
+        if refreshers["CamLockEnabled"] then refreshers["CamLockEnabled"]() end
+        showNotif("✝  Cam Lock", S.CamLockEnabled and L("n_on") or L("n_off"), S.CamLockEnabled)
         return
     end
 
@@ -2701,4 +2788,4 @@ task.spawn(function()
     end
 end)
 
-print("   "..S.gui_key.." = Toggle GUI  ·  "..S.esp_key.." = ESP  ·  "..S.hbx_key.." = Hitbox")
+print("   "..S.gui_key.." = GUI  ·  "..S.esp_key.." = ESP  ·  "..S.hbx_key.." = HBX  ·  "..S.camlock_key.." = CamLock")
