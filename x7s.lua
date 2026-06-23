@@ -2007,24 +2007,40 @@ makeToggle(plrCard,
     "PlayerSoruZCamSnap"
 )
 
--- ── LÓGICA INTERNA del módulo Soru→Z ────────────────────────────────────────
+-- ── LÓGICA INTERNA del módulo Auto-Z cuando NO estás en hitbox del enemigo ───
 do
-    -- Variables de estado internas
-    local _soruZ_firing     = false     -- mutex: evita doble disparo simultáneo
-    local _soruZ_lastTpTime = 0         -- timestamp del último TP detectado
-    local _soruZ_cooldown   = 0.35      -- cooldown mínimo entre activaciones (s)
-    local _soruZ_tpThresh   = 8         -- studs mínimos para considerar un TP (Soru)
-    local _soruZ_tpMaxDist  = 80        -- fallback; el límite real sigue PlayerSoruZRange
-    local _soruZ_lastPos    = nil       -- última posición conocida del LocalPlayer
+    -- ── Estado interno ───────────────────────────────────────────────────────
+    local _soruZ_firing      = false   -- mutex: un solo ciclo de disparo a la vez
+    local _soruZ_lastFire    = 0       -- os.clock() del último disparo
+    local _soruZ_cooldown    = 0.35    -- cooldown mínimo entre disparos (segundos)
+    -- "dentro de hitbox" = distancia al root del enemigo <= este umbral (studs)
+    -- Si el HBX proxy existe usamos su tamaño, si no usamos 6 studs fijo
+    local _HBX_THRESHOLD     = 6       -- fallback cuando no hay proxy
 
-    -- Función auxiliar: obtener el enemigo más cercano dentro del rango
+    -- ── Obtener radio efectivo de hitbox de un jugador ───────────────────────
+    local function getHitboxRadius(p)
+        -- Si el proxy del HBX está activo, usar su tamaño real
+        if _hbxOriginals and _hbxOriginals[p] and _hbxOriginals[p].proxy then
+            local sz = _hbxOriginals[p].proxy.Size
+            -- Radio = mitad de la dimensión más grande
+            return math.max(sz.X, sz.Y, sz.Z) * 0.5
+        end
+        -- Fallback: tamaño configurado en S.hbx_size (si está definido)
+        if S.hbx_size and S.hbx_size > 0 then
+            return S.hbx_size
+        end
+        return _HBX_THRESHOLD
+    end
+
+    -- ── Obtener el enemigo más cercano dentro del rango ──────────────────────
     local function getSoruTarget()
         local myChar = player.Character
         local myRoot = myChar and myChar:FindFirstChild("HumanoidRootPart")
-        if not myRoot then return nil end
+        if not myRoot then return nil, nil, math.huge end
 
-        local best     = nil
-        local bestDist = math.huge
+        local best      = nil
+        local bestP     = nil
+        local bestDist  = math.huge
 
         for _, p in ipairs(Players:GetPlayers()) do
             if shouldSkipPlayer(p) then continue end
@@ -2032,18 +2048,29 @@ do
             local hum  = char:FindFirstChildOfClass("Humanoid")
             local root = char:FindFirstChild("HumanoidRootPart")
             if not hum or hum.Health <= 0 or not root then continue end
-            -- Excluir SafeZone
             if char:FindFirstChild("SafeZoneShield") then continue end
             local dist = (root.Position - myRoot.Position).Magnitude
-            if dist < S.PlayerSoruZRange and dist < bestDist then
+            if dist < (S.PlayerSoruZRange or 120) and dist < bestDist then
                 bestDist = dist
                 best     = root
+                bestP    = p
             end
         end
-        return best
+        return best, bestP, bestDist
     end
 
-    -- Función auxiliar: orientar personaje hacia un punto
+    -- ── Comprobar si el LocalPlayer YA está dentro de la hitbox del objetivo ─
+    -- Devuelve true  → ya estamos encima, NO disparar
+    -- Devuelve false → no estamos encima, SÍ disparar Z
+    local function isInsideHitbox(myRoot, targetRoot, targetPlayer)
+        if not myRoot or not targetRoot then return false end
+        local dist = (myRoot.Position - targetRoot.Position).Magnitude
+        local radius = getHitboxRadius(targetPlayer)
+        -- Consideramos "dentro" si la distancia es menor al radio + pequeño margen
+        return dist <= (radius + 1.5)
+    end
+
+    -- ── Orientar personaje hacia el objetivo (plano XZ) ─────────────────────
     local function faceTarget(myRoot, targetRoot)
         if not myRoot or not targetRoot then return end
         pcall(function()
@@ -2053,161 +2080,160 @@ do
         end)
     end
 
-    -- Función auxiliar: snapear cámara hacia el objetivo
+    -- ── Snap de cámara instantáneo al objetivo ───────────────────────────────
     local function snapCameraToTarget(targetRoot)
         if not targetRoot then return end
         pcall(function()
-            local camPos = camera.CFrame.Position
+            local camPos    = camera.CFrame.Position
             local targetPos = Vector3.new(
                 targetRoot.Position.X,
                 targetRoot.Position.Y + 1.5,
                 targetRoot.Position.Z
             )
-            local dir = (targetPos - camPos)
+            local dir = targetPos - camPos
             if dir.Magnitude < 0.1 then return end
             camera.CFrame = CFrame.lookAt(camPos, camPos + dir.Unit)
         end)
     end
 
-    -- Función principal: disparar la tecla Z (y repetirla si está configurado)
+    -- ── Simular pulsación de tecla (multi-método para distintos executors) ───
+    local function pressKey(keyName)
+        local kc = Enum.KeyCode[keyName]
+        if not kc then return end
+
+        local pressed = false
+
+        -- Método 1: keypress / keyrelease  (Synapse X, KRNL, Fluxus PC)
+        pcall(function()
+            if keypress and keyrelease then
+                keypress(kc.Value)
+                task.wait(0.045)
+                keyrelease(kc.Value)
+                pressed = true
+            end
+        end)
+        if pressed then return end
+
+        -- Método 2: VirtualInputManager  (Synapse V3, algunas builds internas)
+        pcall(function()
+            if VirtualInputManager then
+                VirtualInputManager:SendKeyEvent(true,  kc, false, game)
+                task.wait(0.045)
+                VirtualInputManager:SendKeyEvent(false, kc, false, game)
+                pressed = true
+            end
+        end)
+        if pressed then return end
+
+        -- Método 3: fireproximityprompt / firetouchinterest no aplican aquí;
+        -- Fallback final: simulateEvent (Fluxus Mobile, Wave)
+        pcall(function()
+            local uis = game:GetService("UserInputService")
+            local fakeDown = {
+                UserInputType = Enum.UserInputType.Keyboard,
+                KeyCode       = kc,
+                Delta         = Vector3.zero,
+                Position      = Vector3.zero,
+                IsModifierKeyDown = function() return false end,
+            }
+            uis:simulateEvent(Enum.UserInputType.Keyboard, fakeDown)
+            task.wait(0.045)
+            -- simulateEvent no necesita un "up" separado en la mayoría de executors
+        end)
+    end
+
+    -- ── Ciclo de disparo: orienta, snapea cámara y dispara Z N veces ─────────
     local function fireZKey()
         if _soruZ_firing then return end
         _soruZ_firing = true
 
-        local keyName = S.PlayerSoruZKey or "Z"
-        local repeatCount = math.clamp(math.floor(S.PlayerSoruZRepeat or 1), 1, 5)
-        local interval    = math.clamp(S.PlayerSoruZInterval or 0.06, 0.01, 1)
-
-        -- Intentar con la API del executor (keypress / keyrelease)
-        local function pressKey()
-            local pressed = false
-            -- Método 1: keypress (Synapse X / KRNL / Fluxus)
-            pcall(function()
-                if keypress and keyrelease then
-                    local kc = Enum.KeyCode[keyName]
-                    if kc then
-                        keypress(kc.Value)
-                        task.wait(0.04)
-                        keyrelease(kc.Value)
-                        pressed = true
-                    end
-                end
-            end)
-            if pressed then return end
-            -- Método 2: simulateKeyPress (algunas APIs alternativas)
-            pcall(function()
-                if VirtualInputManager then
-                    VirtualInputManager:SendKeyEvent(true,  Enum.KeyCode[keyName], false, game)
-                    task.wait(0.04)
-                    VirtualInputManager:SendKeyEvent(false, Enum.KeyCode[keyName], false, game)
-                    pressed = true
-                end
-            end)
-            if pressed then return end
-            -- Método 3: UserInputService simulado (Fluxus Mobile / Wave)
-            pcall(function()
-                local uis = game:GetService("UserInputService")
-                local fakeInput = {
-                    UserInputType = Enum.UserInputType.Keyboard,
-                    KeyCode       = Enum.KeyCode[keyName],
-                    Delta         = Vector3.zero,
-                    Position      = Vector3.zero,
-                }
-                uis:simulateEvent(Enum.UserInputType.Keyboard, fakeInput)
-            end)
-        end
+        local keyName     = S.PlayerSoruZKey     or "Z"
+        local repeatCount = math.clamp(math.floor(S.PlayerSoruZRepeat   or 1), 1, 5)
+        local interval    = math.clamp(S.PlayerSoruZInterval             or 0.06, 0.01, 1)
+        local preDelay    = math.clamp(S.PlayerSoruZDelay                or 0.08, 0,   0.5)
 
         task.spawn(function()
+            if preDelay > 0 then task.wait(preDelay) end
+
             for i = 1, repeatCount do
-                -- Antes de cada disparo: re-orientar y snapear cámara
+                -- Re-obtener objetivo y orientar ANTES de cada pulsación
                 local myChar = player.Character
                 local myRoot = myChar and myChar:FindFirstChild("HumanoidRootPart")
-                local target = getSoruTarget()
+                local target, _, _ = getSoruTarget()
 
                 if target then
-                    if S.PlayerSoruZCamSnap  then snapCameraToTarget(target)         end
-                    if S.PlayerSoruZAutoDir  then faceTarget(myRoot, target)          end
+                    if S.PlayerSoruZCamSnap then snapCameraToTarget(target) end
+                    if S.PlayerSoruZAutoDir then faceTarget(myRoot, target) end
                 end
 
-                pressKey()
+                pressKey(keyName)
 
                 if i < repeatCount then
                     task.wait(interval)
                 end
             end
+
             _soruZ_firing = false
         end)
     end
 
-    -- Loop de detección de Soru (monitorea delta de posición)
-    task.spawn(function()
-        -- Esperar a que el personaje cargue
-        local char = player.Character or player.CharacterAdded:Wait()
-        local root = char:WaitForChild("HumanoidRootPart", 10)
-        if not root then return end
-        _soruZ_lastPos = root.Position
+    -- ── Loop principal: se ejecuta cada RenderStepped ────────────────────────
+    -- Lógica:
+    --   1. Si el toggle está OFF → no hace nada.
+    --   2. Obtiene el enemigo más cercano dentro del rango.
+    --   3. Si NO estamos dentro de su hitbox → disparar Z y esperar cooldown.
+    --   4. Si SÍ estamos dentro → silencio total (ya estamos encima, el ataque
+    --      físico normal conecta solo).
+    RunService.RenderStepped:Connect(function()
+        if not S.PlayerSoruZEnabled then return end
 
-        -- Re-inicializar al respawn
-        player.CharacterAdded:Connect(function(newChar)
-            local newRoot = newChar:WaitForChild("HumanoidRootPart", 10)
-            if newRoot then
-                _soruZ_lastPos = newRoot.Position
-                root = newRoot
-            end
-        end)
+        -- Cooldown entre disparos
+        local now = os.clock()
+        if now - _soruZ_lastFire < _soruZ_cooldown then return end
 
-        -- Conectar al RenderStepped para detección frame-a-frame
-        RunService.RenderStepped:Connect(function()
-            -- Sólo activo si el toggle está ON
-            if not S.PlayerSoruZEnabled then
-                _soruZ_lastPos = nil
-                return
-            end
+        -- Mutex: no lanzar si ya estamos en medio de un ciclo
+        if _soruZ_firing then return end
 
-            local myChar2 = player.Character
-            local myRoot2 = myChar2 and myChar2:FindFirstChild("HumanoidRootPart")
-            if not myRoot2 then _soruZ_lastPos = nil; return end
+        local myChar = player.Character
+        local myRoot = myChar and myChar:FindFirstChild("HumanoidRootPart")
+        if not myRoot then return end
 
-            local currentPos = myRoot2.Position
+        local myHum = myChar:FindFirstChildOfClass("Humanoid")
+        if not myHum or myHum.Health <= 0 then return end
 
-            if _soruZ_lastPos then
-                local delta = (currentPos - _soruZ_lastPos).Magnitude
+        -- Obtener objetivo
+        local target, targetP, dist = getSoruTarget()
+        if not target or not targetP then return end   -- sin enemigos en rango
 
-                local tpMaxDist = math.max(_soruZ_tpMaxDist, S.PlayerSoruZRange or _soruZ_tpMaxDist)
+        -- Comprobar si YA estamos dentro de la hitbox
+        if isInsideHitbox(myRoot, target, targetP) then
+            -- Estamos encima → NO disparar auto-Z
+            -- (el Soru ya llevó al personaje ahí; el ataque manual conecta)
+            return
+        end
 
-                -- Detectar Soru: movimiento brusco dentro del rango configurado
-                if delta >= _soruZ_tpThresh and delta <= tpMaxDist then
-                    local now = os.clock()
-                    if now - _soruZ_lastTpTime >= _soruZ_cooldown then
-                        _soruZ_lastTpTime = now
+        -- NO estamos en la hitbox → disparar Z auto-dirigida al enemigo
+        _soruZ_lastFire = now
 
-                        -- Verificar si hay un enemigo cercano tras el TP
-                        local target2 = getSoruTarget()
-                        if target2 then
-                            -- Delay configurable antes de disparar
-                            local preDelay = math.clamp(S.PlayerSoruZDelay or 0.08, 0, 0.5)
-                            if preDelay > 0 then
-                                task.delay(preDelay, fireZKey)
-                            else
-                                task.spawn(fireZKey)
-                            end
+        -- Snap de cámara inmediato ANTES de spawnar el ciclo de disparo
+        if S.PlayerSoruZCamSnap then snapCameraToTarget(target) end
+        if S.PlayerSoruZAutoDir then faceTarget(myRoot, target)  end
 
-                            -- Notificación visual discreta
-                            showNotif("✝  Soru Z", "Fired "..tostring(math.floor(S.PlayerSoruZRepeat or 1)).."x "..S.PlayerSoruZKey, true)
-                        end
-                    end
-                end
-            end
+        fireZKey()
 
-            _soruZ_lastPos = currentPos
-        end)
+        -- Notificación discreta (solo cada cierto tiempo para no spamear)
+        showNotif(
+            "✝  Auto Z",
+            "→ " .. targetP.Name .. " (" .. math.floor(dist) .. " st)",
+            true
+        )
     end)
 
-    -- Guardar estado al cambiar toggles relevantes
+    -- ── Refrescadores de toggle ───────────────────────────────────────────────
     refreshers["PlayerSoruZEnabled"] = function()
         if not S.PlayerSoruZEnabled then
-            _soruZ_firing   = false
-            _soruZ_lastPos  = nil
+            _soruZ_firing    = false
+            _soruZ_lastFire  = 0
         end
         save()
     end
