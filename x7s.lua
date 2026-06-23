@@ -2805,3 +2805,459 @@ task.spawn(function()
         end
     end
 end)
+
+-- ══════════════════════════════════════════════════════════════════════════════
+--  ██████╗ ██████╗ ██╗  ██╗    ███████╗██╗██╗     ███████╗███╗   ██╗████████╗
+--  ██╔══██╗██╔══██╗╚██╗██╔╝    ██╔════╝██║██║     ██╔════╝████╗  ██║╚══██╔══╝
+--  ██████╔╝██████╔╝ ╚███╔╝     ███████╗██║██║     █████╗  ██╔██╗ ██║   ██║
+--  ██╔══██╗██╔══██╗ ██╔██╗     ╚════██║██║██║     ██╔══╝  ██║╚██╗██║   ██║
+--  ██║  ██║██████╔╝██╔╝ ██╗    ███████║██║███████╗███████╗██║ ╚████║   ██║
+--  ╚═╝  ╚═╝╚═════╝ ╚═╝  ╚═╝    ╚══════╝╚═╝╚══════╝╚══════╝╚═╝  ╚═══╝   ╚═╝
+--  SECCIÓN: rbx  —  Silent Aim (Raycast Hook) + Prediction + FOV Filter
+--  Compatible: Solara / Xeno / Synapse X / Wave / Delta
+--  Técnica: hookfunction en WorldRoot:FindPartOnRayWithWhitelist y Raycast
+--            + mouse.Hit / mouse.Target override via getrawmetatable (si disponible)
+--            sin mover la cámara, sin mouse movement
+-- ══════════════════════════════════════════════════════════════════════════════
+
+-- ─── 1. CONFIG rbx (añadida al objeto S global existente) ────────────────────
+do
+    local rbxDefaults = {
+        rbx_on            = false,          -- Silent Aim habilitado
+        rbx_part          = "Head",         -- parte objetivo: Head / UpperTorso / HumanoidRootPart
+        rbx_prediction    = 0,              -- compensación de lag (0-200 ms, en studs/tick)
+        rbx_fov_link      = true,           -- usa el mismo FOV circle del Cam Lock
+        rbx_fov_radius    = 120,            -- FOV propio si rbx_fov_link=false
+        rbx_vis_check     = false,          -- solo apuntar a targets visibles
+        rbx_team_check    = true,           -- ignorar aliados (same team)
+        rbx_key           = "E",            -- toggle keybind
+        rbx_debug_circle  = true,           -- dibuja un punto en la parte hooked
+        rbx_debug_col_r   = 141,
+        rbx_debug_col_g   = 122,
+        rbx_debug_col_b   = 174,
+    }
+    for k, v in pairs(rbxDefaults) do
+        if S[k] == nil then S[k] = v end
+    end
+end
+
+-- ─── 2. PANEL GUI — nueva card en pg_aim (página "Aim") ──────────────────────
+do
+    -- Separador visual entre las cards existentes y la nueva
+    local rbxDivFrame = Instance.new("Frame", pg_aim)
+    rbxDivFrame.Size = UDim2.new(1, 0, 0, 1)
+    rbxDivFrame.BackgroundColor3 = Color3.fromRGB(38, 32, 52)
+    rbxDivFrame.BorderSizePixel = 0
+
+    local rbxCard = makeCard(pg_aim)
+    makeSecHeader(rbxCard, "†", "Silent Aim  [rbx]")
+
+    -- ON/OFF principal
+    makeToggle(rbxCard, "rbx_on",  nil, "rbx_on", function(on)
+        showNotif("✝  Silent Aim", on and "Activado" or "Desactivado", on)
+    end)
+    makeDivider(rbxCard)
+
+    -- Parte objetivo
+    makeDropdown(rbxCard, "target_part", "rbx_part",
+        {"Head", "UpperTorso", "LowerTorso", "HumanoidRootPart"},
+        function(opt)
+            showNotif("✝  Silent Aim", "Parte: " .. opt, true)
+        end
+    )
+    makeDivider(rbxCard)
+
+    -- Predicción (compensación de movimiento)
+    makeSlider(rbxCard, "camlock_strength", "rbx_prediction", 0, 200)
+    makeDivider(rbxCard)
+
+    -- Vis check
+    makeToggle(rbxCard, "camlock_wallcheck", "camlock_wallcheck_d", "rbx_vis_check")
+    makeDivider(rbxCard)
+
+    -- Team check
+    local function makeSimpleToggleRow(parent, labelTxt, stateKey, cbFn)
+        local row = Instance.new("Frame", parent)
+        row.Size = UDim2.new(1, 0, 0, 42)
+        row.BackgroundTransparency = 1
+        local tl = Instance.new("TextLabel", row)
+        tl.Size = UDim2.new(1, -70, 0, 16)
+        tl.Position = UDim2.fromOffset(14, 13)
+        tl.BackgroundTransparency = 1
+        tl.Text = labelTxt
+        tl.TextColor3 = Color3.fromRGB(215, 215, 215)
+        tl.Font = Enum.Font.GothamMedium
+        tl.TextSize = 12
+        tl.TextXAlignment = Enum.TextXAlignment.Left
+        local TW2, TH2 = 44, 24
+        local track2 = Instance.new("Frame", row)
+        track2.Size = UDim2.fromOffset(TW2, TH2)
+        track2.Position = UDim2.new(1, -(TW2 + 14), 0.5, -TH2 / 2)
+        track2.BorderSizePixel = 0
+        Instance.new("UICorner", track2).CornerRadius = UDim.new(1, 0)
+        local trkS2 = Instance.new("UIStroke", track2)
+        trkS2.Color = Color3.fromRGB(58, 58, 58); trkS2.Thickness = 1
+        local thumb2 = Instance.new("Frame", track2)
+        thumb2.Size = UDim2.fromOffset(18, 18); thumb2.BorderSizePixel = 0
+        Instance.new("UICorner", thumb2).CornerRadius = UDim.new(1, 0)
+        local function refresh2()
+            local on2 = S[stateKey]
+            if on2 then
+                TweenService:Create(track2, TI, {BackgroundColor3 = accentColor}):Play()
+                trkS2.Color = accentColor
+            else
+                TweenService:Create(track2, TI, {BackgroundColor3 = Color3.fromRGB(26, 26, 26)}):Play()
+                trkS2.Color = Color3.fromRGB(58, 58, 58)
+            end
+            TweenService:Create(thumb2, TI, {
+                Position = on2 and UDim2.fromOffset(TW2 - 20, 3) or UDim2.fromOffset(2, 3),
+                BackgroundColor3 = on2 and Color3.fromRGB(239, 239, 239) or Color3.fromRGB(58, 58, 58),
+            }):Play()
+        end
+        refresh2()
+        refreshers[stateKey] = refresh2
+        local hit2 = Instance.new("TextButton", row)
+        hit2.Size = UDim2.new(1, 0, 1, 0)
+        hit2.BackgroundTransparency = 1; hit2.Text = ""
+        hit2.MouseButton1Click:Connect(function()
+            S[stateKey] = not S[stateKey]; refresh2(); save()
+            if cbFn then cbFn(S[stateKey]) end
+        end)
+        return row
+    end
+
+    makeSimpleToggleRow(rbxCard, "Team Check",       "rbx_team_check",    nil)
+    makeDivider(rbxCard)
+    makeSimpleToggleRow(rbxCard, "Ligar al FOV",     "rbx_fov_link",      nil)
+    makeDivider(rbxCard)
+    makeSimpleToggleRow(rbxCard, "Debug Circle",     "rbx_debug_circle",  nil)
+    makeDivider(rbxCard)
+
+    -- FOV propio (visible solo si rbx_fov_link = false)
+    makeSlider(rbxCard, "fov_radius", "rbx_fov_radius", 20, 500)
+    makeDivider(rbxCard)
+
+    -- Keybind
+    makeKeybind(rbxCard, "camlock_key", "rbx_key")
+end
+
+-- ─── 3. UTILIDADES internas ───────────────────────────────────────────────────
+local rbxState = {
+    hookedFOPR     = false,  -- hookfunction en FindPartOnRayWithWhitelist aplicada
+    hookedRC       = false,  -- hookfunction en Raycast aplicada
+    hookedMeta     = false,  -- hookmetamethod en mouse.__index aplicada
+    origFOPR       = nil,
+    origRC         = nil,
+    origMouseIndex = nil,
+    debugDot       = nil,    -- Drawing.Circle para debug
+    lastTarget     = nil,    -- última BasePart objetivo
+    lastTargetPos  = nil,    -- Vector3 calculado (con predicción)
+}
+
+-- Debug dot (círculo pequeño que marca la parte hooked en pantalla)
+if HAS_DRAWING then
+    rbxState.debugDot = Drawing.new("Circle")
+    rbxState.debugDot.Visible    = false
+    rbxState.debugDot.Filled     = true
+    rbxState.debugDot.NumSides   = 32
+    rbxState.debugDot.Radius     = 5
+    rbxState.debugDot.Color      = Color3.fromRGB(S.rbx_debug_col_r, S.rbx_debug_col_g, S.rbx_debug_col_b)
+    rbxState.debugDot.Transparency = 0.15
+end
+
+-- ─── 4. SELECCIÓN DE TARGET más cercano al centro de pantalla ────────────────
+local function rbxGetFovRadius()
+    if S.rbx_fov_link then
+        return S.fov_radius
+    end
+    return S.rbx_fov_radius
+end
+
+local function rbxIsInFov(worldPos)
+    local sp, onScreen = camera:WorldToViewportPoint(worldPos)
+    if not onScreen then return false end
+    local center = getFovCenter()
+    local dx = sp.X - center.X
+    local dy = sp.Y - center.Y
+    local r   = rbxGetFovRadius()
+    return (dx * dx + dy * dy) <= (r * r)
+end
+
+local function rbxIsVisible(targetPart)
+    if not S.rbx_vis_check then return true end
+    local myChar = player.Character
+    if not myChar then return true end
+    local origin = camera.CFrame.Position
+    local target = targetPart.Position
+    local dir    = target - origin
+    local dist   = dir.Magnitude
+    local rcP    = RaycastParams.new()
+    rcP.FilterType = Enum.RaycastFilterType.Exclude
+    local exc = {myChar}
+    local ep = targetPart.Parent
+    if ep then
+        for _, bp in ipairs(ep:GetDescendants()) do
+            if bp:IsA("BasePart") then table.insert(exc, bp) end
+        end
+    end
+    rcP.FilterDescendantsInstances = exc
+    local res = workspace:Raycast(origin, dir.Unit * dist, rcP)
+    return res == nil or res.Distance >= dist - 0.5
+end
+
+local function rbxSameTeam(p)
+    if not S.rbx_team_check then return false end
+    pcall(function()
+        if player.Team and p.Team and player.Team == p.Team then
+            return true
+        end
+    end)
+    return false
+end
+
+-- Predicción simple: offset en la dirección de movimiento del HRP
+local function rbxPredictPos(root, basePart)
+    if not basePart or not root then return basePart and basePart.Position end
+    local vel = root.AssemblyLinearVelocity
+    local ping = S.rbx_prediction / 1000  -- convertir ms → segundos
+    return basePart.Position + vel * ping
+end
+
+-- Devuelve la BasePart objetivo del mejor jugador dentro del FOV
+local function rbxPickTarget()
+    local myChar = player.Character
+    local myRoot = myChar and myChar:FindFirstChild("HumanoidRootPart")
+    local center  = getFovCenter()
+    local bestPart = nil
+    local bestDist = math.huge
+
+    for _, p in ipairs(Players:GetPlayers()) do
+        if p == player then continue end
+        if shouldSkipPlayer(p) then continue end
+        if rbxSameTeam(p) then continue end
+        local char = p.Character
+        if not char then continue end
+        local hum = char:FindFirstChildOfClass("Humanoid")
+        if not hum or hum.Health <= 0 then continue end
+
+        -- Escoger la parte según S.rbx_part
+        local part = char:FindFirstChild(S.rbx_part)
+                  or char:FindFirstChild("Head")
+                  or char:FindFirstChild("HumanoidRootPart")
+        if not part then continue end
+
+        local root2 = char:FindFirstChild("HumanoidRootPart")
+        local predPos = rbxPredictPos(root2, part)
+        if not predPos then continue end
+
+        -- Verificar que esté dentro del FOV
+        if not rbxIsInFov(predPos) then continue end
+
+        -- Verificar visibilidad si está activo
+        if not rbxIsVisible(part) then continue end
+
+        -- Calcular distancia en pantalla al centro del FOV
+        local sp, onS = camera:WorldToViewportPoint(predPos)
+        if not onS then continue end
+        local dx = sp.X - center.X
+        local dy = sp.Y - center.Y
+        local screenDist = dx * dx + dy * dy
+
+        if screenDist < bestDist then
+            bestDist = screenDist
+            bestPart = part
+            rbxState.lastTargetPos = predPos
+        end
+    end
+
+    rbxState.lastTarget = bestPart
+    return bestPart, rbxState.lastTargetPos
+end
+
+-- ─── 5. HOOK: FindPartOnRayWithWhitelist ─────────────────────────────────────
+--  Blox Fruits usa esta función internamente para registrar los hits de sus
+--  ataques y skills. La hokeamos para redirigir el origen/dirección al target.
+-- ─────────────────────────────────────────────────────────────────────────────
+local function rbxInstallHooks()
+    if rbxState.hookedFOPR and rbxState.hookedRC then return end
+
+    -- ── Hook 1: FindPartOnRayWithWhitelist (legacy API, aún muy usada) ────────
+    if not rbxState.hookedFOPR and typeof(hookfunction) == "function" then
+        local origFOPR = workspace.FindPartOnRayWithWhitelist
+        rbxState.origFOPR = origFOPR
+        local ok = pcall(function()
+            hookfunction(workspace.FindPartOnRayWithWhitelist,
+                newcclosure(function(ws, ray, whitelist, ignoreWater, ignoreTransparency)
+                    if S.rbx_on then
+                        local targetPart, predPos = rbxPickTarget()
+                        if targetPart and predPos then
+                            -- Crear un Ray modificado que apunta a la parte objetivo
+                            local origin = ray.Origin
+                            local direction = (predPos - origin)
+                            -- Mantener la magnitud original para no alterar el rango
+                            local origMag  = ray.Direction.Magnitude
+                            local newDir   = direction.Unit * math.min(origMag, direction.Magnitude + 2)
+                            local newRay   = Ray.new(origin, newDir)
+                            return origFOPR(ws, newRay, whitelist, ignoreWater, ignoreTransparency)
+                        end
+                    end
+                    return origFOPR(ws, ray, whitelist, ignoreWater, ignoreTransparency)
+                end)
+            )
+        end)
+        if ok then rbxState.hookedFOPR = true end
+    end
+
+    -- ── Hook 2: workspace:Raycast (API moderna) ───────────────────────────────
+    if not rbxState.hookedRC and typeof(hookfunction) == "function" then
+        local origRC = workspace.Raycast
+        rbxState.origRC = origRC
+        local ok2 = pcall(function()
+            hookfunction(workspace.Raycast,
+                newcclosure(function(ws, origin, direction, params)
+                    if S.rbx_on then
+                        local targetPart, predPos = rbxPickTarget()
+                        if targetPart and predPos then
+                            local newDir = (predPos - origin)
+                            -- Preservar la magnitud para no cambiar el rango del raycast
+                            local origMag2 = direction.Magnitude
+                            newDir = newDir.Unit * math.min(origMag2, newDir.Magnitude + 2)
+                            return origRC(ws, origin, newDir, params)
+                        end
+                    end
+                    return origRC(ws, origin, direction, params)
+                end)
+            )
+        end)
+        if ok2 then rbxState.hookedRC = true end
+    end
+
+    -- ── Hook 3: mouse.__index override via getrawmetatable (Solara compatible) ─
+    --  Hace que mouse.Hit.Position y mouse.Target devuelvan la parte objetivo
+    --  sin mover la cámara ni el cursor físico.
+    if not rbxState.hookedMeta then
+        pcall(function()
+            if typeof(getrawmetatable) ~= "function" then return end
+            local mouse = player:GetMouse()
+            local mt    = getrawmetatable(mouse)
+            if not mt then return end
+            -- Solara: setreadonly(mt, false) antes de hookear
+            if typeof(setreadonly) == "function" then
+                pcall(function() setreadonly(mt, false) end)
+            end
+            local origIndex = mt.__index
+            rbxState.origMouseIndex = origIndex
+            mt.__index = newcclosure(function(self, key)
+                if S.rbx_on then
+                    local targetPart, predPos = rbxPickTarget()
+                    if targetPart and predPos then
+                        if key == "Hit" then
+                            return CFrame.new(predPos)
+                        elseif key == "Target" then
+                            return targetPart
+                        end
+                    end
+                end
+                return origIndex(self, key)
+            end)
+            rbxState.hookedMeta = true
+        end)
+    end
+end
+
+-- ─── 6. RENDER LOOP rbx — debug dot + actualización de estado ────────────────
+RunService.RenderStepped:Connect(function()
+    pcall(function()
+        -- Debug dot
+        if not HAS_DRAWING or not rbxState.debugDot then return end
+        if not S.rbx_on or not S.rbx_debug_circle then
+            rbxState.debugDot.Visible = false
+            return
+        end
+        local targetPart, predPos = rbxPickTarget()
+        if not targetPart or not predPos then
+            rbxState.debugDot.Visible = false
+            return
+        end
+        local sp, onS = camera:WorldToViewportPoint(predPos)
+        if not onS then
+            rbxState.debugDot.Visible = false
+            return
+        end
+        rbxState.debugDot.Visible   = true
+        rbxState.debugDot.Position  = Vector2.new(sp.X, sp.Y)
+        rbxState.debugDot.Color     = Color3.fromRGB(
+            S.rbx_debug_col_r,
+            S.rbx_debug_col_g,
+            S.rbx_debug_col_b
+        )
+        -- Pulsar el tamaño del dot según la distancia (efecto visual)
+        local myChar3 = player.Character
+        local myRoot3 = myChar3 and myChar3:FindFirstChild("HumanoidRootPart")
+        if myRoot3 then
+            local d3 = (targetPart.Position - myRoot3.Position).Magnitude
+            rbxState.debugDot.Radius = math.clamp(8 - d3 / 60, 3, 8)
+        end
+    end)
+end)
+
+-- ─── 7. ACTIVAR HOOKS cuando rbx_on se enciende ──────────────────────────────
+--  Los hooks se instalan una sola vez y se controlan con la bandera S.rbx_on
+--  para no hookear/deshookear en cada frame (eso causa crashes en Solara).
+task.spawn(function()
+    -- Esperar a que el personaje cargue antes de instalar hooks
+    if not player.Character then player.CharacterAdded:Wait() end
+    task.wait(1.5)  -- margen de seguridad para que el juego cargue sus remotes
+    rbxInstallHooks()
+    -- Re-instalar en cada respawn (los hooks se pierden al recargar el personaje en algunos juegos)
+    player.CharacterAdded:Connect(function()
+        task.wait(1)
+        rbxInstallHooks()
+    end)
+end)
+
+-- ─── 8. KEYBIND toggle rbx_on ────────────────────────────────────────────────
+-- Se integra al mismo InputBegan que ya existe arriba (añadido al final
+-- usando una conexión adicional para no tocar el bloque original).
+UserInputService.InputBegan:Connect(function(inp, proc)
+    if proc then return end
+    if inp.UserInputType ~= Enum.UserInputType.Keyboard then return end
+    local kn = inp.KeyCode.Name
+    if kn == S.rbx_key then
+        S.rbx_on = not S.rbx_on
+        save()
+        if refreshers["rbx_on"] then refreshers["rbx_on"]() end
+        showNotif("✝  Silent Aim [rbx]",
+            S.rbx_on and "Activado" or "Desactivado",
+            S.rbx_on)
+        -- Asegurar hooks instalados al activar
+        if S.rbx_on then
+            rbxInstallHooks()
+        end
+        -- Ocultar debug dot si se desactiva
+        if not S.rbx_on and rbxState.debugDot then
+            rbxState.debugDot.Visible = false
+        end
+    end
+end)
+
+-- ─── 9. LIMPIEZA al destruir la GUI ──────────────────────────────────────────
+gui.AncestryChanged:Connect(function(_, parent)
+    if parent == nil then
+        pcall(function()
+            if rbxState.debugDot then rbxState.debugDot:Remove() end
+        end)
+    end
+end)
+
+-- ─── 10. STREAM MODE: ocultar debug dot también ──────────────────────────────
+local _origApplyStream = applyStreamMode
+applyStreamMode = function(on)
+    _origApplyStream(on)
+    if on and rbxState.debugDot then
+        rbxState.debugDot.Visible = false
+    end
+end
+
+-- ─── FIN SECCIÓN rbx ─────────────────────────────────────────────────────────
+-- ═══════════════════════════════════════════════════════════════════════════════
