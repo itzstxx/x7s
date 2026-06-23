@@ -103,6 +103,17 @@ local function mkDefault()
         -- === TARGET ===
         TargetPart = "Random",
 
+
+
+
+
+
+
+
+
+
+
+
         -- === EXTRAS ===
         InfStamina   = false,
         EspHealthBar = false,
@@ -203,7 +214,7 @@ local Locale = {
         camlock_range="Cam Lock Range",     camlock_range_d="Maximum distance to target (50-500).",
         camlock_wallcheck="Wall Check",     camlock_wallcheck_d="Only lock on visible enemies.",
         camlock_safezone="Safe Zone",       camlock_safezone_d="Don't lock on players inside a safe zone.",
-        
+
         whitelist_title="Whitelist Manager", whitelist_add="Add Player", whitelist_remove="Remove",
 
         target_part="Target Part",
@@ -222,6 +233,7 @@ local Locale = {
         st_stream="Stream Mode",       st_stream_d="Hides GUI and disables all ESP visuals. Hotkey: RightAlt.",
         st_r1="Reset Toggle UI Keybind",  st_r1_d="Reset this keybind to its default value.",
         st_r2="Reset All Keybinds",       st_r2_d="Reset all keybinds to their default values.",
+
 
         n_on="Enabled", n_off="Disabled", n_reset="Keybind reset",
     },
@@ -251,7 +263,7 @@ local Locale = {
         camlock_range="Rango Cam Lock",     camlock_range_d="Distancia máxima al objetivo (50-500).",
         camlock_wallcheck="Wall Check",     camlock_wallcheck_d="Solo bloquea enemigos visibles.",
         camlock_safezone="Safe Zone",       camlock_safezone_d="No bloquea a jugadores dentro de una zona segura.",
-        
+
         whitelist_title="Gestor de Whitelist", whitelist_add="Añadir Jugador", whitelist_remove="Eliminar",
         target_part="Parte Objetivo",
         extras_title="Extras",
@@ -267,6 +279,7 @@ local Locale = {
         st_stream="Stream Mode",       st_stream_d="Oculta la GUI y desactiva el ESP visual. Tecla: RightAlt.",
         st_r1="Restablecer Tecla UI",     st_r1_d="Restablece esta tecla a su valor predeterminado.",
         st_r2="Restablecer Todas",        st_r2_d="Restablece todas las teclas a sus valores predeterminados.",
+
         n_on="Activado", n_off="Desactivado", n_reset="Tecla restablecida",
     }
 }
@@ -609,12 +622,17 @@ local function makeContentPage()
 end
 
 -- SVG-like icon labels (usando Unicode para los iconos de nav)
+
+
 local NAV_DATA = {
     { icon = "*", label = "Inicio" },
     { icon = "o", label = "Aim" },
     { icon = "+", label = "Extras" },
     { icon = "#", label = "Ajustes" },
 }
+
+
+
 
 local function setPage(idx)
     if activePage == idx then return end
@@ -1272,6 +1290,7 @@ local pg_aim      = pages[2]
 local pg_extras   = pages[3]
 local pg_ajustes  = pages[4]
 
+
 -- ══ INICIO PAGE ══════════════════════════════════
 
 -- User Card (avatar + nombre + skin)
@@ -1864,7 +1883,6 @@ local guiColorRow, guiColorPop = makeColorPicker(cfgCard, "GUI Accent Color",
 
 -- Activar página 1 por defecto
 setPage = setPage  -- referencia correcta (definida arriba con forward)
-
 pages[1].Visible = true
 navBtns[1].BackgroundColor3 = Color3.fromRGB(36,30,46)
 navBtns[1].BackgroundTransparency = 0.5
@@ -2263,13 +2281,13 @@ end
 applyHitbox = function(p, on)
     if not p.Character then return end
     local root = p.Character:FindFirstChild("HumanoidRootPart"); if not root then return end
-    
+
     if on then
         -- NO tocar root.Size (congela al jugador)
         -- Crear un Part proxy invisible soldado al root
         if not _hbxOriginals[p] then
             _hbxOriginals[p] = { proxy = nil, weld = nil }
-            
+
             local s = S.hbx_size * 2
             local proxy = Instance.new("Part")
             proxy.Name = "x7sHitboxProxy"
@@ -2283,14 +2301,14 @@ applyHitbox = function(p, on)
             proxy.TopSurface = Enum.SurfaceType.Smooth
             proxy.BottomSurface = Enum.SurfaceType.Smooth
             proxy.Parent = p.Character
-            
+
             local weld = Instance.new("Weld")
             weld.Name = "x7sHbxWeld"
             weld.Part0 = root
             weld.Part1 = proxy
             weld.C0 = CFrame.new(0, 0, 0)
             weld.Parent = root
-            
+
             _hbxOriginals[p].proxy = proxy
             _hbxOriginals[p].weld = weld
         end
@@ -2360,7 +2378,7 @@ RunService.RenderStepped:Connect(function()
             if obj.itemTag   then obj.itemTag.Visible   = false end
             continue
         end
-        
+
         local char = p.Character
         local function allOff()
             for _, hl in pairs(obj.highlights) do pcall(function() hl.Enabled = false end) end
@@ -2399,7 +2417,7 @@ RunService.RenderStepped:Connect(function()
             local targetSize = isVis2 
                 and (S.hbx_size * 2)      -- Expandido si está visible
                 or  2                      -- Normal si está detrás de pared
-            
+
             pcall(function()
                 local currentSize = _hbxOriginals[p].proxy.Size.X
                 if math.abs(currentSize - targetSize) > 0.1 then
@@ -2787,5 +2805,3 @@ task.spawn(function()
         end
     end
 end)
-
-print("   "..S.gui_key.." = GUI  ·  "..S.esp_key.." = ESP  ·  "..S.hbx_key.." = HBX  ·  "..S.camlock_key.." = CamLock")
