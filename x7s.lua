@@ -66,10 +66,6 @@ local UserInputService = game:GetService("UserInputService")
 local RunService       = game:GetService("RunService")
 local Workspace        = game:GetService("Workspace")
 local HttpService      = game:GetService("HttpService")
-local _vimOk, VirtualInputManager = pcall(function()
-    return game:GetService("VirtualInputManager")
-end)
-if not _vimOk then VirtualInputManager = nil end
 
 local player    = Players.LocalPlayer
 local playerGui = player:WaitForChild("PlayerGui")
@@ -107,31 +103,22 @@ local function mkDefault()
         -- === TARGET ===
         TargetPart = "Random",
 
-        -- === TELEPORT ===
-        AutoTeleportMain = false,
-        AutoTeleportAlt = false,
-        TeleportDuelType = "1v1",
-        TeleportPlatformRow = "Right Platforms",
-        TeleportLowerKD = false,
-        TeleportKDTargetKills = 2,
-        TeleportBreakStreak = false,
-        TeleportBreakStreakTarget = 1,
+
+
+
+
+
+
+
+
+
+
 
         -- === EXTRAS ===
         InfStamina   = false,
         EspHealthBar = false,
         EspDistance  = false,
         ItemInHand   = false,
-
-        -- === PLAYER (Soru + Z-Attack) ===
-        PlayerSoruZEnabled  = false,   -- Auto-dispara Z al hacer Soru a hitbox
-        PlayerSoruZKey      = "Z",     -- Tecla a disparar
-        PlayerSoruZDelay    = 0.08,    -- Delay tras el TP antes de disparar (segundos)
-        PlayerSoruZAutoDir  = true,    -- Auto-dirigir al enemigo al disparar
-        PlayerSoruZCamSnap  = true,    -- Snap de cámara instantáneo al enemigo antes de Z
-        PlayerSoruZRange    = 120,     -- Rango máximo para detectar objetivo (studs)
-        PlayerSoruZRepeat   = 1,       -- Cuántas veces disparar Z por Soru
-        PlayerSoruZInterval = 0.06,    -- Intervalo entre disparos repetidos
     }
 end
 local S = mkDefault()
@@ -194,11 +181,6 @@ local function shouldSkipPlayer(p)
     if not p or not p.Parent then return true end  -- Validación
     if p == player then return true end            -- Tu personaje
     if isWhitelisted(p) then return true end       -- En whitelist
-    local char = p.Character
-    if not char then return true end
-    local root = char:FindFirstChild("HumanoidRootPart")
-    local hum = char:FindFirstChildOfClass("Humanoid")
-    if not root or not hum or hum.Health <= 1 then return true end
     return false
 end
 
@@ -232,7 +214,7 @@ local Locale = {
         camlock_range="Cam Lock Range",     camlock_range_d="Maximum distance to target (50-500).",
         camlock_wallcheck="Wall Check",     camlock_wallcheck_d="Only lock on visible enemies.",
         camlock_safezone="Safe Zone",       camlock_safezone_d="Don't lock on players inside a safe zone.",
-        
+
         whitelist_title="Whitelist Manager", whitelist_add="Add Player", whitelist_remove="Remove",
 
         target_part="Target Part",
@@ -242,15 +224,7 @@ local Locale = {
         ext_distance="Distance",              ext_distance_d="Shows the distance to each enemy in meters.",
         ext_item_hand="Item in Hand",         ext_item_hand_d="Shows what item the enemy is holding.",
 
-        summer_on="Summer 2026",    summer_on_d="Tracks active Summer 2026 drops without forcing collection.",
-        teleport_main="Auto Teleport Main", teleport_main_d="Stores the main teleport role for private-match routing.",
-        teleport_alt="Auto Teleport Alt", teleport_alt_d="Stores the alternate teleport role for private-match routing.",
-        teleport_duel_type="Duel Type",
-        teleport_platform_row="Platform Row",
-        teleport_lower_kd="Lower KD", teleport_lower_kd_d="Uses Main or Alt based on the active teleport role.",
-        teleport_kd_target="KD Target Kills",
-        teleport_break_streak="Break Streak", teleport_break_streak_d="Uses Main or Alt based on the active teleport role.",
-        teleport_streak_target="Break Streak Target",
+        summer_on="Summer 2026",    summer_on_d="Collects Summer 2026 drops automatically. Only in matches.",
 
         st_bg="Toggle Panel Background",
         st_notif="Enable Notifications",
@@ -259,6 +233,7 @@ local Locale = {
         st_stream="Stream Mode",       st_stream_d="Hides GUI and disables all ESP visuals. Hotkey: RightAlt.",
         st_r1="Reset Toggle UI Keybind",  st_r1_d="Reset this keybind to its default value.",
         st_r2="Reset All Keybinds",       st_r2_d="Reset all keybinds to their default values.",
+
 
         n_on="Enabled", n_off="Disabled", n_reset="Keybind reset",
     },
@@ -288,7 +263,7 @@ local Locale = {
         camlock_range="Rango Cam Lock",     camlock_range_d="Distancia máxima al objetivo (50-500).",
         camlock_wallcheck="Wall Check",     camlock_wallcheck_d="Solo bloquea enemigos visibles.",
         camlock_safezone="Safe Zone",       camlock_safezone_d="No bloquea a jugadores dentro de una zona segura.",
-        
+
         whitelist_title="Gestor de Whitelist", whitelist_add="Añadir Jugador", whitelist_remove="Eliminar",
         target_part="Parte Objetivo",
         extras_title="Extras",
@@ -296,15 +271,7 @@ local Locale = {
         ext_health_bar="Barra de Salud",      ext_health_bar_d="Dibuja una barra de vida junto a cada enemigo.",
         ext_distance="Distancia",             ext_distance_d="Muestra la distancia a cada enemigo en metros.",
         ext_item_hand="Ítem en la Mano",      ext_item_hand_d="Muestra qué ítem sostiene el enemigo.",
-        summer_on="Summer 2026",     summer_on_d="Detecta drops activos del Summer 2026 sin forzar recolección.",
-        teleport_main="Auto Teleport Main", teleport_main_d="Guarda el rol principal de teleport para rutas privadas.",
-        teleport_alt="Auto Teleport Alt", teleport_alt_d="Guarda el rol alterno de teleport para rutas privadas.",
-        teleport_duel_type="Tipo de Duelo",
-        teleport_platform_row="Fila de Plataforma",
-        teleport_lower_kd="Lower KD", teleport_lower_kd_d="Usa Main o Alt según el rol de Auto Teleport activo.",
-        teleport_kd_target="KD Target Kills",
-        teleport_break_streak="Break Streak", teleport_break_streak_d="Usa Main o Alt según el rol de Auto Teleport activo.",
-        teleport_streak_target="Break Streak Target",
+        summer_on="Summer 2026",     summer_on_d="Recolecta los drops del Summer 2026 automáticamente. Solo en partidas.",
         st_bg="Fondo del Panel",
         st_notif="Activar Notificaciones",
         st_lang="Idioma",
@@ -312,6 +279,7 @@ local Locale = {
         st_stream="Stream Mode",       st_stream_d="Oculta la GUI y desactiva el ESP visual. Tecla: RightAlt.",
         st_r1="Restablecer Tecla UI",     st_r1_d="Restablece esta tecla a su valor predeterminado.",
         st_r2="Restablecer Todas",        st_r2_d="Restablece todas las teclas a sus valores predeterminados.",
+
         n_on="Activado", n_off="Desactivado", n_reset="Tecla restablecida",
     }
 }
@@ -654,14 +622,17 @@ local function makeContentPage()
 end
 
 -- SVG-like icon labels (usando Unicode para los iconos de nav)
+
+
 local NAV_DATA = {
     { icon = "*", label = "Inicio" },
     { icon = "o", label = "Aim" },
     { icon = "+", label = "Extras" },
-    { icon = ">", label = "Teleport" },
-    { icon = "P", label = "Player" },
     { icon = "#", label = "Ajustes" },
 }
+
+
+
 
 local function setPage(idx)
     if activePage == idx then return end
@@ -1313,13 +1284,12 @@ local function makeColorPicker(parent, label, getR, getG, getB, setRGB)
     return row, popup
 end
 
--- Páginas: 1 = Inicio, 2 = Aim, 3 = Extras, 4 = Teleport, 5 = Player, 6 = Ajustes
+-- Páginas: 1 = Inicio, 2 = Aim, 3 = Extras, 4 = Ajustes
 local pg_inicio   = pages[1]
 local pg_aim      = pages[2]
 local pg_extras   = pages[3]
-local pg_teleport = pages[4]
-local pg_player   = pages[5]
-local pg_ajustes  = pages[6]
+local pg_ajustes  = pages[4]
+
 
 -- ══ INICIO PAGE ══════════════════════════════════
 
@@ -1521,27 +1491,6 @@ local targetCard = makeCard(pg_aim)
 makeSecHeader(targetCard, "+", "Target")
 makeDivider(targetCard)
 makeDropdown(targetCard, "target_part", "TargetPart", {"Head","UpperTorso","LowerTorso","Pierna","Pecho","Combo","Random"})
-
--- ══ TELEPORT PAGE ═════════════════════════════════════════════
-local teleportCard = makeCard(pg_teleport)
-makeSecHeader(teleportCard, ">", "Teleport")
-makeToggle(teleportCard, "teleport_main", "teleport_main_d", "AutoTeleportMain")
-makeDivider(teleportCard)
-makeToggle(teleportCard, "teleport_alt", "teleport_alt_d", "AutoTeleportAlt")
-makeDivider(teleportCard)
-makeDropdown(teleportCard, "teleport_duel_type", "TeleportDuelType", {"1v1","2v2","3v3","4v4","5v5"})
-makeDivider(teleportCard)
-makeDropdown(teleportCard, "teleport_platform_row", "TeleportPlatformRow", {"Right Platforms","Left Platforms"})
-
-local teleportLogicCard = makeCard(pg_teleport)
-makeSecHeader(teleportLogicCard, "+", "Logic")
-makeToggle(teleportLogicCard, "teleport_lower_kd", "teleport_lower_kd_d", "TeleportLowerKD")
-makeDivider(teleportLogicCard)
-makeSlider(teleportLogicCard, "teleport_kd_target", "TeleportKDTargetKills", 1, 20)
-makeDivider(teleportLogicCard)
-makeToggle(teleportLogicCard, "teleport_break_streak", "teleport_break_streak_d", "TeleportBreakStreak")
-makeDivider(teleportLogicCard)
-makeSlider(teleportLogicCard, "teleport_streak_target", "TeleportBreakStreakTarget", 1, 20)
 
 -- ══ WHITELIST (igual a SyyClient - dropdown con lista del servidor) ══
 local whitelistCard = makeCard(pg_aim)
@@ -1887,418 +1836,7 @@ makeDivider(extrasCard)
 -- Item in Hand Drawing
 makeToggle(extrasCard, "ext_item_hand", "ext_item_hand_d", "ItemInHand")
 
--- ══════════════════════════════════════════════════════════════════════════════
---  PLAYER PAGE  —  Soru → Hitbox → Auto Z-Attack  (Blox Fruits)
---  Lógica:
---    1. Se detecta cuándo el LocalPlayer hace un TP (Soru) hacia la hitbox de un
---       enemigo monitorizando el delta de posición del HumanoidRootPart.
---    2. Inmediatamente después del TP se snapea la cámara al enemigo más cercano
---       dentro del rango configurado (PlayerSoruZRange).
---    3. Se dispara la tecla Z (o la tecla configurada) N veces con el intervalo
---       configurado usando keypress() / mouse1press() del executor.
---    4. Si PlayerSoruZAutoDir está ON, el CFrame del HumanoidRootPart se orienta
---       hacia el objetivo para que el ataque conecte sin importar el ángulo.
---
---  NOTA sobre Silent Aim en PC:
---    El silent aim clásico (manipular el ángulo del rayo de la bala en el cliente)
---    no funciona en Blox Fruits PC porque el servidor valida la dirección del ataque
---    contra la posición del HumanoidRootPart. Lo que SÍ funciona es:
---      a) Expandir la hitbox (ya tienes HBX).
---      b) Snapear la cámara + orientar el personaje al objetivo antes del ataque.
---    Este módulo implementa (b) de forma automática en el momento del Soru.
--- ══════════════════════════════════════════════════════════════════════════════
-
--- ── Referencia a la página ──────────────────────────────────────────────────
-local plrCard = makeCard(pg_player)
-makeSecHeader(plrCard, "P", "Player")
-makeDivider(plrCard)
-
--- ── Locale entries (añadidas inline porque el Locale está fijo arriba) ──────
--- Usamos claves directas en inglés/español según S.lang
-local function LP(en, es)
-    return (S.lang == "Español") and es or en
-end
-
--- ── Sección: Soru → Z ───────────────────────────────────────────────────────
-secLabel(plrCard, "· · · SORU → Z ATTACK · · ·")
-
--- Toggle principal
-makeToggle(plrCard,
-    "Soru Z Attack",
-    "Auto-fires Z key when you Soru to an enemy hitbox.",
-    "PlayerSoruZEnabled"
-)
-makeDivider(plrCard)
-
--- Tecla a disparar (keybind custom)
-do
-    local row, _ = makeRow(plrCard, "Z Key to Fire", "Key fired after Soru TP.")
-    row.Size = UDim2.new(1, 0, 0, 56)
-
-    local kbBtn = Instance.new("TextButton", row)
-    kbBtn.Size = UDim2.fromOffset(44, 28)
-    kbBtn.Position = UDim2.new(1, -(44+14), 0.5, -14)
-    kbBtn.BackgroundColor3 = Color3.fromRGB(22, 18, 32)
-    kbBtn.BorderSizePixel = 0; kbBtn.AutoButtonColor = false
-    kbBtn.Font = Enum.Font.GothamBold; kbBtn.TextSize = 12
-    kbBtn.TextColor3 = accentColor
-    local kbs2 = Instance.new("UIStroke", kbBtn); kbs2.Color = accentColor; kbs2.Thickness = 1
-    Instance.new("UICorner", kbBtn).CornerRadius = UDim.new(0, 6)
-
-    local waiting = false
-    local function refreshZKey()
-        kbBtn.Text = S.PlayerSoruZKey
-    end
-    refreshZKey()
-    refreshers["PlayerSoruZKey"] = refreshZKey
-
-    kbBtn.MouseButton1Click:Connect(function()
-        if waiting then return end
-        waiting = true
-        kbBtn.Text = "..."
-        local conn
-        conn = UserInputService.InputBegan:Connect(function(inp, proc)
-            if proc then return end
-            if inp.UserInputType == Enum.UserInputType.Keyboard then
-                S.PlayerSoruZKey = inp.KeyCode.Name
-                save(); refreshZKey()
-                conn:Disconnect(); waiting = false
-                showNotif("✝  Z Key", "Set to: "..S.PlayerSoruZKey, true)
-            end
-        end)
-    end)
-end
-makeDivider(plrCard)
-
--- Repeticiones de Z
-makeSlider(plrCard, "Z Repeat Count", "PlayerSoruZRepeat", 1, 5)
-makeDivider(plrCard)
-
--- Delay antes del primer disparo
-makeSlider(plrCard, "Pre-fire Delay (x10ms)", "PlayerSoruZDelay", 0, 30, function(v)
-    S.PlayerSoruZDelay = v * 0.01   -- convertir a segundos
-    save()
-end)
-makeDivider(plrCard)
-
--- Intervalo entre disparos repetidos
-makeSlider(plrCard, "Repeat Interval (x10ms)", "PlayerSoruZInterval", 1, 20, function(v)
-    S.PlayerSoruZInterval = v * 0.01
-    save()
-end)
-makeDivider(plrCard)
-
--- Rango de detección
-makeSlider(plrCard, "Detection Range (studs)", "PlayerSoruZRange", 20, 300)
-makeDivider(plrCard)
-
--- Toggle Auto-dirección
-makeToggle(plrCard,
-    "Auto Direction",
-    "Orients your character toward the enemy before firing Z.",
-    "PlayerSoruZAutoDir"
-)
-makeDivider(plrCard)
-
--- Toggle Cam Snap
-makeToggle(plrCard,
-    "Camera Snap",
-    "Instantly snaps camera to enemy before firing Z.",
-    "PlayerSoruZCamSnap"
-)
-
--- ══════════════════════════════════════════════════════════════════════════════
---  LÓGICA INTERNA — Auto-Z directo via remotes del Tool (Blox Fruits)
---
---  Cómo funciona el ataque Z en Blox Fruits (confirmado por remote spy):
---    1. tool.RemoteEvent:FireServer(targetPosition)   ← dirección al objetivo
---    2. tool.RemoteFunction:InvokeServer("Z")         ← dispara la habilidad Z
---
---  Este módulo replica exactamente esa secuencia apuntando al root del enemigo
---  más cercano, sin necesidad de simular teclas ni usar keypress/keyrelease.
---  La cámara y el CFrame del personaje se orientan antes de cada invocación
---  para que el servidor valide la dirección correctamente.
--- ══════════════════════════════════════════════════════════════════════════════
-do
-    -- ── Estado interno ───────────────────────────────────────────────────────
-    local _soruZ_firing   = false  -- mutex: evita disparos simultáneos
-    local _soruZ_lastFire = 0      -- os.clock() del último disparo aceptado
-    local _soruZ_cooldown = 0.38   -- cooldown mínimo entre ciclos (segundos)
-    local _HBX_FALLBACK   = 6      -- studs de radio cuando no hay HBX proxy activo
-
-    -- ── Obtener remotes del Tool equipado actualmente ────────────────────────
-    -- Blox Fruits coloca RemoteEvent y RemoteFunction como hijos directos
-    -- del Tool en el personaje. Los buscamos en cada disparo para soportar
-    -- cambios de fruta/arma en caliente sin reiniciar el script.
-    local function getToolRemotes()
-        local myChar = player.Character
-        if not myChar then return nil, nil end
-        local tool = myChar:FindFirstChildWhichIsA("Tool")
-        if not tool then return nil, nil end
-        local re = tool:FindFirstChildWhichIsA("RemoteEvent")
-        local rf = tool:FindFirstChildWhichIsA("RemoteFunction")
-        return re, rf, tool
-    end
-
-    -- ── Radio efectivo de hitbox del objetivo ────────────────────────────────
-    local function getHitboxRadius(targetPlayer)
-        if _hbxOriginals and _hbxOriginals[targetPlayer] then
-            local proxy = _hbxOriginals[targetPlayer].proxy
-            if proxy and proxy.Parent then
-                local sz = proxy.Size
-                return math.max(sz.X, sz.Y, sz.Z) * 0.5
-            end
-        end
-        if S.hbx_size and S.hbx_size > 0 then
-            return S.hbx_size
-        end
-        return _HBX_FALLBACK
-    end
-
-    -- ── Enemigo más cercano dentro del rango configurado ────────────────────
-    local function getSoruTarget()
-        local myChar = player.Character
-        local myRoot = myChar and myChar:FindFirstChild("HumanoidRootPart")
-        if not myRoot then return nil, nil, math.huge end
-
-        local bestRoot  = nil
-        local bestP     = nil
-        local bestDist  = math.huge
-        local range     = S.PlayerSoruZRange or 120
-
-        for _, p in ipairs(Players:GetPlayers()) do
-            if shouldSkipPlayer(p) then continue end
-            local char = p.Character
-            if not char then continue end
-            local hum  = char:FindFirstChildOfClass("Humanoid")
-            local root = char:FindFirstChild("HumanoidRootPart")
-            if not hum or hum.Health <= 0 or not root then continue end
-            if char:FindFirstChild("SafeZoneShield") then continue end
-            local dist = (root.Position - myRoot.Position).Magnitude
-            if dist < range and dist < bestDist then
-                bestDist = dist
-                bestRoot = root
-                bestP    = p
-            end
-        end
-        return bestRoot, bestP, bestDist
-    end
-
-    -- ── Comprueba si ya estamos DENTRO de la hitbox del objetivo ────────────
-    -- Devuelve true  → encima, no disparar (el melee conecta solo)
-    -- Devuelve false → lejos, disparar Z auto-dirigida
-    local function isInsideHitbox(myRoot, targetRoot, targetPlayer)
-        if not myRoot or not targetRoot then return false end
-        local dist   = (myRoot.Position - targetRoot.Position).Magnitude
-        local radius = getHitboxRadius(targetPlayer)
-        return dist <= (radius + 1.5)   -- margen de 1.5 studs
-    end
-
-    -- ── Orienta el CFrame del personaje hacia el objetivo (plano XZ) ────────
-    local function faceTarget(myRoot, targetPos)
-        if not myRoot or not targetPos then return end
-        pcall(function()
-            local flat = (targetPos - myRoot.Position) * Vector3.new(1, 0, 1)
-            if flat.Magnitude < 0.05 then return end
-            myRoot.CFrame = CFrame.new(myRoot.Position, myRoot.Position + flat.Unit)
-        end)
-    end
-
-    -- ── Snapea la cámara instantáneamente hacia el objetivo ─────────────────
-    local function snapCamera(targetPos)
-        if not targetPos then return end
-        pcall(function()
-            local camPos = camera.CFrame.Position
-            local dir    = targetPos - camPos
-            if dir.Magnitude < 0.05 then return end
-            camera.CFrame = CFrame.lookAt(camPos, camPos + dir.Unit)
-        end)
-    end
-
-    -- ── DISPARO PRINCIPAL: replica exactamente la secuencia del LocalScript ──
-    --
-    --  Secuencia real confirmada por decompile del Portal-Portal LocalScript:
-    --    tool.RemoteEvent:FireServer(Mouse.Hit.p)   ← posición objetivo
-    --    tool.RemoteFunction:InvokeServer("Z")      ← ejecuta habilidad
-    --
-    --  Nosotros sustituimos Mouse.Hit.p por la posición del HumanoidRootPart
-    --  del enemigo más cercano + offset de altura (1.5 studs) para apuntar
-    --  al centro del torso en vez del suelo.
-    -- ─────────────────────────────────────────────────────────────────────────
-    local function fireZOnTarget(targetRoot, targetPlayer, myRoot)
-        -- Calcular posición de impacto: centro de torso del enemigo
-        local aimPos = Vector3.new(
-            targetRoot.Position.X,
-            targetRoot.Position.Y + 1.5,
-            targetRoot.Position.Z
-        )
-
-        -- 1. Orientar cámara y personaje ANTES del FireServer para que el
-        --    servidor acepte la dirección sin rechazarla por ángulo incorrecto
-        if S.PlayerSoruZCamSnap then snapCamera(aimPos)       end
-        if S.PlayerSoruZAutoDir then faceTarget(myRoot, aimPos) end
-
-        -- 2. Obtener los remotes del Tool activo
-        local re, rf, tool = getToolRemotes()
-        if not re or not rf then
-            -- Sin tool válido: no podemos disparar
-            return false
-        end
-
-        -- 3. FireServer con la posición objetivo (equivalente a Mouse.Hit.p)
-        --    Blox Fruits usa esto para validar la dirección del ataque
-        pcall(function()
-            re:FireServer(aimPos)
-        end)
-
-        -- 4. Pequeña pausa entre FireServer e InvokeServer igual que el juego
-        --    (el LocalScript original no tiene wait, pero algunos servidores
-        --     validan el orden; 1 frame es suficiente y no detecta timing raro)
-        task.wait(0)
-
-        -- 5. InvokeServer("Z") — dispara la habilidad Z en el servidor
-        --    Esto es bloqueante (coroutine yielding) por ser RemoteFunction,
-        --    por eso siempre lo llamamos dentro de task.spawn
-        local ok, result = pcall(function()
-            return rf:InvokeServer("Z")
-        end)
-
-        return ok
-    end
-
-    -- ── Ciclo completo de disparo con repetición ─────────────────────────────
-    local function fireZCycle()
-        if _soruZ_firing then return end
-        _soruZ_firing = true
-
-        local repeatCount = math.clamp(math.floor(S.PlayerSoruZRepeat or 1), 1, 5)
-        local interval    = math.clamp(S.PlayerSoruZInterval or 0.06, 0.01, 1.0)
-        local preDelay    = math.clamp(S.PlayerSoruZDelay    or 0.08, 0,    0.5)
-
-        task.spawn(function()
-            -- Delay pre-disparo configurable
-            if preDelay > 0 then task.wait(preDelay) end
-
-            for i = 1, repeatCount do
-                -- Re-obtener objetivo en cada repetición (puede haberse movido)
-                local myChar = player.Character
-                local myRoot = myChar and myChar:FindFirstChild("HumanoidRootPart")
-                if not myRoot then break end
-
-                local myHum = myChar:FindFirstChildOfClass("Humanoid")
-                if not myHum or myHum.Health <= 0 then break end
-
-                -- Verificar que el personaje no esté stunneado/ocupado
-                local stun = myChar:FindFirstChild("Stun")
-                local busy = myChar:FindFirstChild("Busy")
-                if (stun and stun.Value > 0) or (busy and busy.Value) then
-                    task.wait(0.05)
-                    -- No romper el ciclo, esperar y reintentar
-                    i = i - 1
-                    if i < 0 then i = 0 end
-                    continue
-                end
-
-                local target, targetP, dist = getSoruTarget()
-                if not target or not targetP then break end  -- objetivo perdido
-
-                -- Disparar la Z directamente via remotes del Tool
-                fireZOnTarget(target, targetP, myRoot)
-
-                -- Esperar entre repeticiones (excepto en la última)
-                if i < repeatCount then
-                    task.wait(interval)
-                end
-            end
-
-            _soruZ_firing = false
-        end)
-    end
-
-    -- ── Notificación con throttle para no spamear la pantalla ────────────────
-    local _lastNotifTime = 0
-    local _NOTIF_THROTTLE = 2.5   -- segundos mínimos entre notificaciones
-
-    local function notifyAutoZ(targetName, dist)
-        local now = os.clock()
-        if now - _lastNotifTime < _NOTIF_THROTTLE then return end
-        _lastNotifTime = now
-        showNotif(
-            "✝  Auto Z",
-            "→ " .. tostring(targetName) .. " (" .. math.floor(dist) .. " st)",
-            true
-        )
-    end
-
-    -- ── LOOP PRINCIPAL ────────────────────────────────────────────────────────
-    --
-    --  Cada frame de RenderStepped verifica:
-    --    1. Toggle ON?
-    --    2. Cooldown pasado?
-    --    3. No estamos en medio de un ciclo?
-    --    4. Personaje vivo?
-    --    5. Hay enemigo en rango?
-    --    6. NO estamos YA dentro de su hitbox?
-    --
-    --  Si todo se cumple → disparar Z directa al enemigo via remotes del tool.
-    --  Si estamos dentro de la hitbox → no hacer nada (melee normal conecta).
-    -- ─────────────────────────────────────────────────────────────────────────
-    RunService.RenderStepped:Connect(function()
-        -- Guard 1: toggle
-        if not S.PlayerSoruZEnabled then return end
-
-        -- Guard 2: cooldown global entre ciclos
-        local now = os.clock()
-        if now - _soruZ_lastFire < _soruZ_cooldown then return end
-
-        -- Guard 3: mutex (ya en un ciclo de disparo)
-        if _soruZ_firing then return end
-
-        -- Guard 4: personaje y vida
-        local myChar = player.Character
-        local myRoot = myChar and myChar:FindFirstChild("HumanoidRootPart")
-        if not myRoot then return end
-        local myHum = myChar:FindFirstChildOfClass("Humanoid")
-        if not myHum or myHum.Health <= 0 then return end
-
-        -- Guard 5: stun/busy del juego (no atacar si el personaje está ocupado)
-        local stunVal = myChar:FindFirstChild("Stun")
-        local busyVal = myChar:FindFirstChild("Busy")
-        if (stunVal and stunVal.Value > 0) or (busyVal and busyVal.Value) then return end
-
-        -- Guard 6: tool equipado (sin tool = sin habilidades)
-        local re, rf = getToolRemotes()
-        if not re or not rf then return end
-
-        -- Obtener el objetivo más cercano
-        local target, targetP, dist = getSoruTarget()
-        if not target or not targetP then return end
-
-        -- Guard 7: si YA estamos dentro de la hitbox NO disparar
-        --          (el Soru nos metió ahí; el golpe físico conecta solo)
-        if isInsideHitbox(myRoot, target, targetP) then return end
-
-        -- ✅ Todas las guards pasadas → disparar Z hacia el objetivo
-        _soruZ_lastFire = now
-
-        -- Notificación opcional con throttle
-        notifyAutoZ(targetP.Name, dist)
-
-        -- Lanzar el ciclo de disparo en un thread separado
-        fireZCycle()
-    end)
-
-    -- ── Refrescadores de toggle ───────────────────────────────────────────────
-    refreshers["PlayerSoruZEnabled"] = function()
-        if not S.PlayerSoruZEnabled then
-            _soruZ_firing    = false
-            _soruZ_lastFire  = 0
-        end
-        save()
-    end
-end
-
--- ── AJUSTES PAGE ══════════════════════════════════
+-- ══ AJUSTES PAGE ══════════════════════════════════
 local cfgCard = makeCard(pg_ajustes)
 makeSecHeader(cfgCard, "†", "Settings")
 
@@ -2345,7 +1883,6 @@ local guiColorRow, guiColorPop = makeColorPicker(cfgCard, "GUI Accent Color",
 
 -- Activar página 1 por defecto
 setPage = setPage  -- referencia correcta (definida arriba con forward)
-
 pages[1].Visible = true
 navBtns[1].BackgroundColor3 = Color3.fromRGB(36,30,46)
 navBtns[1].BackgroundTransparency = 0.5
@@ -2356,7 +1893,7 @@ for _, ch in ipairs(navBtns[1]:GetChildren()) do
 end
 
 -- Expose tabPages alias para compatibilidad con keybinds toggle
-local tabPages = {pages[1], pages[2], pages[3], pages[4], pages[5], pages[6]}  -- dummy, no se usa con tabs
+local tabPages = {pages[1], pages[2], pages[3], pages[4]}  -- dummy, no se usa con tabs
 
 -- ══════════════════════════════════════════════
 --  DRAG — mover panel (por el header)
@@ -2744,19 +2281,13 @@ end
 applyHitbox = function(p, on)
     if not p.Character then return end
     local root = p.Character:FindFirstChild("HumanoidRootPart"); if not root then return end
-    if on then
-        local hum = p.Character:FindFirstChildOfClass("Humanoid")
-        if not hum or hum.Health <= 1 then
-            on = false
-        end
-    end
-    
+
     if on then
         -- NO tocar root.Size (congela al jugador)
         -- Crear un Part proxy invisible soldado al root
         if not _hbxOriginals[p] then
             _hbxOriginals[p] = { proxy = nil, weld = nil }
-            
+
             local s = S.hbx_size * 2
             local proxy = Instance.new("Part")
             proxy.Name = "x7sHitboxProxy"
@@ -2770,14 +2301,14 @@ applyHitbox = function(p, on)
             proxy.TopSurface = Enum.SurfaceType.Smooth
             proxy.BottomSurface = Enum.SurfaceType.Smooth
             proxy.Parent = p.Character
-            
+
             local weld = Instance.new("Weld")
             weld.Name = "x7sHbxWeld"
             weld.Part0 = root
             weld.Part1 = proxy
             weld.C0 = CFrame.new(0, 0, 0)
             weld.Parent = root
-            
+
             _hbxOriginals[p].proxy = proxy
             _hbxOriginals[p].weld = weld
         end
@@ -2847,7 +2378,7 @@ RunService.RenderStepped:Connect(function()
             if obj.itemTag   then obj.itemTag.Visible   = false end
             continue
         end
-        
+
         local char = p.Character
         local function allOff()
             for _, hl in pairs(obj.highlights) do pcall(function() hl.Enabled = false end) end
@@ -2886,7 +2417,7 @@ RunService.RenderStepped:Connect(function()
             local targetSize = isVis2 
                 and (S.hbx_size * 2)      -- Expandido si está visible
                 or  2                      -- Normal si está detrás de pared
-            
+
             pcall(function()
                 local currentSize = _hbxOriginals[p].proxy.Size.X
                 if math.abs(currentSize - targetSize) > 0.1 then
@@ -3254,21 +2785,23 @@ end)
 
 
 task.spawn(function()
+    local remote = game:GetService("ReplicatedStorage").Packages.Networking:WaitForChild("RE/Events/CollectEventSpawnable")
     local folder = workspace:WaitForChild("Spawnables"):WaitForChild("SpawnablesClient")
-    local lastSeen = 0
-    while task.wait(1.0) do
+    while task.wait(0.3) do
         if not S.summer_on then continue end
-        local count = 0
         for _, spawn in ipairs(folder:GetChildren()) do
-            if spawn:IsA("BasePart") or spawn.PrimaryPart or spawn:FindFirstChildWhichIsA("BasePart", true) then
-                count += 1
+            -- Intenta con "Touch", si no existe usa cualquier BasePart del modelo
+            local touch = spawn:FindFirstChild("Touch")
+                       or spawn:FindFirstChildOfClass("Part")
+                       or spawn:FindFirstChildOfClass("MeshPart")
+                       or (spawn:IsA("BasePart") and spawn)
+            if touch then
+                pcall(function()
+                    remote:FireServer(touch)
+                    spawn:Destroy()
+                end)
+                task.wait(0.05)
             end
-        end
-        if count > 0 and os.clock() - lastSeen > 5 then
-            lastSeen = os.clock()
-            showNotif("✝  Summer 2026", tostring(count).." drop(s) active", true)
         end
     end
 end)
-
-print("   "..S.gui_key.." = GUI  ·  "..S.esp_key.." = ESP  ·  "..S.hbx_key.." = HBX  ·  "..S.camlock_key.." = CamLock")
