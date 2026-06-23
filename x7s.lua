@@ -66,10 +66,6 @@ local UserInputService = game:GetService("UserInputService")
 local RunService       = game:GetService("RunService")
 local Workspace        = game:GetService("Workspace")
 local HttpService      = game:GetService("HttpService")
-local _vimOk, VirtualInputManager = pcall(function()
-    return game:GetService("VirtualInputManager")
-end)
-if not _vimOk then VirtualInputManager = nil end
 
 local player    = Players.LocalPlayer
 local playerGui = player:WaitForChild("PlayerGui")
@@ -98,40 +94,16 @@ local function mkDefault()
         Whitelist={},
         -- === CAM LOCK ===
         CamLockEnabled = false,
-        CamLockStrength = 30,
+        CamLockStrength = 10,
         CamLockRange = 150,
         CamLockWallCheck = true,
-        camlock_key = "F",
-        fov_on = false, fov_visible = true, fov_radius = 120,
-        CamLockSafeZone = true,
         -- === TARGET ===
         TargetPart = "Random",
-
-        -- === TELEPORT ===
-        AutoTeleportMain = false,
-        AutoTeleportAlt = false,
-        TeleportDuelType = "1v1",
-        TeleportPlatformRow = "Right Platforms",
-        TeleportLowerKD = false,
-        TeleportKDTargetKills = 2,
-        TeleportBreakStreak = false,
-        TeleportBreakStreakTarget = 1,
-
         -- === EXTRAS ===
         InfStamina   = false,
         EspHealthBar = false,
         EspDistance  = false,
         ItemInHand   = false,
-
-        -- === PLAYER (Soru + Z-Attack) ===
-        PlayerSoruZEnabled  = false,   -- Auto-dispara Z al hacer Soru a hitbox
-        PlayerSoruZKey      = "Z",     -- Tecla a disparar
-        PlayerSoruZDelay    = 0.08,    -- Delay tras el TP antes de disparar (segundos)
-        PlayerSoruZAutoDir  = true,    -- Auto-dirigir al enemigo al disparar
-        PlayerSoruZCamSnap  = true,    -- Snap de cámara instantáneo al enemigo antes de Z
-        PlayerSoruZRange    = 120,     -- Rango máximo para detectar objetivo (studs)
-        PlayerSoruZRepeat   = 1,       -- Cuántas veces disparar Z por Soru
-        PlayerSoruZInterval = 0.06,    -- Intervalo entre disparos repetidos
     }
 end
 local S = mkDefault()
@@ -194,11 +166,6 @@ local function shouldSkipPlayer(p)
     if not p or not p.Parent then return true end  -- Validación
     if p == player then return true end            -- Tu personaje
     if isWhitelisted(p) then return true end       -- En whitelist
-    local char = p.Character
-    if not char then return true end
-    local root = char:FindFirstChild("HumanoidRootPart")
-    local hum = char:FindFirstChildOfClass("Humanoid")
-    if not root or not hum or hum.Health <= 1 then return true end
     return false
 end
 
@@ -222,16 +189,9 @@ local Locale = {
         hbx_vis="Visible Check",    hbx_vis_d="Only register hits when the enemy is actually visible. Prevents kills through walls.",
 
         camlock_on="Enable Cam Lock",      camlock_on_d="Automatically locks camera on the closest enemy.",
-        camlock_key="Cam Lock Keybind",
-
-        fov_on="Enable FOV Circle",    fov_on_d="Only lock enemies inside the FOV circle.",
-        fov_visible="Show FOV Circle",  fov_visible_d="Draw the FOV circle on screen.",
-        fov_radius="FOV Radius",        fov_radius_d="Size of the FOV circle in pixels.",
-
         camlock_strength="Cam Lock Strength", camlock_strength_d="How smoothly the camera follows (1-100).",
         camlock_range="Cam Lock Range",     camlock_range_d="Maximum distance to target (50-500).",
         camlock_wallcheck="Wall Check",     camlock_wallcheck_d="Only lock on visible enemies.",
-        camlock_safezone="Safe Zone",       camlock_safezone_d="Don't lock on players inside a safe zone.",
         
         whitelist_title="Whitelist Manager", whitelist_add="Add Player", whitelist_remove="Remove",
 
@@ -242,15 +202,7 @@ local Locale = {
         ext_distance="Distance",              ext_distance_d="Shows the distance to each enemy in meters.",
         ext_item_hand="Item in Hand",         ext_item_hand_d="Shows what item the enemy is holding.",
 
-        summer_on="Summer 2026",    summer_on_d="Tracks active Summer 2026 drops without forcing collection.",
-        teleport_main="Auto Teleport Main", teleport_main_d="Stores the main teleport role for private-match routing.",
-        teleport_alt="Auto Teleport Alt", teleport_alt_d="Stores the alternate teleport role for private-match routing.",
-        teleport_duel_type="Duel Type",
-        teleport_platform_row="Platform Row",
-        teleport_lower_kd="Lower KD", teleport_lower_kd_d="Uses Main or Alt based on the active teleport role.",
-        teleport_kd_target="KD Target Kills",
-        teleport_break_streak="Break Streak", teleport_break_streak_d="Uses Main or Alt based on the active teleport role.",
-        teleport_streak_target="Break Streak Target",
+        summer_on="Summer 2026",    summer_on_d="Collects Summer 2026 drops automatically. Only in matches.",
 
         st_bg="Toggle Panel Background",
         st_notif="Enable Notifications",
@@ -278,16 +230,9 @@ local Locale = {
         hbx_key="Tecla Hitbox",
         hbx_vis="Visible Check",    hbx_vis_d="Solo registra el hit si el enemigo está a la vista. Evita matar a través de paredes.",
         camlock_on="Activar Cam Lock",      camlock_on_d="Bloquea automáticamente la cámara en el enemigo más cercano.",
-        camlock_key="Tecla Cam Lock",
-
-        fov_on="Activar Círculo FOV",   fov_on_d="Solo bloquea enemigos dentro del círculo FOV.",
-        fov_visible="Mostrar Círculo",   fov_visible_d="Dibuja el círculo FOV en pantalla.",
-        fov_radius="Radio FOV",          fov_radius_d="Tamaño del círculo FOV en píxeles.",
-
         camlock_strength="Fuerza Cam Lock", camlock_strength_d="Qué tan suavemente sigue la cámara (1-100).",
         camlock_range="Rango Cam Lock",     camlock_range_d="Distancia máxima al objetivo (50-500).",
         camlock_wallcheck="Wall Check",     camlock_wallcheck_d="Solo bloquea enemigos visibles.",
-        camlock_safezone="Safe Zone",       camlock_safezone_d="No bloquea a jugadores dentro de una zona segura.",
         
         whitelist_title="Gestor de Whitelist", whitelist_add="Añadir Jugador", whitelist_remove="Eliminar",
         target_part="Parte Objetivo",
@@ -296,15 +241,7 @@ local Locale = {
         ext_health_bar="Barra de Salud",      ext_health_bar_d="Dibuja una barra de vida junto a cada enemigo.",
         ext_distance="Distancia",             ext_distance_d="Muestra la distancia a cada enemigo en metros.",
         ext_item_hand="Ítem en la Mano",      ext_item_hand_d="Muestra qué ítem sostiene el enemigo.",
-        summer_on="Summer 2026",     summer_on_d="Detecta drops activos del Summer 2026 sin forzar recolección.",
-        teleport_main="Auto Teleport Main", teleport_main_d="Guarda el rol principal de teleport para rutas privadas.",
-        teleport_alt="Auto Teleport Alt", teleport_alt_d="Guarda el rol alterno de teleport para rutas privadas.",
-        teleport_duel_type="Tipo de Duelo",
-        teleport_platform_row="Fila de Plataforma",
-        teleport_lower_kd="Lower KD", teleport_lower_kd_d="Usa Main o Alt según el rol de Auto Teleport activo.",
-        teleport_kd_target="KD Target Kills",
-        teleport_break_streak="Break Streak", teleport_break_streak_d="Usa Main o Alt según el rol de Auto Teleport activo.",
-        teleport_streak_target="Break Streak Target",
+        summer_on="Summer 2026",     summer_on_d="Recolecta los drops del Summer 2026 automáticamente. Solo en partidas.",
         st_bg="Fondo del Panel",
         st_notif="Activar Notificaciones",
         st_lang="Idioma",
@@ -623,7 +560,7 @@ makeSBChain(sidebar, 88)
 
 -- Nav buttons (paginas)
 local navArea = Instance.new("Frame", sidebar)
-navArea.Size = UDim2.new(1, -16, 0, 300); navArea.Position = UDim2.fromOffset(8, 100)
+navArea.Size = UDim2.new(1, -16, 0, 200); navArea.Position = UDim2.fromOffset(8, 100)
 navArea.BackgroundTransparency = 1; navArea.BorderSizePixel = 0
 local navLayout = Instance.new("UIListLayout", navArea)
 navLayout.SortOrder = Enum.SortOrder.LayoutOrder; navLayout.Padding = UDim.new(0, 3)
@@ -1316,9 +1253,6 @@ local pg_inicio   = pages[1]
 local pg_aim      = pages[2]
 local pg_extras   = pages[3]
 local pg_ajustes  = pages[4]
-local pg_removed  = makeContentPage()
-local pg_teleport = pg_removed
-local pg_player   = pg_removed
 
 -- ══ INICIO PAGE ══════════════════════════════════
 
@@ -1499,48 +1433,12 @@ makeDivider(camLockCard)
 makeSlider(camLockCard, "camlock_range", "CamLockRange", 50, 500)
 makeDivider(camLockCard)
 makeToggle(camLockCard, "camlock_wallcheck", "camlock_wallcheck_d", "CamLockWallCheck")
-makeDivider(camLockCard)
-makeToggle(camLockCard, "camlock_safezone", "camlock_safezone_d", "CamLockSafeZone")
-makeDivider(camLockCard)
-makeKeybind(camLockCard, "camlock_key", "camlock_key")
-
--- ══ FOV CIRCLE CARD ═══════════════════════════════════════════
-local fovCard = makeCard(pg_aim)
-makeSecHeader(fovCard, "o", "FOV Circle")
-makeToggle(fovCard, "fov_on", "fov_on_d", "fov_on", function(on)
-    showNotif("✝  FOV Circle", on and L("n_on") or L("n_off"), on)
-end)
-makeDivider(fovCard)
-makeToggle(fovCard, "fov_visible", "fov_visible_d", "fov_visible")
-makeDivider(fovCard)
-makeSlider(fovCard, "fov_radius", "fov_radius", 20, 400)
 
 -- ══ TARGET (igual a SyyClient - dropdown desplegable) ═════════
 local targetCard = makeCard(pg_aim)
 makeSecHeader(targetCard, "+", "Target")
 makeDivider(targetCard)
 makeDropdown(targetCard, "target_part", "TargetPart", {"Head","UpperTorso","LowerTorso","Pierna","Pecho","Combo","Random"})
-
--- ══ TELEPORT PAGE ═════════════════════════════════════════════
-local teleportCard = makeCard(pg_teleport)
-makeSecHeader(teleportCard, ">", "Teleport")
-makeToggle(teleportCard, "teleport_main", "teleport_main_d", "AutoTeleportMain")
-makeDivider(teleportCard)
-makeToggle(teleportCard, "teleport_alt", "teleport_alt_d", "AutoTeleportAlt")
-makeDivider(teleportCard)
-makeDropdown(teleportCard, "teleport_duel_type", "TeleportDuelType", {"1v1","2v2","3v3","4v4","5v5"})
-makeDivider(teleportCard)
-makeDropdown(teleportCard, "teleport_platform_row", "TeleportPlatformRow", {"Right Platforms","Left Platforms"})
-
-local teleportLogicCard = makeCard(pg_teleport)
-makeSecHeader(teleportLogicCard, "+", "Logic")
-makeToggle(teleportLogicCard, "teleport_lower_kd", "teleport_lower_kd_d", "TeleportLowerKD")
-makeDivider(teleportLogicCard)
-makeSlider(teleportLogicCard, "teleport_kd_target", "TeleportKDTargetKills", 1, 20)
-makeDivider(teleportLogicCard)
-makeToggle(teleportLogicCard, "teleport_break_streak", "teleport_break_streak_d", "TeleportBreakStreak")
-makeDivider(teleportLogicCard)
-makeSlider(teleportLogicCard, "teleport_streak_target", "TeleportBreakStreakTarget", 1, 20)
 
 -- ══ WHITELIST (igual a SyyClient - dropdown con lista del servidor) ══
 local whitelistCard = makeCard(pg_aim)
@@ -1886,359 +1784,7 @@ makeDivider(extrasCard)
 -- Item in Hand Drawing
 makeToggle(extrasCard, "ext_item_hand", "ext_item_hand_d", "ItemInHand")
 
--- ══════════════════════════════════════════════════════════════════════════════
---  PLAYER PAGE  —  Soru → Hitbox → Auto Z-Attack  (Blox Fruits)
---  Lógica:
---    1. Se detecta cuándo el LocalPlayer hace un TP (Soru) hacia la hitbox de un
---       enemigo monitorizando el delta de posición del HumanoidRootPart.
---    2. Inmediatamente después del TP se snapea la cámara al enemigo más cercano
---       dentro del rango configurado (PlayerSoruZRange).
---    3. Se dispara la tecla Z (o la tecla configurada) N veces con el intervalo
---       configurado usando keypress() / mouse1press() del executor.
---    4. Si PlayerSoruZAutoDir está ON, el CFrame del HumanoidRootPart se orienta
---       hacia el objetivo para que el ataque conecte sin importar el ángulo.
---
---  NOTA sobre Silent Aim en PC:
---    El silent aim clásico (manipular el ángulo del rayo de la bala en el cliente)
---    no funciona en Blox Fruits PC porque el servidor valida la dirección del ataque
---    contra la posición del HumanoidRootPart. Lo que SÍ funciona es:
---      a) Expandir la hitbox (ya tienes HBX).
---      b) Snapear la cámara + orientar el personaje al objetivo antes del ataque.
---    Este módulo implementa (b) de forma automática en el momento del Soru.
--- ══════════════════════════════════════════════════════════════════════════════
-
--- ── Referencia a la página ──────────────────────────────────────────────────
-local plrCard = makeCard(pg_player)
-makeSecHeader(plrCard, "P", "Player")
-makeDivider(plrCard)
-
--- ── Locale entries (añadidas inline porque el Locale está fijo arriba) ──────
--- Usamos claves directas en inglés/español según S.lang
-local function LP(en, es)
-    return (S.lang == "Español") and es or en
-end
-
--- ── Sección: Soru → Z ───────────────────────────────────────────────────────
-secLabel(plrCard, "· · · SORU → Z ATTACK · · ·")
-
--- Toggle principal
-makeToggle(plrCard,
-    "Soru Z Attack",
-    "Auto-fires Z key when you Soru to an enemy hitbox.",
-    "PlayerSoruZEnabled"
-)
-makeDivider(plrCard)
-
--- Tecla a disparar (keybind custom)
-do
-    local row, _ = makeRow(plrCard, "Z Key to Fire", "Key fired after Soru TP.")
-    row.Size = UDim2.new(1, 0, 0, 56)
-
-    local kbBtn = Instance.new("TextButton", row)
-    kbBtn.Size = UDim2.fromOffset(44, 28)
-    kbBtn.Position = UDim2.new(1, -(44+14), 0.5, -14)
-    kbBtn.BackgroundColor3 = Color3.fromRGB(22, 18, 32)
-    kbBtn.BorderSizePixel = 0; kbBtn.AutoButtonColor = false
-    kbBtn.Font = Enum.Font.GothamBold; kbBtn.TextSize = 12
-    kbBtn.TextColor3 = accentColor
-    local kbs2 = Instance.new("UIStroke", kbBtn); kbs2.Color = accentColor; kbs2.Thickness = 1
-    Instance.new("UICorner", kbBtn).CornerRadius = UDim.new(0, 6)
-
-    local waiting = false
-    local function refreshZKey()
-        kbBtn.Text = S.PlayerSoruZKey
-    end
-    refreshZKey()
-    refreshers["PlayerSoruZKey"] = refreshZKey
-
-    kbBtn.MouseButton1Click:Connect(function()
-        if waiting then return end
-        waiting = true
-        kbBtn.Text = "..."
-        local conn
-        conn = UserInputService.InputBegan:Connect(function(inp, proc)
-            if proc then return end
-            if inp.UserInputType == Enum.UserInputType.Keyboard then
-                S.PlayerSoruZKey = inp.KeyCode.Name
-                save(); refreshZKey()
-                conn:Disconnect(); waiting = false
-                showNotif("✝  Z Key", "Set to: "..S.PlayerSoruZKey, true)
-            end
-        end)
-    end)
-end
-makeDivider(plrCard)
-
--- Repeticiones de Z
-makeSlider(plrCard, "Z Repeat Count", "PlayerSoruZRepeat", 1, 5)
-makeDivider(plrCard)
-
--- Delay antes del primer disparo
-makeSlider(plrCard, "Pre-fire Delay (x10ms)", "PlayerSoruZDelay", 0, 30, function(v)
-    S.PlayerSoruZDelay = v * 0.01   -- convertir a segundos
-    save()
-end)
-makeDivider(plrCard)
-
--- Intervalo entre disparos repetidos
-makeSlider(plrCard, "Repeat Interval (x10ms)", "PlayerSoruZInterval", 1, 20, function(v)
-    S.PlayerSoruZInterval = v * 0.01
-    save()
-end)
-makeDivider(plrCard)
-
--- Rango de detección
-makeSlider(plrCard, "Detection Range (studs)", "PlayerSoruZRange", 20, 300)
-makeDivider(plrCard)
-
--- Toggle Auto-dirección
-makeToggle(plrCard,
-    "Auto Direction",
-    "Orients your character toward the enemy before firing Z.",
-    "PlayerSoruZAutoDir"
-)
-makeDivider(plrCard)
-
--- Toggle Cam Snap
-makeToggle(plrCard,
-    "Camera Snap",
-    "Instantly snaps camera to enemy before firing Z.",
-    "PlayerSoruZCamSnap"
-)
-
--- ── LÓGICA INTERNA del módulo Auto-Z cuando NO estás en hitbox del enemigo ───
-do
-    -- ── Estado interno ───────────────────────────────────────────────────────
-    local _soruZ_firing      = false   -- mutex: un solo ciclo de disparo a la vez
-    local _soruZ_lastFire    = 0       -- os.clock() del último disparo
-    local _soruZ_cooldown    = 0.35    -- cooldown mínimo entre disparos (segundos)
-    -- "dentro de hitbox" = distancia al root del enemigo <= este umbral (studs)
-    -- Si el HBX proxy existe usamos su tamaño, si no usamos 6 studs fijo
-    local _HBX_THRESHOLD     = 6       -- fallback cuando no hay proxy
-
-    -- ── Obtener radio efectivo de hitbox de un jugador ───────────────────────
-    local function getHitboxRadius(p)
-        -- Si el proxy del HBX está activo, usar su tamaño real
-        if _hbxOriginals and _hbxOriginals[p] and _hbxOriginals[p].proxy then
-            local sz = _hbxOriginals[p].proxy.Size
-            -- Radio = mitad de la dimensión más grande
-            return math.max(sz.X, sz.Y, sz.Z) * 0.5
-        end
-        -- Fallback: tamaño configurado en S.hbx_size (si está definido)
-        if S.hbx_size and S.hbx_size > 0 then
-            return S.hbx_size
-        end
-        return _HBX_THRESHOLD
-    end
-
-    -- ── Obtener el enemigo más cercano dentro del rango ──────────────────────
-    local function getSoruTarget()
-        local myChar = player.Character
-        local myRoot = myChar and myChar:FindFirstChild("HumanoidRootPart")
-        if not myRoot then return nil, nil, math.huge end
-
-        local best      = nil
-        local bestP     = nil
-        local bestDist  = math.huge
-
-        for _, p in ipairs(Players:GetPlayers()) do
-            if shouldSkipPlayer(p) then continue end
-            local char = p.Character; if not char then continue end
-            local hum  = char:FindFirstChildOfClass("Humanoid")
-            local root = char:FindFirstChild("HumanoidRootPart")
-            if not hum or hum.Health <= 0 or not root then continue end
-            if char:FindFirstChild("SafeZoneShield") then continue end
-            local dist = (root.Position - myRoot.Position).Magnitude
-            if dist < (S.PlayerSoruZRange or 120) and dist < bestDist then
-                bestDist = dist
-                best     = root
-                bestP    = p
-            end
-        end
-        return best, bestP, bestDist
-    end
-
-    -- ── Comprobar si el LocalPlayer YA está dentro de la hitbox del objetivo ─
-    -- Devuelve true  → ya estamos encima, NO disparar
-    -- Devuelve false → no estamos encima, SÍ disparar Z
-    local function isInsideHitbox(myRoot, targetRoot, targetPlayer)
-        if not myRoot or not targetRoot then return false end
-        local dist = (myRoot.Position - targetRoot.Position).Magnitude
-        local radius = getHitboxRadius(targetPlayer)
-        -- Consideramos "dentro" si la distancia es menor al radio + pequeño margen
-        return dist <= (radius + 1.5)
-    end
-
-    -- ── Orientar personaje hacia el objetivo (plano XZ) ─────────────────────
-    local function faceTarget(myRoot, targetRoot)
-        if not myRoot or not targetRoot then return end
-        pcall(function()
-            local dir = (targetRoot.Position - myRoot.Position) * Vector3.new(1, 0, 1)
-            if dir.Magnitude < 0.1 then return end
-            myRoot.CFrame = CFrame.new(myRoot.Position, myRoot.Position + dir.Unit)
-        end)
-    end
-
-    -- ── Snap de cámara instantáneo al objetivo ───────────────────────────────
-    local function snapCameraToTarget(targetRoot)
-        if not targetRoot then return end
-        pcall(function()
-            local camPos    = camera.CFrame.Position
-            local targetPos = Vector3.new(
-                targetRoot.Position.X,
-                targetRoot.Position.Y + 1.5,
-                targetRoot.Position.Z
-            )
-            local dir = targetPos - camPos
-            if dir.Magnitude < 0.1 then return end
-            camera.CFrame = CFrame.lookAt(camPos, camPos + dir.Unit)
-        end)
-    end
-
-    -- ── Simular pulsación de tecla (multi-método para distintos executors) ───
-    local function pressKey(keyName)
-        local kc = Enum.KeyCode[keyName]
-        if not kc then return end
-
-        local pressed = false
-
-        -- Método 1: keypress / keyrelease  (Synapse X, KRNL, Fluxus PC)
-        pcall(function()
-            if keypress and keyrelease then
-                keypress(kc.Value)
-                task.wait(0.045)
-                keyrelease(kc.Value)
-                pressed = true
-            end
-        end)
-        if pressed then return end
-
-        -- Método 2: VirtualInputManager  (Synapse V3, algunas builds internas)
-        pcall(function()
-            if VirtualInputManager then
-                VirtualInputManager:SendKeyEvent(true,  kc, false, game)
-                task.wait(0.045)
-                VirtualInputManager:SendKeyEvent(false, kc, false, game)
-                pressed = true
-            end
-        end)
-        if pressed then return end
-
-        -- Método 3: fireproximityprompt / firetouchinterest no aplican aquí;
-        -- Fallback final: simulateEvent (Fluxus Mobile, Wave)
-        pcall(function()
-            local uis = game:GetService("UserInputService")
-            local fakeDown = {
-                UserInputType = Enum.UserInputType.Keyboard,
-                KeyCode       = kc,
-                Delta         = Vector3.zero,
-                Position      = Vector3.zero,
-                IsModifierKeyDown = function() return false end,
-            }
-            uis:simulateEvent(Enum.UserInputType.Keyboard, fakeDown)
-            task.wait(0.045)
-            -- simulateEvent no necesita un "up" separado en la mayoría de executors
-        end)
-    end
-
-    -- ── Ciclo de disparo: orienta, snapea cámara y dispara Z N veces ─────────
-    local function fireZKey()
-        if _soruZ_firing then return end
-        _soruZ_firing = true
-
-        local keyName     = S.PlayerSoruZKey     or "Z"
-        local repeatCount = math.clamp(math.floor(S.PlayerSoruZRepeat   or 1), 1, 5)
-        local interval    = math.clamp(S.PlayerSoruZInterval             or 0.06, 0.01, 1)
-        local preDelay    = math.clamp(S.PlayerSoruZDelay                or 0.08, 0,   0.5)
-
-        task.spawn(function()
-            if preDelay > 0 then task.wait(preDelay) end
-
-            for i = 1, repeatCount do
-                -- Re-obtener objetivo y orientar ANTES de cada pulsación
-                local myChar = player.Character
-                local myRoot = myChar and myChar:FindFirstChild("HumanoidRootPart")
-                local target, _, _ = getSoruTarget()
-
-                if target then
-                    if S.PlayerSoruZCamSnap then snapCameraToTarget(target) end
-                    if S.PlayerSoruZAutoDir then faceTarget(myRoot, target) end
-                end
-
-                pressKey(keyName)
-
-                if i < repeatCount then
-                    task.wait(interval)
-                end
-            end
-
-            _soruZ_firing = false
-        end)
-    end
-
-    -- ── Loop principal: se ejecuta cada RenderStepped ────────────────────────
-    -- Lógica:
-    --   1. Si el toggle está OFF → no hace nada.
-    --   2. Obtiene el enemigo más cercano dentro del rango.
-    --   3. Si NO estamos dentro de su hitbox → disparar Z y esperar cooldown.
-    --   4. Si SÍ estamos dentro → silencio total (ya estamos encima, el ataque
-    --      físico normal conecta solo).
-    RunService.RenderStepped:Connect(function()
-        if not S.PlayerSoruZEnabled then return end
-
-        -- Cooldown entre disparos
-        local now = os.clock()
-        if now - _soruZ_lastFire < _soruZ_cooldown then return end
-
-        -- Mutex: no lanzar si ya estamos en medio de un ciclo
-        if _soruZ_firing then return end
-
-        local myChar = player.Character
-        local myRoot = myChar and myChar:FindFirstChild("HumanoidRootPart")
-        if not myRoot then return end
-
-        local myHum = myChar:FindFirstChildOfClass("Humanoid")
-        if not myHum or myHum.Health <= 0 then return end
-
-        -- Obtener objetivo
-        local target, targetP, dist = getSoruTarget()
-        if not target or not targetP then return end   -- sin enemigos en rango
-
-        -- Comprobar si YA estamos dentro de la hitbox
-        if isInsideHitbox(myRoot, target, targetP) then
-            -- Estamos encima → NO disparar auto-Z
-            -- (el Soru ya llevó al personaje ahí; el ataque manual conecta)
-            return
-        end
-
-        -- NO estamos en la hitbox → disparar Z auto-dirigida al enemigo
-        _soruZ_lastFire = now
-
-        -- Snap de cámara inmediato ANTES de spawnar el ciclo de disparo
-        if S.PlayerSoruZCamSnap then snapCameraToTarget(target) end
-        if S.PlayerSoruZAutoDir then faceTarget(myRoot, target)  end
-
-        fireZKey()
-
-        -- Notificación discreta (solo cada cierto tiempo para no spamear)
-        showNotif(
-            "✝  Auto Z",
-            "→ " .. targetP.Name .. " (" .. math.floor(dist) .. " st)",
-            true
-        )
-    end)
-
-    -- ── Refrescadores de toggle ───────────────────────────────────────────────
-    refreshers["PlayerSoruZEnabled"] = function()
-        if not S.PlayerSoruZEnabled then
-            _soruZ_firing    = false
-            _soruZ_lastFire  = 0
-        end
-        save()
-    end
-end
-
--- ── AJUSTES PAGE ══════════════════════════════════
+-- ══ AJUSTES PAGE ══════════════════════════════════
 local cfgCard = makeCard(pg_ajustes)
 makeSecHeader(cfgCard, "†", "Settings")
 
@@ -2285,7 +1831,6 @@ local guiColorRow, guiColorPop = makeColorPicker(cfgCard, "GUI Accent Color",
 
 -- Activar página 1 por defecto
 setPage = setPage  -- referencia correcta (definida arriba con forward)
-
 pages[1].Visible = true
 navBtns[1].BackgroundColor3 = Color3.fromRGB(36,30,46)
 navBtns[1].BackgroundTransparency = 0.5
@@ -2684,12 +2229,6 @@ end
 applyHitbox = function(p, on)
     if not p.Character then return end
     local root = p.Character:FindFirstChild("HumanoidRootPart"); if not root then return end
-    if on then
-        local hum = p.Character:FindFirstChildOfClass("Humanoid")
-        if not hum or hum.Health <= 1 then
-            on = false
-        end
-    end
     
     if on then
         -- NO tocar root.Size (congela al jugador)
@@ -3009,47 +2548,6 @@ end)
 -- ══════════════════════════════════════════════
 local camLockTarget=nil
 
-
--- ══════════════════════════════════════════════
---  FOV CIRCLE (igual a SyyClient)
--- ══════════════════════════════════════════════
-local fovCircle = Drawing.new("Circle")
-fovCircle.Visible      = false
-fovCircle.Thickness    = 1.5
-fovCircle.Filled       = false
-fovCircle.NumSides     = 64
-fovCircle.Color        = Color3.fromRGB(141, 122, 174)  -- morado acento
-
-local function getFovCenter()
-    -- Centro de pantalla, igual que SyyClient
-    local vp = camera.ViewportSize
-    return Vector2.new(vp.X * 0.5, vp.Y * 0.5)
-end
-
-local function isInFov(root)
-    if not S.fov_on then return true end
-    local sp, onScreen = camera:WorldToViewportPoint(root.Position)
-    if not onScreen then return false end
-    local center = getFovCenter()
-    local dx = sp.X - center.X
-    local dy = sp.Y - center.Y
-    return (dx*dx + dy*dy) <= (S.fov_radius * S.fov_radius)
-end
-
-RunService.RenderStepped:Connect(function()
-    -- Visible solo cuando fov_visible está ON (independiente del filtro)
-    fovCircle.Visible = S.fov_visible
-    if S.fov_visible then
-        fovCircle.Position = getFovCenter()
-        fovCircle.Radius   = S.fov_radius
-        -- Morado cuando filtro ON, gris cuando solo visual
-        fovCircle.Color = S.fov_on
-            and Color3.fromRGB(141, 122, 174)   -- morado
-            or  Color3.fromRGB(110, 110, 110)    -- gris
-    end
-end)
-
-
 RunService:BindToRenderStep("x7sCamLock", Enum.RenderPriority.Camera.Value+1, function()
     pcall(function()
     if not S.CamLockEnabled then camLockTarget=nil; return end
@@ -3064,7 +2562,6 @@ RunService:BindToRenderStep("x7sCamLock", Enum.RenderPriority.Camera.Value+1, fu
         local hum=char:FindFirstChildOfClass("Humanoid")
         local root=char:FindFirstChild("HumanoidRootPart")
         if not hum or hum.Health<=0 or not root then continue end
-        if S.CamLockSafeZone and char:FindFirstChild("SafeZoneShield") then continue end
         local dist3D=myRoot and (root.Position-myRoot.Position).Magnitude or math.huge
         if dist3D>S.CamLockRange then continue end
         if S.CamLockWallCheck and myChar then
@@ -3073,8 +2570,6 @@ RunService:BindToRenderStep("x7sCamLock", Enum.RenderPriority.Camera.Value+1, fu
             end)
             if ok and #obs>0 then continue end
         end
-        -- FOV check
-        if not isInFov(root) then continue end
         if dist3D<bestDist then bestDist=dist3D; bestRoot=root end
     end
 
@@ -3085,14 +2580,13 @@ RunService:BindToRenderStep("x7sCamLock", Enum.RenderPriority.Camera.Value+1, fu
     local targetPos=Vector3.new(bestRoot.Position.X,bestRoot.Position.Y+1.5,bestRoot.Position.Z)
     local rawDir=targetPos-camPos
     if rawDir.Magnitude<0.1 then return end
-    local strength=math.clamp(S.CamLockStrength,1,100)*0.003
+    local strength=math.clamp(S.CamLockStrength,1,100)*0.012
     local newLook=camera.CFrame.LookVector:Lerp(rawDir.Unit,strength)
     if newLook.Magnitude>0.01 then
         camera.CFrame=CFrame.lookAt(camPos,camPos+newLook.Unit)
     end
     end)
 end)
-
 
 -- ══════════════════════════════════════════════
 --  KEYBINDS globales
@@ -3146,14 +2640,6 @@ UserInputService.InputBegan:Connect(function(inp, proc)
         return
     end
 
-    -- Toggle Cam Lock
-    if kn == S.camlock_key then
-        S.CamLockEnabled = not S.CamLockEnabled; save()
-        if refreshers["CamLockEnabled"] then refreshers["CamLockEnabled"]() end
-        showNotif("✝  Cam Lock", S.CamLockEnabled and L("n_on") or L("n_off"), S.CamLockEnabled)
-        return
-    end
-
     -- Toggle Hitbox
     if kn == S.hbx_key then
         S.hbx_on = not S.hbx_on; save()
@@ -3194,21 +2680,25 @@ end)
 
 
 task.spawn(function()
+    local remote = game:GetService("ReplicatedStorage").Packages.Networking:WaitForChild("RE/Events/CollectEventSpawnable")
     local folder = workspace:WaitForChild("Spawnables"):WaitForChild("SpawnablesClient")
-    local lastSeen = 0
-    while task.wait(1.0) do
+    while task.wait(0.3) do
         if not S.summer_on then continue end
-        local count = 0
         for _, spawn in ipairs(folder:GetChildren()) do
-            if spawn:IsA("BasePart") or spawn.PrimaryPart or spawn:FindFirstChildWhichIsA("BasePart", true) then
-                count += 1
+            -- Intenta con "Touch", si no existe usa cualquier BasePart del modelo
+            local touch = spawn:FindFirstChild("Touch")
+                       or spawn:FindFirstChildOfClass("Part")
+                       or spawn:FindFirstChildOfClass("MeshPart")
+                       or (spawn:IsA("BasePart") and spawn)
+            if touch then
+                pcall(function()
+                    remote:FireServer(touch)
+                    spawn:Destroy()
+                end)
+                task.wait(0.05)
             end
-        end
-        if count > 0 and os.clock() - lastSeen > 5 then
-            lastSeen = os.clock()
-            showNotif("✝  Summer 2026", tostring(count).." drop(s) active", true)
         end
     end
 end)
 
-print("   "..S.gui_key.." = GUI  ·  "..S.esp_key.." = ESP  ·  "..S.hbx_key.." = HBX  ·  "..S.camlock_key.." = CamLock")
+print("   "..S.gui_key.." = Toggle GUI  ·  "..S.esp_key.." = ESP  ·  "..S.hbx_key.." = Hitbox")
