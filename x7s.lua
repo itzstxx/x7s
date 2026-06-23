@@ -658,8 +658,6 @@ local NAV_DATA = {
     { icon = "*", label = "Inicio" },
     { icon = "o", label = "Aim" },
     { icon = "+", label = "Extras" },
-    { icon = ">", label = "Teleport" },
-    { icon = "P", label = "Player" },
     { icon = "#", label = "Ajustes" },
 }
 
@@ -1313,13 +1311,14 @@ local function makeColorPicker(parent, label, getR, getG, getB, setRGB)
     return row, popup
 end
 
--- Páginas: 1 = Inicio, 2 = Aim, 3 = Extras, 4 = Teleport, 5 = Player, 6 = Ajustes
+-- Páginas: 1 = Inicio, 2 = Aim, 3 = Extras, 4 = Ajustes
 local pg_inicio   = pages[1]
 local pg_aim      = pages[2]
 local pg_extras   = pages[3]
-local pg_teleport = pages[4]
-local pg_player   = pages[5]
-local pg_ajustes  = pages[6]
+local pg_ajustes  = pages[4]
+local pg_removed  = makeContentPage()
+local pg_teleport = pg_removed
+local pg_player   = pg_removed
 
 -- ══ INICIO PAGE ══════════════════════════════════
 
@@ -2297,7 +2296,7 @@ for _, ch in ipairs(navBtns[1]:GetChildren()) do
 end
 
 -- Expose tabPages alias para compatibilidad con keybinds toggle
-local tabPages = {pages[1], pages[2], pages[3], pages[4], pages[5], pages[6]}  -- dummy, no se usa con tabs
+local tabPages = {pages[1], pages[2], pages[3], pages[4]}  -- dummy, no se usa con tabs
 
 -- ══════════════════════════════════════════════
 --  DRAG — mover panel (por el header)
