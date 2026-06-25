@@ -2785,141 +2785,153 @@ end)
 
 
 -- ══════════════════════════════════════════════════════════════
---  SUMMER 2026 — Recolector automático sin moverse
+--  SUMMER 2026 — Recolector automático (reverse engineered)
 --
---  Estructura confirmada en vivo:
---    • workspace/SpawnablesClient  ← Folder (NO dentro de Spawnables)
---    • Cada hijo es un Model (nombre "1".."20") con:
---        Cone, Cone.003, Cylinder, Sphere.001, Water (MeshPart)
---        Touch (Part)  ← argumento que espera el servidor
---    • Remote: RS/Packages/Networking/RE/Events/CollectEventSpawnable
+--  FUENTE REAL (EventsController decompilado):
+--    ① SpawnablesClient es creado por el cliente, directo en workspace
+--       con tag v4.Item = "Coconut" en cada modelo
+--    ② La recolección ocurre cuando p1.PrimaryPart.Touched se dispara
+--       con una Part que pertenezca a LocalPlayer.Character
+--    ③ El remote se llama SIN argumentos:
+--         Remotes.CollectEventSpawnable:FireServer()   -- cero args
+--    ④ El servidor identifica QUÉ coconut recoger por el Touched
+--       (el server también tiene el listener de Touched, no por args)
 --
---  Técnica: el servidor probablemente valida que Touch.Position esté
---  cerca del HumanoidRootPart del jugador. En lugar de mover al
---  personaje, teleportamos el Touch al jugador (solo cliente),
---  hacemos FireServer, y lo restauramos. El jugador no se mueve.
+--  TÉCNICA: Teletransportar el PrimaryPart de cada coconut encima
+--  del HumanoidRootPart del jugador → el engine dispara Touched
+--  tanto en cliente como en servidor → FireServer() sin args confirma
+--  → el servidor lo da como recolectado y destruye el modelo.
+--  El PERSONAJE nunca se mueve.
 -- ══════════════════════════════════════════════════════════════
 task.spawn(function()
-    -- ── Obtener remote navegando paso a paso ────────────────
-    local RS           = game:GetService("ReplicatedStorage")
-    local Networking   = RS:WaitForChild("Packages",  10)
-                           :WaitForChild("Networking", 10)
-    local EventsFolder = Networking:WaitForChild("RE",     10)
-                                   :WaitForChild("Events", 10)
-    local remote       = EventsFolder:WaitForChild("CollectEventSpawnable", 10)
+    local RS            = game:GetService("ReplicatedStorage")
+
+    -- ── Remote: sin argumentos (confirmado por decompile) ───
+    local remote = RS
+        :WaitForChild("Packages",  10)
+        :WaitForChild("Networking",10)
+        :WaitForChild("RE",        10)
+        :WaitForChild("Events",    10)
+        :WaitForChild("CollectEventSpawnable", 10)
 
     if not remote then
-        warn("[x7s Summer] Remote CollectEventSpawnable no encontrado — abortando")
+        warn("[x7s Summer] CollectEventSpawnable remote no encontrado")
         return
     end
 
-    -- ── Folder real: SpawnablesClient DIRECTO en workspace ──
-    local folder = workspace:WaitForChild("SpawnablesClient", 15)
+    -- ── Folder: SpawnablesClient directo en workspace ───────
+    --    (el propio EventsController lo crea con Instance.new)
+    local folder = workspace:WaitForChild("SpawnablesClient", 20)
     if not folder then
-        warn("[x7s Summer] SpawnablesClient no encontrado en workspace — abortando")
+        warn("[x7s Summer] SpawnablesClient no encontrado en workspace")
         return
     end
 
-    -- ── Set de deduplicación: evita doble-fire por latencia ─
-    local _collected = {}
+    -- ── Set de dedup para no re-procesar el mismo modelo ────
+    local _sent = {}   -- [tostring(model)] = true
 
-    -- ── Función core: trae el Touch al jugador y hace fire ──
-    -- El personaje NO se mueve. Solo el Part Touch (cliente-side)
-    -- se teletransporta momentáneamente junto al HRP para pasar
-    -- cualquier validación de proximidad server-side.
-    local function collectOne(spawn)
-        if not spawn or not spawn.Parent then return end
+    -- ── Función principal de recolección ────────────────────
+    local function collectOne(coconut)
+        if not coconut or not coconut.Parent then return end
 
-        -- Dedup por identidad de instancia (más robusto que el nombre)
-        local key = tostring(spawn)
-        if _collected[key] then return end
+        local key = tostring(coconut)
+        if _sent[key] then return end
 
-        -- Buscar Touch: primero por nombre exacto, luego por clase Part
-        local touch = spawn:FindFirstChild("Touch")
-        if not touch then
-            for _, part in ipairs(spawn:GetChildren()) do
-                if part:IsA("Part") then touch = part; break end
+        -- PrimaryPart del coconut (el juego usa :GetPivot() y BulkMoveTo sobre él)
+        local pp = coconut.PrimaryPart
+        if not pp then
+            -- Fallback: primer BasePart que encuentre
+            for _, c in ipairs(coconut:GetChildren()) do
+                if c:IsA("BasePart") then pp = c; break end
             end
         end
-        if not touch then return end
+        if not pp then return end
 
-        -- Obtener HumanoidRootPart actual (puede cambiar tras respawn)
+        -- HumanoidRootPart actual del jugador
         local myChar = player.Character
         local myRoot = myChar and myChar:FindFirstChild("HumanoidRootPart")
         if not myRoot then return end
 
-        -- Marcar ANTES de manipular para evitar re-entrada
-        _collected[key] = true
+        -- Marcar antes de hacer cualquier cosa
+        _sent[key] = true
 
-        -- Guardar CFrame original del Touch para restaurarlo después
-        local originalCF = touch.CFrame
+        -- Guardar estado original del PrimaryPart
+        local origCF       = pp.CFrame
+        local origAnchored = pp.Anchored
 
-        -- Desactivar física del Touch momentáneamente para poder moverlo
-        -- sin que el motor físico lo regrese a su lugar en el mismo frame
-        local originalAnchored = touch.Anchored
-        pcall(function() touch.Anchored = true end)
+        -- Anclar para que la física no lo devuelva en el mismo frame
+        pcall(function() pp.Anchored = true end)
 
-        -- Teletransportar Touch a la posición del jugador (solo cliente)
-        -- Usamos offset Y+1 para que quede al nivel del torso, no del suelo
+        -- Teletransportar el coconut encima del HRP del jugador.
+        -- Usamos PivotTo para mover todo el modelo junto.
+        -- Posición: mismo XZ que el jugador, Y+1 (torso) para que
+        -- el Touched se dispare con cualquier parte del personaje.
+        local targetCF = CFrame.new(
+            myRoot.Position.X,
+            myRoot.Position.Y + 1,
+            myRoot.Position.Z
+        )
         pcall(function()
-            touch.CFrame = myRoot.CFrame * CFrame.new(0, 1, 0)
+            coconut:PivotTo(targetCF)
         end)
 
-        -- Un frame de espera para que el engine client-side registre la posición
-        -- antes de que el paquete de red salga al servidor
-        task.wait()
+        -- Esperar un heartbeat para que el engine registre la posición
+        -- y dispare el evento Touched tanto en cliente como servidor
+        RunService.Heartbeat:Wait()
 
-        -- Disparar el remote al servidor con el Touch ya "junto" al jugador
+        -- FireServer sin argumentos — exactamente como lo hace el juego original
         local ok, err = pcall(function()
-            remote:FireServer(touch)
+            remote:FireServer()
         end)
 
-        -- Restaurar CFrame y estado del Touch independientemente del resultado
-        -- (el servidor lo destruirá si el fire fue exitoso; si no, queda intacto)
+        -- Restaurar posición original (si el servidor acepta lo destruirá;
+        -- si no acepta, el coconut vuelve a su lugar limpiamente)
         pcall(function()
-            if touch and touch.Parent then
-                touch.CFrame    = originalCF
-                touch.Anchored  = originalAnchored
+            if pp and pp.Parent then
+                coconut:PivotTo(origCF)
+                pp.Anchored = origAnchored
             end
         end)
 
         if not ok then
-            -- Desmarcar para reintentar en el siguiente ciclo
-            _collected[key] = nil
-            warn("[x7s Summer] FireServer falló en spawn " .. spawn.Name .. ": " .. tostring(err))
+            _sent[key] = nil   -- desmarcar para reintentar
+            warn("[x7s Summer] FireServer error en coconut " .. coconut.Name .. ": " .. tostring(err))
         end
     end
 
-    -- ── Reset del set cuando el servidor renueva los spawnables ─
-    local setEventRE = EventsFolder:FindFirstChild("SetEventSpawnables")
-    if setEventRE then
-        setEventRE.OnClientEvent:Connect(function()
-            _collected = {}
+    -- ── Limpiar dedup cuando el servidor manda nuevos spawnables ─
+    -- (SetEventSpawnables → digestEventItemSpawns → manageEventItems
+    --  destruye los viejos y crea nuevos → nuevos tostring() IDs)
+    local setRE = RS
+        :WaitForChild("Packages",  10)
+        :WaitForChild("Networking",10)
+        :WaitForChild("RE",        10)
+        :WaitForChild("Events",    10)
+        :FindFirstChild("SetEventSpawnables")
+
+    if setRE then
+        setRE.OnClientEvent:Connect(function()
+            task.wait(0.5)  -- dar tiempo a manageEventItems para crear los nuevos modelos
+            _sent = {}
         end)
     end
 
-    -- ── Reset al respawnear (nueva vida = nuevos IDs de instancia) ─
+    -- ── Limpiar al respawnear ─────────────────────────────────
     player.CharacterAdded:Connect(function()
-        _collected = {}
+        _sent = {}
     end)
 
     -- ── Loop principal ────────────────────────────────────────
-    -- Intervalo de 0.2 s entre ciclos completos.
-    -- Entre cada spawnable individual hay task.wait() del collectOne,
-    -- más un extra de 0.05 s para no martillar el servidor.
-    while task.wait(0.2) do
+    while task.wait(0.15) do
         if not S.summer_on then continue end
 
         local myChar = player.Character
         if not myChar or not myChar:FindFirstChild("HumanoidRootPart") then continue end
 
-        local children = folder:GetChildren()
-        if #children == 0 then continue end
-
-        for _, spawn in ipairs(children) do
-            if not spawn or not spawn.Parent then continue end
-            collectOne(spawn)
-            task.wait(0.05)
+        for _, coconut in ipairs(folder:GetChildren()) do
+            if not coconut or not coconut.Parent then continue end
+            collectOne(coconut)
+            task.wait(0.06)  -- pequeño gap entre fires para no saturar
         end
     end
 end)
