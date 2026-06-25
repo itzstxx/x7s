@@ -2784,24 +2784,101 @@ task.defer(function()
 end)
 
 
+-- ══════════════════════════════════════════════════════════════
+--  SUMMER 2026 — Recolector automático de Spawnables
+--  FIX: SpawnablesClient está directo en workspace (no en Spawnables)
+--       Remote path: RS/Packages/Networking/RE/Events/CollectEventSpawnable
+--       Cada modelo tiene un Part llamado "Touch" que es el argumento correcto
+-- ══════════════════════════════════════════════════════════════
 task.spawn(function()
-    local remote = game:GetService("ReplicatedStorage").Packages.Networking:WaitForChild("RE/Events/CollectEventSpawnable")
-    local folder = workspace:WaitForChild("Spawnables"):WaitForChild("SpawnablesClient")
-    while task.wait(0.3) do
-        if not S.summer_on then continue end
-        for _, spawn in ipairs(folder:GetChildren()) do
-            -- Intenta con "Touch", si no existe usa cualquier BasePart del modelo
-            local touch = spawn:FindFirstChild("Touch")
-                       or spawn:FindFirstChildOfClass("Part")
-                       or spawn:FindFirstChildOfClass("MeshPart")
-                       or (spawn:IsA("BasePart") and spawn)
-            if touch then
-                pcall(function()
-                    remote:FireServer(touch)
-                    spawn:Destroy()
-                end)
-                task.wait(0.05)
+    -- ── Remote ──────────────────────────────────────────────
+    local RS        = game:GetService("ReplicatedStorage")
+    local Networking = RS:WaitForChild("Packages", 10):WaitForChild("Networking", 10)
+    local REFolder   = Networking:WaitForChild("RE", 10)
+    local EventsFolder = REFolder:WaitForChild("Events", 10)
+    local remote     = EventsFolder:WaitForChild("CollectEventSpawnable", 10)
+
+    if not remote then
+        warn("[x7s Summer] Remote CollectEventSpawnable no encontrado — abortando")
+        return
+    end
+
+    -- ── Folder: SpawnablesClient está DIRECTO en workspace ──
+    --    workspace/Spawnables es una Configuration vacía (trampa del devs)
+    --    El folder real es workspace/SpawnablesClient
+    local folder = workspace:WaitForChild("SpawnablesClient", 15)
+    if not folder then
+        warn("[x7s Summer] SpawnablesClient no encontrado en workspace — abortando")
+        return
+    end
+
+    -- Set de deduplicación para no firar el mismo spawnable dos veces
+    -- si el servidor tarda en destruirlo
+    local _collected = {}
+
+    -- Función interna de recolección para un único spawnable
+    local function collectOne(spawn)
+        if not spawn or not spawn.Parent then return end
+
+        -- Clave única por nombre del modelo (ej: "1", "2", ... "20")
+        local key = tostring(spawn) .. spawn.Name
+        if _collected[key] then return end
+
+        -- El servidor espera el Part "Touch" como argumento, NO el modelo entero
+        -- Cada modelo en SpawnablesClient tiene: Cone, Cone.003, Cylinder,
+        -- Sphere.001, Water, y Touch (Part). Touch es el correcto.
+        local touch = spawn:FindFirstChild("Touch")
+        if not touch then
+            -- Fallback defensivo: buscar cualquier Part no-MeshPart
+            for _, part in ipairs(spawn:GetChildren()) do
+                if part:IsA("Part") then
+                    touch = part
+                    break
+                end
             end
+        end
+        if not touch then return end
+
+        -- Marcar antes de fire para evitar doble-fire en el mismo frame
+        _collected[key] = true
+
+        local ok, err = pcall(function()
+            remote:FireServer(touch)
+        end)
+
+        if not ok then
+            -- Si falló, desmarcar para reintentar en el próximo ciclo
+            _collected[key] = nil
+            warn("[x7s Summer] FireServer falló en " .. spawn.Name .. ": " .. tostring(err))
+        end
+    end
+
+    -- Limpiar el set de deduplicación cuando el servidor
+    -- reemplaza todos los spawnables (RE Events/SetEventSpawnables)
+    local setEventRE = EventsFolder:FindFirstChild("SetEventSpawnables")
+    if setEventRE then
+        setEventRE.OnClientEvent:Connect(function()
+            _collected = {}
+        end)
+    end
+
+    -- Limpiar también al respawnear (nueva partida = nuevos IDs)
+    player.CharacterAdded:Connect(function()
+        _collected = {}
+    end)
+
+    -- ── Loop principal ───────────────────────────────────────
+    while task.wait(0.25) do
+        if not S.summer_on then continue end
+
+        local children = folder:GetChildren()
+        if #children == 0 then continue end
+
+        for _, spawn in ipairs(children) do
+            if not spawn or not spawn.Parent then continue end
+            collectOne(spawn)
+            -- Pequeño yield entre fires para no saturar el servidor
+            task.wait(0.04)
         end
     end
 end)
