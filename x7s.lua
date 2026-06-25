@@ -2785,76 +2785,112 @@ end)
 
 
 -- ══════════════════════════════════════════════════════════════
---  SUMMER 2026 — Recolector automático de Spawnables
---  FIX: SpawnablesClient está directo en workspace (no en Spawnables)
---       Remote path: RS/Packages/Networking/RE/Events/CollectEventSpawnable
---       Cada modelo tiene un Part llamado "Touch" que es el argumento correcto
+--  SUMMER 2026 — Recolector automático sin moverse
+--
+--  Estructura confirmada en vivo:
+--    • workspace/SpawnablesClient  ← Folder (NO dentro de Spawnables)
+--    • Cada hijo es un Model (nombre "1".."20") con:
+--        Cone, Cone.003, Cylinder, Sphere.001, Water (MeshPart)
+--        Touch (Part)  ← argumento que espera el servidor
+--    • Remote: RS/Packages/Networking/RE/Events/CollectEventSpawnable
+--
+--  Técnica: el servidor probablemente valida que Touch.Position esté
+--  cerca del HumanoidRootPart del jugador. En lugar de mover al
+--  personaje, teleportamos el Touch al jugador (solo cliente),
+--  hacemos FireServer, y lo restauramos. El jugador no se mueve.
 -- ══════════════════════════════════════════════════════════════
 task.spawn(function()
-    -- ── Remote ──────────────────────────────────────────────
-    local RS        = game:GetService("ReplicatedStorage")
-    local Networking = RS:WaitForChild("Packages", 10):WaitForChild("Networking", 10)
-    local REFolder   = Networking:WaitForChild("RE", 10)
-    local EventsFolder = REFolder:WaitForChild("Events", 10)
-    local remote     = EventsFolder:WaitForChild("CollectEventSpawnable", 10)
+    -- ── Obtener remote navegando paso a paso ────────────────
+    local RS           = game:GetService("ReplicatedStorage")
+    local Networking   = RS:WaitForChild("Packages",  10)
+                           :WaitForChild("Networking", 10)
+    local EventsFolder = Networking:WaitForChild("RE",     10)
+                                   :WaitForChild("Events", 10)
+    local remote       = EventsFolder:WaitForChild("CollectEventSpawnable", 10)
 
     if not remote then
         warn("[x7s Summer] Remote CollectEventSpawnable no encontrado — abortando")
         return
     end
 
-    -- ── Folder: SpawnablesClient está DIRECTO en workspace ──
-    --    workspace/Spawnables es una Configuration vacía (trampa del devs)
-    --    El folder real es workspace/SpawnablesClient
+    -- ── Folder real: SpawnablesClient DIRECTO en workspace ──
     local folder = workspace:WaitForChild("SpawnablesClient", 15)
     if not folder then
         warn("[x7s Summer] SpawnablesClient no encontrado en workspace — abortando")
         return
     end
 
-    -- Set de deduplicación para no firar el mismo spawnable dos veces
-    -- si el servidor tarda en destruirlo
+    -- ── Set de deduplicación: evita doble-fire por latencia ─
     local _collected = {}
 
-    -- Función interna de recolección para un único spawnable
+    -- ── Función core: trae el Touch al jugador y hace fire ──
+    -- El personaje NO se mueve. Solo el Part Touch (cliente-side)
+    -- se teletransporta momentáneamente junto al HRP para pasar
+    -- cualquier validación de proximidad server-side.
     local function collectOne(spawn)
         if not spawn or not spawn.Parent then return end
 
-        -- Clave única por nombre del modelo (ej: "1", "2", ... "20")
-        local key = tostring(spawn) .. spawn.Name
+        -- Dedup por identidad de instancia (más robusto que el nombre)
+        local key = tostring(spawn)
         if _collected[key] then return end
 
-        -- El servidor espera el Part "Touch" como argumento, NO el modelo entero
-        -- Cada modelo en SpawnablesClient tiene: Cone, Cone.003, Cylinder,
-        -- Sphere.001, Water, y Touch (Part). Touch es el correcto.
+        -- Buscar Touch: primero por nombre exacto, luego por clase Part
         local touch = spawn:FindFirstChild("Touch")
         if not touch then
-            -- Fallback defensivo: buscar cualquier Part no-MeshPart
             for _, part in ipairs(spawn:GetChildren()) do
-                if part:IsA("Part") then
-                    touch = part
-                    break
-                end
+                if part:IsA("Part") then touch = part; break end
             end
         end
         if not touch then return end
 
-        -- Marcar antes de fire para evitar doble-fire en el mismo frame
+        -- Obtener HumanoidRootPart actual (puede cambiar tras respawn)
+        local myChar = player.Character
+        local myRoot = myChar and myChar:FindFirstChild("HumanoidRootPart")
+        if not myRoot then return end
+
+        -- Marcar ANTES de manipular para evitar re-entrada
         _collected[key] = true
 
+        -- Guardar CFrame original del Touch para restaurarlo después
+        local originalCF = touch.CFrame
+
+        -- Desactivar física del Touch momentáneamente para poder moverlo
+        -- sin que el motor físico lo regrese a su lugar en el mismo frame
+        local originalAnchored = touch.Anchored
+        pcall(function() touch.Anchored = true end)
+
+        -- Teletransportar Touch a la posición del jugador (solo cliente)
+        -- Usamos offset Y+1 para que quede al nivel del torso, no del suelo
+        pcall(function()
+            touch.CFrame = myRoot.CFrame * CFrame.new(0, 1, 0)
+        end)
+
+        -- Un frame de espera para que el engine client-side registre la posición
+        -- antes de que el paquete de red salga al servidor
+        task.wait()
+
+        -- Disparar el remote al servidor con el Touch ya "junto" al jugador
         local ok, err = pcall(function()
             remote:FireServer(touch)
         end)
 
+        -- Restaurar CFrame y estado del Touch independientemente del resultado
+        -- (el servidor lo destruirá si el fire fue exitoso; si no, queda intacto)
+        pcall(function()
+            if touch and touch.Parent then
+                touch.CFrame    = originalCF
+                touch.Anchored  = originalAnchored
+            end
+        end)
+
         if not ok then
-            -- Si falló, desmarcar para reintentar en el próximo ciclo
+            -- Desmarcar para reintentar en el siguiente ciclo
             _collected[key] = nil
-            warn("[x7s Summer] FireServer falló en " .. spawn.Name .. ": " .. tostring(err))
+            warn("[x7s Summer] FireServer falló en spawn " .. spawn.Name .. ": " .. tostring(err))
         end
     end
 
-    -- Limpiar el set de deduplicación cuando el servidor
-    -- reemplaza todos los spawnables (RE Events/SetEventSpawnables)
+    -- ── Reset del set cuando el servidor renueva los spawnables ─
     local setEventRE = EventsFolder:FindFirstChild("SetEventSpawnables")
     if setEventRE then
         setEventRE.OnClientEvent:Connect(function()
@@ -2862,14 +2898,20 @@ task.spawn(function()
         end)
     end
 
-    -- Limpiar también al respawnear (nueva partida = nuevos IDs)
+    -- ── Reset al respawnear (nueva vida = nuevos IDs de instancia) ─
     player.CharacterAdded:Connect(function()
         _collected = {}
     end)
 
-    -- ── Loop principal ───────────────────────────────────────
-    while task.wait(0.25) do
+    -- ── Loop principal ────────────────────────────────────────
+    -- Intervalo de 0.2 s entre ciclos completos.
+    -- Entre cada spawnable individual hay task.wait() del collectOne,
+    -- más un extra de 0.05 s para no martillar el servidor.
+    while task.wait(0.2) do
         if not S.summer_on then continue end
+
+        local myChar = player.Character
+        if not myChar or not myChar:FindFirstChild("HumanoidRootPart") then continue end
 
         local children = folder:GetChildren()
         if #children == 0 then continue end
@@ -2877,8 +2919,7 @@ task.spawn(function()
         for _, spawn in ipairs(children) do
             if not spawn or not spawn.Parent then continue end
             collectOne(spawn)
-            -- Pequeño yield entre fires para no saturar el servidor
-            task.wait(0.04)
+            task.wait(0.05)
         end
     end
 end)
