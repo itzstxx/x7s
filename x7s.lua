@@ -2336,353 +2336,339 @@ Players.PlayerRemoving:Connect(function() task.defer(function() _plrList = Playe
 --  RENDER LOOP
 -- ══════════════════════════════════════════════
 local _frame = 0
+
+-- ════════════════════════════════════════════════════════════════════════════
+--  ESP + CAMLOCK OPTIMIZED V2 — INTEGRADO DIRECTAMENTE
+-- ════════════════════════════════════════════════════════════════════════════
+
+local espPool = {billboards = {}, nameLabels = {}, highlights = {}, selBoxes = {}, lines = {}, reusable = true}
+local espPartCache = {}
+local frameCounter = 0
+local raycastParams = RaycastParams.new()
+raycastParams.FilterType = Enum.RaycastFilterType.Blacklist
+
+local function cachePlayerParts(player)
+    local char = player.Character
+    if not char then return end
+    local cache = espPartCache[player] or {}
+    cache.root = char:FindFirstChild("HumanoidRootPart")
+    cache.head = char:FindFirstChild("Head")
+    cache.torso = char:FindFirstChild("Torso") or char:FindFirstChild("UpperTorso")
+    cache.hum = char:FindFirstChildOfClass("Humanoid")
+    cache.timestamp = tick()
+    espPartCache[player] = cache
+    return cache
+end
+
+local function getPlayerPartCache(player)
+    if not espPartCache[player] or (tick() - espPartCache[player].timestamp) > 1 then
+        return cachePlayerParts(player)
+    end
+    return espPartCache[player]
+end
+
+local function isVisibleOptimized(targetPos, sourcePos, ignoreList)
+    if not targetPos or not sourcePos then return false end
+    local dist = (targetPos - sourcePos).Magnitude
+    if dist > 500 then return false end
+    raycastParams.FilterDescendantsInstances = ignoreList or {}
+    local ray = workspace:Raycast(sourcePos, (targetPos - sourcePos).Unit * dist, raycastParams)
+    return not ray
+end
+
+local function getDetailLevel(distance)
+    if distance <= 30 then return "ULTRA"
+    elseif distance <= 80 then return "HIGH"
+    elseif distance <= 180 then return "MID"
+    elseif distance <= 400 then return "LOW"
+    else return "CULL" end
+end
+
 RunService.RenderStepped:Connect(function()
-    local _ok, _err = pcall(function()
-    _frame = _frame + 1
-    -- Avanzar el hue del arcoíris cada frame
-    if S.esp_rainbow then
-        _rainbowHue = (_rainbowHue + 0.004) % 1
-    end
-    local myChar = player.Character
-    local myRoot = myChar and myChar:FindFirstChild("HumanoidRootPart")
-    local vpSize = camera.ViewportSize
-    local mousePos = UserInputService:GetMouseLocation()
-    local now = tick()
-
-    -- Aplicar hitbox solo al activar/desactivar (no cada frame para evitar Player:Move error)
-    -- La lógica de "activar si hbx_on, desactivar si no" se gestiona por los keybinds y toggles
-    -- Aquí solo nos aseguramos de que jugadores nuevos tengan hitbox si está activo
-    if _frame % 30 == 0 and S.hbx_on then
-        for _, p in ipairs(_plrList) do
-            if p ~= player and p.Character and not _hbxOriginals[p] then
-                applyHitbox(p, true)
-            end
+    frameCounter = frameCounter + 1
+    pcall(function()
+        if S.esp_rainbow then
+            _rainbowHue = (_rainbowHue + 0.004) % 1
         end
-    end
-
-    if _frame % 2 ~= 0 then return end
-    for p, obj in pairs(espObjects) do
-        -- BUGFIX: Validar jugador existe y aplicar whitelist
-        if shouldSkipPlayer(p) then
-            -- Ocultar ESP del jugador en whitelist
-            for _, hl in pairs(obj.highlights) do pcall(function() hl.Enabled = false end) end
-            if obj.billboard     then obj.billboard.Enabled     = false end
-            if obj.nameBillboard then obj.nameBillboard.Enabled = false end
-            obj.line.Visible = false
-            obj.hbx.Visible = false
-            if obj.selBox then obj.selBox.Visible = false end
-            if obj.selBox2 then obj.selBox2.Visible = false end
-            if obj.healthBg  then obj.healthBg.Visible  = false end
-            if obj.healthBar then obj.healthBar.Visible = false end
-            if obj.distTag   then obj.distTag.Visible   = false end
-            if obj.itemTag   then obj.itemTag.Visible   = false end
-            continue
-        end
-
-        local char = p.Character
-        local function allOff()
-            for _, hl in pairs(obj.highlights) do pcall(function() hl.Enabled = false end) end
-            if obj.billboard      then obj.billboard.Enabled      = false end
-            if obj.nameBillboard  then obj.nameBillboard.Enabled  = false end
-            obj.line.Visible = false
-            obj.hbx.Visible  = false
-            if obj.selBox then obj.selBox.Visible = false end
-            -- EXTRAS
-            if obj.healthBg  then obj.healthBg.Visible  = false end
-            if obj.healthBar then obj.healthBar.Visible = false end
-            if obj.distTag   then obj.distTag.Visible   = false end
-            if obj.itemTag   then obj.itemTag.Visible   = false end
-        end
-        if not char then allOff(); continue end
-        local root = char:FindFirstChild("HumanoidRootPart")
-        local hum  = char:FindFirstChildOfClass("Humanoid")
-        if not root or not hum or hum.Health <= 0 then allOff(); continue end
-
-        -- ▸ Highlight aura (a través de paredes) — color cambia si está detrás de pared
-        if S.esp_on and not streamModeOn then
-            local isVis = myChar and isVisible(root, myChar)
-            applyHighlights(obj, char, isVis)
-            for _, hl in pairs(obj.highlights) do
-                pcall(function() hl.Enabled = true end)
-            end
-        else
-            for _, hl in pairs(obj.highlights) do
-                pcall(function() hl.Enabled = false end)
-            end
-        end
-
-        -- ▸ Ajustar tamaño de hitbox según Visible Check (dinámico cada frame)
-        if S.hbx_on and S.hbx_vis_check and _hbxOriginals[p] and _hbxOriginals[p].proxy then
-            local isVis2 = myChar and isVisible(root, myChar)
-            local targetSize = isVis2 
-                and (S.hbx_size * 2)      -- Expandido si está visible
-                or  2                      -- Normal si está detrás de pared
-
-            pcall(function()
-                local currentSize = _hbxOriginals[p].proxy.Size.X
-                if math.abs(currentSize - targetSize) > 0.1 then
-                    _hbxOriginals[p].proxy.Size = Vector3.new(targetSize, targetSize, targetSize)
+        
+        local myChar = player.Character
+        local myRoot = myChar and myChar:FindFirstChild("HumanoidRootPart")
+        if not myRoot then return end
+        
+        local vpSize = camera.ViewportSize
+        
+        if frameCounter % 30 == 0 and S.hbx_on then
+            for _, p in ipairs(_plrList) do
+                if p ~= player and p.Character and not _hbxOriginals[p] then
+                    applyHitbox(p, true)
                 end
-                -- CanCollide siempre false para que puedas pasar (tamaño visual indica estado)
-                _hbxOriginals[p].proxy.CanCollide = false
-            end)
+            end
         end
-
-        -- ▸ Nombre encima del personaje — color dinámico si está detrás de pared
-        if obj.nameBillboard then
-            local showName = S.esp_on and S.esp_names and not streamModeOn
-            obj.nameBillboard.Enabled = showName
-            if showName then
-                local nameLbl = obj.nameBillboard:FindFirstChild("NameLbl")
-                if nameLbl then
-                    -- Si hbx_vis_check activo, cambiar color cuando está detrás de pared
-                    if S.hbx_vis_check then
-                        local isVis3 = myChar and isVisible(root, myChar)
-                        nameLbl.TextColor3 = isVis3 
-                            and getEspColor()                           -- Color normal si visible
-                            or  Color3.fromRGB(220, 80, 80)             -- Rojo si detrás de pared
-                    else
-                        nameLbl.TextColor3 = getEspColor()
+        
+        if frameCounter % 2 ~= 0 then return end
+        for p, obj in pairs(espObjects) do
+            if shouldSkipPlayer(p) then
+                for _, hl in pairs(obj.highlights) do pcall(function() hl.Enabled = false end) end
+                if obj.billboard then obj.billboard.Enabled = false end
+                if obj.nameBillboard then obj.nameBillboard.Enabled = false end
+                obj.line.Visible = false
+                obj.hbx.Visible = false
+                if obj.selBox then obj.selBox.Visible = false end
+                if obj.selBox2 then obj.selBox2.Visible = false end
+                if obj.healthBg then obj.healthBg.Visible = false end
+                if obj.healthBar then obj.healthBar.Visible = false end
+                if obj.distTag then obj.distTag.Visible = false end
+                if obj.itemTag then obj.itemTag.Visible = false end
+                continue
+            end
+            
+            local cache = getPlayerPartCache(p)
+            if not cache or not cache.root or not cache.hum or cache.hum.Health <= 0 then
+                for _, hl in pairs(obj.highlights) do pcall(function() hl.Enabled = false end) end
+                if obj.billboard then obj.billboard.Enabled = false end
+                if obj.nameBillboard then obj.nameBillboard.Enabled = false end
+                obj.line.Visible = false
+                obj.hbx.Visible = false
+                if obj.selBox then obj.selBox.Visible = false end
+                if obj.selBox2 then obj.selBox2.Visible = false end
+                continue
+            end
+            
+            local root = cache.root
+            local head = cache.head
+            local dist3D = (root.Position - myRoot.Position).Magnitude
+            local detailLevel = getDetailLevel(dist3D)
+            
+            if detailLevel == "CULL" then
+                for _, hl in pairs(obj.highlights) do pcall(function() hl.Enabled = false end) end
+                if obj.billboard then obj.billboard.Enabled = false end
+                if obj.nameBillboard then obj.nameBillboard.Enabled = false end
+                obj.line.Visible = false
+                obj.hbx.Visible = false
+                if obj.selBox then obj.selBox.Visible = false end
+                continue
+            end
+            
+            local isVis = false
+            if frameCounter % 4 == 0 then
+                isVis = isVisibleOptimized(root.Position, myRoot.Position, {myChar, p.Character})
+            else
+                isVis = obj._cachedVis or false
+            end
+            obj._cachedVis = isVis
+            
+            if S.esp_on and not streamModeOn then
+                if frameCounter % (detailLevel == "ULTRA" and 1 or (detailLevel == "HIGH" and 2 or 4)) == 0 then
+                    applyHighlights(obj, p.Character, isVis)
+                end
+                for _, hl in pairs(obj.highlights) do
+                    pcall(function() hl.Enabled = true end)
+                end
+            else
+                for _, hl in pairs(obj.highlights) do
+                    pcall(function() hl.Enabled = false end)
+                end
+            end
+            
+            if obj.nameBillboard then
+                local showName = S.esp_on and S.esp_names and not streamModeOn and (detailLevel == "ULTRA" or detailLevel == "HIGH")
+                obj.nameBillboard.Enabled = showName
+                if showName then
+                    local nameLbl = obj.nameBillboard:FindFirstChild("NameLbl")
+                    if nameLbl then
+                        nameLbl.TextColor3 = (isVis and getEspColor() or Color3.fromRGB(220, 80, 80))
                     end
                 end
             end
-        end
-
-        -- ▸ Avatar — solo si esp_on Y esp_avatar, color dinámico si está detrás de pared
-        if obj.billboard then
-            local showAv = S.esp_on and S.esp_avatar and not streamModeOn
-            obj.billboard.Enabled = showAv
-            if showAv then
-                local bg2 = obj.billboard:FindFirstChildOfClass("Frame")
-                if bg2 then
-                    local st = bg2:FindFirstChild("AvatarStroke")
-                    if st then
-                        -- Si hbx_vis_check activo, cambiar color cuando está detrás de pared
-                        if S.hbx_vis_check then
-                            local isVis4 = myChar and isVisible(root, myChar)
-                            st.Color = isVis4 
-                                and getEspColor()                           -- Color normal si visible
-                                or  Color3.fromRGB(220, 80, 80)             -- Rojo si detrás de pared
-                        else
-                            st.Color = getEspColor()
+            
+            if obj.billboard then
+                local showAv = S.esp_on and S.esp_avatar and not streamModeOn and detailLevel == "ULTRA"
+                obj.billboard.Enabled = showAv
+                if showAv then
+                    local bg2 = obj.billboard:FindFirstChildOfClass("Frame")
+                    if bg2 then
+                        local st = bg2:FindFirstChild("AvatarStroke")
+                        if st then st.Color = (isVis and getEspColor() or Color3.fromRGB(220, 80, 80)) end
+                    end
+                end
+            end
+            
+            local sp, onS = camera:WorldToViewportPoint(root.Position)
+            if S.esp_on and S.esp_lines and onS and HAS_DRAWING and (detailLevel == "ULTRA" or detailLevel == "HIGH" or detailLevel == "MID") then
+                obj.line.Visible = true
+                obj.line.Color = getEspColor()
+                obj.line.Thickness = 1.2
+                obj.line.From = Vector2.new(vpSize.X / 2, vpSize.Y - 2)
+                obj.line.To = Vector2.new(sp.X, sp.Y)
+            else
+                obj.line.Visible = false
+            end
+            
+            if S.hbx_on and S.hbx_vis_check and _hbxOriginals[p] and _hbxOriginals[p].proxy then
+                if frameCounter % 2 == 0 then
+                    local targetSize = (isVis and S.hbx_size * 2) or 2
+                    pcall(function()
+                        if math.abs(_hbxOriginals[p].proxy.Size.X - targetSize) > 0.1 then
+                            _hbxOriginals[p].proxy.Size = Vector3.new(targetSize, targetSize, targetSize)
                         end
-                    end
+                        _hbxOriginals[p].proxy.CanCollide = false
+                    end)
                 end
             end
-        end
-
-        -- ▸ Drawing: posición en pantalla
-        local sp, onS = camera:WorldToViewportPoint(root.Position)
-        local sp2 = Vector2.new(sp.X, sp.Y)
-        local headPart = char:FindFirstChild("Head")
-        local topY = headPart and camera:WorldToViewportPoint(headPart.Position + Vector3.new(0, 0.7, 0)).Y or (sp.Y - 40)
-        local height = math.abs(sp2.Y - topY) * 2.2
-
-        -- ESP Lines — requiere Drawing
-        if S.esp_on and S.esp_lines and onS and HAS_DRAWING then
-            obj.line.Visible   = true
-            obj.line.Color     = getEspColor()
-            obj.line.Thickness = 1.5
-            obj.line.From      = Vector2.new(vpSize.X / 2, vpSize.Y - 2)
-            obj.line.To        = sp2
-        else
-            obj.line.Visible = false
-        end
-
-        -- Show Hitbox: SelectionBox 3D real con color del ESP (apunta al proxy, no al root)
-        if obj.selBox and typeof(obj.selBox) == "Instance" then
-            if S.hbx_on and S.hbx_show and onS and _hbxOriginals[p] and _hbxOriginals[p].proxy then
-                local isVis2 = myChar and isVisible(root, myChar)
-                -- visible check solo cambia el COLOR de la caja (rojo = detrás de pared)
-                local col3d = (S.hbx_vis_check and not isVis2)
-                    and Color3.fromRGB(220, 80, 80)
-                    or  getEspColor()
-                -- Apuntar a la parte proxy (el hitbox invisible)
-                obj.selBox.Adornee       = _hbxOriginals[p].proxy
-                obj.selBox.Color3        = col3d
-                obj.selBox.SurfaceColor3 = col3d
-                obj.selBox.Visible       = true
+            
+            if obj.selBox and S.hbx_on and S.hbx_show and onS and _hbxOriginals[p] and _hbxOriginals[p].proxy then
+                local col3d = (S.hbx_vis_check and not isVis) and Color3.fromRGB(220, 80, 80) or getEspColor()
+                pcall(function()
+                    obj.selBox.Adornee = _hbxOriginals[p].proxy
+                    obj.selBox.Color3 = col3d
+                    obj.selBox.Visible = true
+                end)
             else
-                obj.selBox.Visible = false
+                if obj.selBox then obj.selBox.Visible = false end
             end
         end
-
-        -- Show Hitbox (Always): SelectionBox independiente, sin visible check
-        if obj.selBox2 and typeof(obj.selBox2) == "Instance" then
-            if S.hbx_on and S.hbx_show2 and _hbxOriginals[p] and _hbxOriginals[p].proxy then
-                obj.selBox2.Adornee       = _hbxOriginals[p].proxy
-                obj.selBox2.Color3        = Color3.fromRGB(255, 200, 0)
-                obj.selBox2.SurfaceColor3 = Color3.fromRGB(255, 200, 0)
-                obj.selBox2.Visible       = true
-            else
-                obj.selBox2.Visible = false
-            end
-        end
-
-        -- ▸ EXTRAS: Health Bar (Drawing) — igual a SyyClient
-        local myRoot2 = myChar and myChar:FindFirstChild("HumanoidRootPart")
-        local dist3D  = myRoot2 and (root.Position - myRoot2.Position).Magnitude or 0
-        local headPart2 = char:FindFirstChild("Head")
-        local footPart  = char:FindFirstChild("LeftFoot") or root
-
-        if onS and headPart2 and footPart and HAS_DRAWING then
-            local topSP  = Vector2.new(camera:WorldToViewportPoint(headPart2.Position + Vector3.new(0,0.6,0)).X,
-                                       camera:WorldToViewportPoint(headPart2.Position + Vector3.new(0,0.6,0)).Y)
-            local botSP  = Vector2.new(camera:WorldToViewportPoint(footPart.Position  - Vector3.new(0,0.2,0)).X,
-                                       camera:WorldToViewportPoint(footPart.Position  - Vector3.new(0,0.2,0)).Y)
-            local boxH   = math.abs(botSP.Y - topSP.Y)
-            local boxW   = boxH * 0.45
-
-            -- Health Bar
-            local hp = hum.Health / math.max(hum.MaxHealth, 1)
-            if S.EspHealthBar and S.esp_on then
-                local bx = sp2.X - boxW * 0.5 - 7
-                obj.healthBg.Visible   = true
-                obj.healthBg.Position  = Vector2.new(bx, topSP.Y)
-                obj.healthBg.Size      = Vector2.new(4, boxH)
-                obj.healthBg.Color     = Color3.fromRGB(20, 20, 20)
-                local barH = boxH * hp
-                local r = hp < 0.5 and 255 or math.floor(255*(1-hp)*2)
-                local g = hp > 0.5 and 255 or math.floor(255*hp*2)
-                obj.healthBar.Visible  = true
-                obj.healthBar.Position = Vector2.new(bx, topSP.Y + boxH - barH)
-                obj.healthBar.Size     = Vector2.new(4, barH)
-                obj.healthBar.Color    = Color3.fromRGB(r, g, 0)
-            else
-                obj.healthBg.Visible  = false
-                obj.healthBar.Visible = false
-            end
-
-            -- Distance
-            if S.EspDistance and S.esp_on then
-                obj.distTag.Visible   = true
-                obj.distTag.Text      = math.floor(dist3D) .. "m"
-                obj.distTag.Position  = Vector2.new(sp2.X - boxW * 0.5, botSP.Y + 2)
-                obj.distTag.Color     = Color3.fromRGB(70, 160, 210)
-            else
-                obj.distTag.Visible = false
-            end
-
-            -- Item in Hand
-            if S.ItemInHand and S.esp_on then
-                local iname = nil
-                for _, v in ipairs(char:GetChildren()) do
-                    if v:IsA("Tool") then iname = v.Name; break end
-                end
-                if iname then
-                    obj.itemTag.Visible   = true
-                    obj.itemTag.Text      = "[" .. iname .. "]"
-                    obj.itemTag.Position  = Vector2.new(sp2.X, topSP.Y - 16)
-                    obj.itemTag.Color     = Color3.fromRGB(255, 215, 0)
-                else
-                    obj.itemTag.Visible = false
-                end
-            else
-                obj.itemTag.Visible = false
-            end
-        else
-            if obj.healthBg  then obj.healthBg.Visible  = false end
-            if obj.healthBar then obj.healthBar.Visible = false end
-            if obj.distTag   then obj.distTag.Visible   = false end
-            if obj.itemTag   then obj.itemTag.Visible   = false end
-        end
-
-        obj.hbx.Visible = false
-    end
     end)
-    if not _ok then
-        warn("[x7s] Error en RenderStepped (frame ".._frame.."): ".. tostring(_err))
-    end
 end)
 
--- ══════════════════════════════════════════════
---  CAM LOCK (EXACTAMENTE igual a SyyClient)
--- ══════════════════════════════════════════════
-local camLockTarget=nil
+local camLockTarget = nil
+local camLockVelocityTracker = {}
+local lastCamPos = camera.CFrame.Position
+local lastCamLookAt = camera.CFrame.LookVector
 
-
--- ══════════════════════════════════════════════
---  FOV CIRCLE (igual a SyyClient)
--- ══════════════════════════════════════════════
-local fovCircle = Drawing.new("Circle")
-fovCircle.Visible      = false
-fovCircle.Thickness    = 1.5
-fovCircle.Filled       = false
-fovCircle.NumSides     = 64
-fovCircle.Color        = Color3.fromRGB(141, 122, 174)  -- morado acento
-
-local function getFovCenter()
-    -- Centro de pantalla, igual que SyyClient
-    local vp = camera.ViewportSize
-    return Vector2.new(vp.X * 0.5, vp.Y * 0.5)
+local function getPredictedPosition(targetRoot, predictFraction)
+    predictFraction = predictFraction or 0.15
+    if not targetRoot or not camLockVelocityTracker[targetRoot] then
+        return targetRoot.Position
+    end
+    local predictedPos = targetRoot.Position + (camLockVelocityTracker[targetRoot] * predictFraction)
+    return predictedPos
 end
 
-local function isInFov(root)
-    if not S.fov_on then return true end
-    local sp, onScreen = camera:WorldToViewportPoint(root.Position)
-    if not onScreen then return false end
-    local center = getFovCenter()
-    local dx = sp.X - center.X
-    local dy = sp.Y - center.Y
-    return (dx*dx + dy*dy) <= (S.fov_radius * S.fov_radius)
+local function updateVelocityTracker(targetRoot)
+    if not targetRoot then return end
+    local currentPos = targetRoot.Position
+    local prevPos = camLockVelocityTracker[targetRoot] or currentPos
+    local vel = (currentPos - prevPos) * 0.85
+    camLockVelocityTracker[targetRoot] = vel
 end
+
+RunService:BindToRenderStep("x7sCamLockV2", Enum.RenderPriority.Camera.Value + 1, function()
+    pcall(function()
+        if not S.CamLockEnabled then
+            camLockTarget = nil
+            return
+        end
+        
+        local myChar = player.Character
+        local myRoot = myChar and myChar:FindFirstChild("HumanoidRootPart")
+        if not myRoot then return end
+        
+        local bestRoot = nil
+        local bestHead = nil
+        local bestDist = math.huge
+        
+        for _, p in ipairs(_plrList) do
+            if shouldSkipPlayer(p) then continue end
+            local cache = getPlayerPartCache(p)
+            if not cache or not cache.root or not cache.hum or cache.hum.Health <= 0 then
+                continue
+            end
+            
+            local root = cache.root
+            local head = cache.head
+            local dist3D = (root.Position - myRoot.Position).Magnitude
+            
+            if dist3D > S.CamLockRange then continue end
+            if S.CamLockSafeZone and p.Character:FindFirstChild("SafeZoneShield") then
+                continue
+            end
+            
+            if S.CamLockWallCheck and frameCounter % 2 == 0 then
+                raycastParams.FilterDescendantsInstances = {myChar, p.Character}
+                local ray = workspace:Raycast(camera.CFrame.Position, (root.Position - camera.CFrame.Position).Unit * dist3D, raycastParams)
+                if ray then continue end
+            end
+            
+            if S.fov_on and not isInFov(root) then continue end
+            
+            if dist3D < bestDist then
+                bestDist = dist3D
+                bestRoot = root
+                bestHead = head
+            end
+        end
+        
+        camLockTarget = bestRoot
+        if not bestRoot or not bestHead then return end
+        
+        updateVelocityTracker(bestRoot)
+        
+        local camPos = camera.CFrame.Position
+        local targetTracking = bestHead or bestRoot
+        local baseTargetPos = targetTracking.Position
+        
+        local targetVel = camLockVelocityTracker[bestRoot] or Vector3.new()
+        local velMagnitude = targetVel.Magnitude
+        local predictAmount = math.clamp(velMagnitude * 0.08, 0, 2)
+        local predictedPos = baseTargetPos + (targetVel.Unit * predictAmount)
+        
+        local targetPos = predictedPos + Vector3.new(0, 1.8, 0)
+        
+        local rawDir = targetPos - camPos
+        if rawDir.Magnitude < 0.01 then return end
+        
+        local distanceFactor = math.clamp(bestDist / 200, 0.3, 1)
+        local speedFactor = math.clamp(1 - (velMagnitude / 50), 0.1, 1)
+        
+        local baseStrength = math.clamp(S.CamLockStrength, 1, 100) * 0.003
+        local adaptiveStrength = baseStrength * distanceFactor * speedFactor
+        
+        local currentLook = camera.CFrame.LookVector
+        local targetLook = rawDir.Unit
+        
+        local maxAngleChange = math.rad(15)
+        local angleBetween = math.acos(math.clamp(currentLook:Dot(targetLook), -1, 1))
+        
+        local finalStrength = adaptiveStrength
+        if angleBetween > maxAngleChange then
+            finalStrength = maxAngleChange / angleBetween * 0.5
+        end
+        
+        local newLook = currentLook:Lerp(targetLook, finalStrength)
+        
+        if newLook.Magnitude > 0.01 then
+            camera.CFrame = CFrame.lookAt(camPos, camPos + newLook.Unit)
+        end
+    end)
+end)
 
 RunService.RenderStepped:Connect(function()
-    -- Visible solo cuando fov_visible está ON (independiente del filtro)
     fovCircle.Visible = S.fov_visible
     if S.fov_visible then
         fovCircle.Position = getFovCenter()
-        fovCircle.Radius   = S.fov_radius
-        -- Morado cuando filtro ON, gris cuando solo visual
+        fovCircle.Radius = S.fov_radius
         fovCircle.Color = S.fov_on
-            and Color3.fromRGB(141, 122, 174)   -- morado
-            or  Color3.fromRGB(110, 110, 110)    -- gris
+            and Color3.fromRGB(141, 122, 174)
+            or  Color3.fromRGB(110, 110, 110)
     end
 end)
 
-
-RunService:BindToRenderStep("x7sCamLock", Enum.RenderPriority.Camera.Value+1, function()
-    pcall(function()
-    if not S.CamLockEnabled then camLockTarget=nil; return end
-
-    local myChar=player.Character
-    local myRoot=myChar and myChar:FindFirstChild("HumanoidRootPart")
-    local bestRoot=nil; local bestDist=math.huge
-
-    for _,p in ipairs(_plrList) do
-        if shouldSkipPlayer(p) then continue end
-        local char=p.Character; if not char then continue end
-        local hum=char:FindFirstChildOfClass("Humanoid")
-        local root=char:FindFirstChild("HumanoidRootPart")
-        if not hum or hum.Health<=0 or not root then continue end
-        if S.CamLockSafeZone and char:FindFirstChild("SafeZoneShield") then continue end
-        local dist3D=myRoot and (root.Position-myRoot.Position).Magnitude or math.huge
-        if dist3D>S.CamLockRange then continue end
-        if S.CamLockWallCheck and myChar then
-            local ok,obs=pcall(function()
-                return camera:GetPartsObscuringTarget({root.Position},{myChar,char})
-            end)
-            if ok and #obs>0 then continue end
-        end
-        -- FOV check
-        if not isInFov(root) then continue end
-        if dist3D<bestDist then bestDist=dist3D; bestRoot=root end
-    end
-
-    camLockTarget=bestRoot
-    if not bestRoot then return end
-
-    local camPos=camera.CFrame.Position
-    local targetPos=Vector3.new(bestRoot.Position.X,bestRoot.Position.Y+1.5,bestRoot.Position.Z)
-    local rawDir=targetPos-camPos
-    if rawDir.Magnitude<0.1 then return end
-    local strength=math.clamp(S.CamLockStrength,1,100)*0.003
-    local newLook=camera.CFrame.LookVector:Lerp(rawDir.Unit,strength)
-    if newLook.Magnitude>0.01 then
-        camera.CFrame=CFrame.lookAt(camPos,camPos+newLook.Unit)
-    end
-    end)
+player.CharacterAdded:Connect(function()
+    espPartCache = {}
+    camLockVelocityTracker = {}
+    camLockTarget = nil
 end)
+
+Players.PlayerRemoving:Connect(function(p)
+    espPartCache[p] = nil
+    camLockVelocityTracker[p] = nil
+    if espObjects[p] then
+        espObjects[p] = nil
+    end
+end)
+
+print("[x7s] ESP + Camlock Optimized v2 cargado ✓")
+
 
 
 -- ══════════════════════════════════════════════
