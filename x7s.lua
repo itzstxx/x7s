@@ -1470,38 +1470,62 @@ makeKeybind(playerCard, "ghost_mode_key", "ghost_mode_key")
 
 -- Speed Hack Loop
 task.spawn(function()
-    while task.wait(0.1) do
+    while task.wait(0.15) do
         if not S.speed_hack_on then continue end
-        local char = player.Character
-        if not char then continue end
-        local hum = char:FindFirstChildOfClass("Humanoid")
-        if not hum then continue end
-        hum.WalkSpeed = 16 * (S.speed_hack_value / 50)
+        
+        pcall(function()
+            local char = player.Character
+            if not char then return end
+            
+            local hum = char:FindFirstChildOfClass("Humanoid")
+            if not hum then return end
+            
+            local speedMultiplier = math.max(0.1, S.speed_hack_value / 50)
+            hum.WalkSpeed = 16 * speedMultiplier
+        end)
     end
 end)
 
 -- Ghost Mode
 local ghostModeActive = false
+local ghostHealthConnection = nil
+
 local function toggleGhostMode(state)
     ghostModeActive = state
     local char = player.Character
     if not char then return end
+    
     local hum = char:FindFirstChildOfClass("Humanoid")
     if not hum then return end
     
     if state then
+        -- Disconnect old connection if exists
+        if ghostHealthConnection then
+            ghostHealthConnection:Disconnect()
+            ghostHealthConnection = nil
+        end
+        
+        -- Make invincible
         pcall(function()
             hum.MaxHealth = math.huge
             hum.Health = math.huge
         end)
-        -- Mantener Health infinito
-        local conn
-        conn = hum.HealthChanged:Connect(function()
+        
+        -- Monitor health changes
+        ghostHealthConnection = hum.HealthChanged:Connect(function()
             if ghostModeActive and hum and hum.Health < math.huge then
-                pcall(function() hum.Health = math.huge end)
+                pcall(function()
+                    hum.Health = math.huge
+                end)
             end
         end)
     else
+        -- Restore normal health
+        if ghostHealthConnection then
+            ghostHealthConnection:Disconnect()
+            ghostHealthConnection = nil
+        end
+        
         pcall(function()
             if hum then
                 hum.MaxHealth = 100
@@ -1512,26 +1536,53 @@ local function toggleGhostMode(state)
 end
 
 -- Keybinds para Speed Hack y Ghost Mode
-UserInputService.InputBegan:Connect(function(input, gameProcessed)
-    if gameProcessed then return end
-    
-    if input.KeyCode == Enum.KeyCode[S.speed_hack_key] then
-        S.speed_hack_on = not S.speed_hack_on
-        if refreshers["speed_hack_on"] then refreshers["speed_hack_on"]() end
-        save()
-    end
-    
-    if input.KeyCode == Enum.KeyCode[S.ghost_mode_key] then
-        S.ghost_mode_on = not S.ghost_mode_on
-        toggleGhostMode(S.ghost_mode_on)
-        if refreshers["ghost_mode_on"] then refreshers["ghost_mode_on"]() end
-        save()
-    end
-end)
+local speedHackConnected = false
+local ghostModeConnected = false
+
+if not speedHackConnected then
+    speedHackConnected = true
+    UserInputService.InputBegan:Connect(function(input, gameProcessed)
+        if gameProcessed then return end
+        
+        -- Speed Hack
+        pcall(function()
+            local keyName = tostring(input.KeyCode.Name):upper()
+            local configKey = (S.speed_hack_key or "V"):upper()
+            if keyName == configKey then
+                S.speed_hack_on = not S.speed_hack_on
+                if refreshers["speed_hack_on"] then refreshers["speed_hack_on"]() end
+                save()
+            end
+        end)
+        
+        -- Ghost Mode
+        pcall(function()
+            local keyName = tostring(input.KeyCode.Name):upper()
+            local configKey = (S.ghost_mode_key or "B"):upper()
+            if keyName == configKey then
+                S.ghost_mode_on = not S.ghost_mode_on
+                toggleGhostMode(S.ghost_mode_on)
+                if refreshers["ghost_mode_on"] then refreshers["ghost_mode_on"]() end
+                save()
+            end
+        end)
+    end)
+end
 
 -- Reset Ghost Mode al respawnear
 player.CharacterAdded:Connect(function()
     ghostModeActive = false
+    if ghostHealthConnection then
+        ghostHealthConnection:Disconnect()
+        ghostHealthConnection = nil
+    end
+    
+    -- Restore normal state on new character
+    task.wait(0.1)
+    if S.ghost_mode_on then
+        S.ghost_mode_on = false
+        if refreshers["ghost_mode_on"] then refreshers["ghost_mode_on"]() end
+    end
 end)
 
 -- ══ SUMMER 2026 ═══════════════════════════════════
