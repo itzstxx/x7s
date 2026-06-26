@@ -2338,11 +2338,13 @@ Players.PlayerRemoving:Connect(function() task.defer(function() _plrList = Playe
 local _frame = 0
 
 -- ════════════════════════════════════════════════════════════════════════════
---  ESP + CAMLOCK OPTIMIZED V2 — INTEGRADO DIRECTAMENTE
+--  ESP + CAMLOCK OPTIMIZED V2.1 + HITBOX FIX + OBJECT ESP — INTEGRADO
 -- ════════════════════════════════════════════════════════════════════════════
 
 local espPool = {billboards = {}, nameLabels = {}, highlights = {}, selBoxes = {}, lines = {}, reusable = true}
 local espPartCache = {}
+local espVisibilityCache = {}
+local objectESPLabels = {}
 local frameCounter = 0
 local raycastParams = RaycastParams.new()
 raycastParams.FilterType = Enum.RaycastFilterType.Blacklist
@@ -2384,6 +2386,102 @@ local function getDetailLevel(distance)
     else return "CULL" end
 end
 
+local function hasVisibilityChanged(player, newVis)
+    local oldVis = espVisibilityCache[player]
+    espVisibilityCache[player] = newVis
+    return oldVis ~= newVis
+end
+
+-- ── OBJECT ESP ───────────────────────────────────────────────────────────
+local function updateObjectESP()
+    pcall(function()
+        for obj, label in pairs(objectESPLabels) do
+            if not obj.Parent then
+                pcall(function() label:Destroy() end)
+                objectESPLabels[obj] = nil
+            end
+        end
+        
+        local itemPatterns = {
+            "item", "object", "pickup", "drop", "loot", "weapon", "gun", "sword",
+            "cash", "money", "coin", "crystal", "gem", "resource", "material",
+            "prop", "tool", "equipment", "chest", "crate", "box"
+        }
+        
+        for _, obj in ipairs(workspace:GetDescendants()) do
+            if not obj:IsA("BasePart") then continue end
+            if obj.Parent:FindFirstChildOfClass("Humanoid") then continue end
+            if obj:FindFirstChildOfClass("Humanoid") then continue end
+            if obj.Parent.Parent and obj.Parent.Parent:FindFirstChildOfClass("Humanoid") then continue end
+            
+            local isItem = false
+            local name = obj.Name:lower()
+            for _, pattern in ipairs(itemPatterns) do
+                if name:find(pattern) then
+                    isItem = true
+                    break
+                end
+            end
+            
+            if not isItem then continue end
+            if objectESPLabels[obj] then continue end
+            
+            local label = Instance.new("BillboardGui")
+            label.Adornee = obj
+            label.MaxDistance = 300
+            label.Size = UDim2.fromOffset(100, 30)
+            label.StudsOffset = Vector3.new(0, 2, 0)
+            
+            local textLabel = Instance.new("TextLabel", label)
+            textLabel.Size = UDim2.new(1, 0, 1, 0)
+            textLabel.BackgroundColor3 = Color3.fromRGB(255, 200, 0)
+            textLabel.BackgroundTransparency = 0.2
+            textLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+            textLabel.TextSize = 12
+            textLabel.Font = Enum.Font.GothamBold
+            textLabel.Text = obj.Name
+            
+            local corner = Instance.new("UICorner", textLabel)
+            corner.CornerRadius = UDim.new(0, 4)
+            
+            label.Parent = obj
+            objectESPLabels[obj] = label
+        end
+    end)
+end
+
+-- ── HITBOX POSITION UPDATE ───────────────────────────────────────────────
+local function updateHitboxPosition(player)
+    pcall(function()
+        if not player or not player.Character then return end
+        
+        local char = player.Character
+        local root = char:FindFirstChild("HumanoidRootPart")
+        if not root then return end
+        
+        if espObjects[player] and espObjects[player].selBox then
+            local selBox = espObjects[player].selBox
+            
+            if _hbxOriginals[player] and _hbxOriginals[player].proxy then
+                local proxy = _hbxOriginals[player].proxy
+                proxy.CFrame = root.CFrame
+                proxy.CanCollide = false
+                proxy.Transparency = 1
+                selBox.Adornee = proxy
+            else
+                selBox.Adornee = root
+            end
+            
+            if S.hbx_vis_check and espObjects[player]._cachedVis ~= nil then
+                local isVis = espObjects[player]._cachedVis
+                selBox.Color3 = isVis and getEspColor() or Color3.fromRGB(220, 80, 80)
+            else
+                selBox.Color3 = getEspColor()
+            end
+        end
+    end)
+end
+
 RunService.RenderStepped:Connect(function()
     frameCounter = frameCounter + 1
     pcall(function()
@@ -2397,15 +2495,17 @@ RunService.RenderStepped:Connect(function()
         
         local vpSize = camera.ViewportSize
         
-        if frameCounter % 30 == 0 and S.hbx_on then
+        -- HITBOX UPDATE CADA FRAME
+        if S.hbx_on then
             for _, p in ipairs(_plrList) do
-                if p ~= player and p.Character and not _hbxOriginals[p] then
-                    applyHitbox(p, true)
+                if p ~= player and p.Character then
+                    updateHitboxPosition(p)
                 end
             end
         end
         
         if frameCounter % 2 ~= 0 then return end
+        
         for p, obj in pairs(espObjects) do
             if shouldSkipPlayer(p) then
                 for _, hl in pairs(obj.highlights) do pcall(function() hl.Enabled = false end) end
@@ -2450,12 +2550,12 @@ RunService.RenderStepped:Connect(function()
             end
             
             local isVis = false
-            if frameCounter % 4 == 0 then
+            if frameCounter % 2 == 0 then
                 isVis = isVisibleOptimized(root.Position, myRoot.Position, {myChar, p.Character})
+                obj._cachedVis = isVis
             else
                 isVis = obj._cachedVis or false
             end
-            obj._cachedVis = isVis
             
             if S.esp_on and not streamModeOn then
                 if frameCounter % (detailLevel == "ULTRA" and 1 or (detailLevel == "HIGH" and 2 or 4)) == 0 then
@@ -2505,15 +2605,13 @@ RunService.RenderStepped:Connect(function()
             end
             
             if S.hbx_on and S.hbx_vis_check and _hbxOriginals[p] and _hbxOriginals[p].proxy then
-                if frameCounter % 2 == 0 then
-                    local targetSize = (isVis and S.hbx_size * 2) or 2
-                    pcall(function()
-                        if math.abs(_hbxOriginals[p].proxy.Size.X - targetSize) > 0.1 then
-                            _hbxOriginals[p].proxy.Size = Vector3.new(targetSize, targetSize, targetSize)
-                        end
-                        _hbxOriginals[p].proxy.CanCollide = false
-                    end)
-                end
+                local targetSize = (isVis and S.hbx_size * 2) or 2
+                pcall(function()
+                    if math.abs(_hbxOriginals[p].proxy.Size.X - targetSize) > 0.1 then
+                        _hbxOriginals[p].proxy.Size = Vector3.new(targetSize, targetSize, targetSize)
+                    end
+                    _hbxOriginals[p].proxy.CanCollide = false
+                end)
             end
             
             if obj.selBox and S.hbx_on and S.hbx_show and onS and _hbxOriginals[p] and _hbxOriginals[p].proxy then
@@ -2532,17 +2630,6 @@ end)
 
 local camLockTarget = nil
 local camLockVelocityTracker = {}
-local lastCamPos = camera.CFrame.Position
-local lastCamLookAt = camera.CFrame.LookVector
-
-local function getPredictedPosition(targetRoot, predictFraction)
-    predictFraction = predictFraction or 0.15
-    if not targetRoot or not camLockVelocityTracker[targetRoot] then
-        return targetRoot.Position
-    end
-    local predictedPos = targetRoot.Position + (camLockVelocityTracker[targetRoot] * predictFraction)
-    return predictedPos
-end
 
 local function updateVelocityTracker(targetRoot)
     if not targetRoot then return end
@@ -2583,7 +2670,7 @@ RunService:BindToRenderStep("x7sCamLockV2", Enum.RenderPriority.Camera.Value + 1
                 continue
             end
             
-            if S.CamLockWallCheck and frameCounter % 2 == 0 then
+            if S.CamLockWallCheck then
                 raycastParams.FilterDescendantsInstances = {myChar, p.Character}
                 local ray = workspace:Raycast(camera.CFrame.Position, (root.Position - camera.CFrame.Position).Unit * dist3D, raycastParams)
                 if ray then continue end
@@ -2647,42 +2734,46 @@ RunService.RenderStepped:Connect(function()
     if S.fov_visible then
         fovCircle.Position = getFovCenter()
         fovCircle.Radius = S.fov_radius
-        fovCircle.Color = S.fov_on
-            and Color3.fromRGB(141, 122, 174)
-            or  Color3.fromRGB(110, 110, 110)
+        fovCircle.Color = S.fov_on and Color3.fromRGB(141, 122, 174) or Color3.fromRGB(110, 110, 110)
+    end
+end)
+
+task.spawn(function()
+    while true do
+        task.wait(0.5)
+        if S.esp_objects_on then
+            updateObjectESP()
+        else
+            for obj, label in pairs(objectESPLabels) do
+                pcall(function() label:Destroy() end)
+            end
+            objectESPLabels = {}
+        end
     end
 end)
 
 player.CharacterAdded:Connect(function()
     espPartCache = {}
+    espVisibilityCache = {}
     camLockVelocityTracker = {}
+    for obj, label in pairs(objectESPLabels) do
+        pcall(function() label:Destroy() end)
+    end
+    objectESPLabels = {}
     camLockTarget = nil
 end)
 
 Players.PlayerRemoving:Connect(function(p)
     espPartCache[p] = nil
+    espVisibilityCache[p] = nil
     camLockVelocityTracker[p] = nil
     if espObjects[p] then
         espObjects[p] = nil
     end
 end)
 
-print("[x7s] ESP + Camlock Optimized v2 cargado ✓")
+print("[x7s] ESP + Camlock v2.1 + Hitbox Fix + Object ESP cargado ✓")
 
-
-
--- ══════════════════════════════════════════════
---  KEYBINDS globales
--- ══════════════════════════════════════════════
-UserInputService.InputBegan:Connect(function(inp, proc)
-    if proc then return end
-    if inp.UserInputType ~= Enum.UserInputType.Keyboard then return end
-    local kn = inp.KeyCode.Name
-
-    -- Toggle GUI
-    if kn == S.gui_key then
-        if streamModeOn then return end  -- No mostrar GUI en stream mode
-        if panel.Visible then
             TweenService:Create(panel, TweenInfo.new(0.15, Enum.EasingStyle.Quad), {BackgroundTransparency=1}):Play()
             TweenService:Create(glow,  TweenInfo.new(0.15), {BackgroundTransparency=1}):Play()
             task.delay(0.16, function()
