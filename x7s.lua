@@ -114,17 +114,17 @@ local function mkDefault()
 
 
 
+        -- === PLAYER ===
+        speed_hack_on = false,
+        speed_hack_value = 50,  -- 1-100, multiplier de velocidad
+        speed_hack_key = "V",
+        ghost_mode_on = false,
+        ghost_mode_key = "B",
         -- === EXTRAS ===
         InfStamina   = false,
         EspHealthBar = false,
         EspDistance  = false,
         ItemInHand   = false,
-        -- === PLAYER ===
-        speed_hack_on = false,
-        speed_hack_value = 50,
-        speed_hack_key = "V",
-        ghost_mode_on = false,
-        ghost_mode_key = "B",
     }
 end
 local S = mkDefault()
@@ -1458,133 +1458,6 @@ end)
 makeDivider(hbxCard)
 makeKeybind(hbxCard, "hbx_key", "hbx_key")
 
--- ══ PLAYER — Speed Hack & Ghost Mode ═════════════════════
-local playerCard = makeCard(pg_inicio)
-makeSecHeader(playerCard, "⚡", "Player")
-makeToggle(playerCard, "speed_hack_on", "Speed Hack", "speed_hack_on")
-makeSlider(playerCard, "speed_hack_value", "Speed (1-100)", 1, 100, 1, "speed_hack_value")
-makeKeybind(playerCard, "speed_hack_key", "speed_hack_key")
-makeDivider(playerCard)
-makeToggle(playerCard, "ghost_mode_on", "Ghost Mode (Invincible)", "ghost_mode_on")
-makeKeybind(playerCard, "ghost_mode_key", "ghost_mode_key")
-
--- Speed Hack Loop
-task.spawn(function()
-    while task.wait(0.15) do
-        if not S.speed_hack_on then continue end
-        
-        pcall(function()
-            local char = player.Character
-            if not char then return end
-            
-            local hum = char:FindFirstChildOfClass("Humanoid")
-            if not hum then return end
-            
-            local speedMultiplier = math.max(0.1, S.speed_hack_value / 50)
-            hum.WalkSpeed = 16 * speedMultiplier
-        end)
-    end
-end)
-
--- Ghost Mode
-local ghostModeActive = false
-local ghostHealthConnection = nil
-
-local function toggleGhostMode(state)
-    ghostModeActive = state
-    local char = player.Character
-    if not char then return end
-    
-    local hum = char:FindFirstChildOfClass("Humanoid")
-    if not hum then return end
-    
-    if state then
-        -- Disconnect old connection if exists
-        if ghostHealthConnection then
-            ghostHealthConnection:Disconnect()
-            ghostHealthConnection = nil
-        end
-        
-        -- Make invincible
-        pcall(function()
-            hum.MaxHealth = math.huge
-            hum.Health = math.huge
-        end)
-        
-        -- Monitor health changes
-        ghostHealthConnection = hum.HealthChanged:Connect(function()
-            if ghostModeActive and hum and hum.Health < math.huge then
-                pcall(function()
-                    hum.Health = math.huge
-                end)
-            end
-        end)
-    else
-        -- Restore normal health
-        if ghostHealthConnection then
-            ghostHealthConnection:Disconnect()
-            ghostHealthConnection = nil
-        end
-        
-        pcall(function()
-            if hum then
-                hum.MaxHealth = 100
-                hum.Health = 100
-            end
-        end)
-    end
-end
-
--- Keybinds para Speed Hack y Ghost Mode
-local speedHackConnected = false
-local ghostModeConnected = false
-
-if not speedHackConnected then
-    speedHackConnected = true
-    UserInputService.InputBegan:Connect(function(input, gameProcessed)
-        if gameProcessed then return end
-        
-        -- Speed Hack
-        pcall(function()
-            local keyName = tostring(input.KeyCode.Name):upper()
-            local configKey = (S.speed_hack_key or "V"):upper()
-            if keyName == configKey then
-                S.speed_hack_on = not S.speed_hack_on
-                if refreshers["speed_hack_on"] then refreshers["speed_hack_on"]() end
-                save()
-            end
-        end)
-        
-        -- Ghost Mode
-        pcall(function()
-            local keyName = tostring(input.KeyCode.Name):upper()
-            local configKey = (S.ghost_mode_key or "B"):upper()
-            if keyName == configKey then
-                S.ghost_mode_on = not S.ghost_mode_on
-                toggleGhostMode(S.ghost_mode_on)
-                if refreshers["ghost_mode_on"] then refreshers["ghost_mode_on"]() end
-                save()
-            end
-        end)
-    end)
-end
-
--- Reset Ghost Mode al respawnear
-player.CharacterAdded:Connect(function()
-    ghostModeActive = false
-    if ghostHealthConnection then
-        ghostHealthConnection:Disconnect()
-        ghostHealthConnection = nil
-    end
-    
-    -- Restore normal state on new character
-    task.wait(0.1)
-    if S.ghost_mode_on then
-        S.ghost_mode_on = false
-        if refreshers["ghost_mode_on"] then refreshers["ghost_mode_on"]() end
-    end
-end)
-
 -- ══ SUMMER 2026 ═══════════════════════════════════
 local summerCard = makeCard(pg_inicio)
 makeSecHeader(summerCard, "*", "Summer 2026")
@@ -2530,6 +2403,7 @@ RunService.RenderStepped:Connect(function()
         
         local vpSize = camera.ViewportSize
         
+        -- Aplicar hitbox cada 30 frames
         if frameCounter % 30 == 0 and S.hbx_on then
             for _, p in ipairs(_plrList) do
                 if p ~= player and p.Character and not _hbxOriginals[p] then
@@ -2538,13 +2412,258 @@ RunService.RenderStepped:Connect(function()
             end
         end
         
-        if frameCounter % 2 ~= 0 then return end
+        -- ══ OPTIMIZACIÓN INTELIGENTE: ══
+        -- Si ESP está ACTIVADO: actualizar CADA FRAME (reactivo al instante)
+        -- Si ESP está INACTIVO: saltar frames para ahorrar CPU
+        local shouldUpdateESP = S.esp_on or frameCounter % 2 == 0
+        if not shouldUpdateESP then return end
+        
+        -- Visibility check cada 5 frames (raycast pesado)
+        local shouldCheckVis = frameCounter % 5 == 0
+        
         for p, obj in pairs(espObjects) do
             if shouldSkipPlayer(p) then
                 for _, hl in pairs(obj.highlights) do pcall(function() hl.Enabled = false end) end
                 if obj.billboard then obj.billboard.Enabled = false end
                 if obj.nameBillboard then obj.nameBillboard.Enabled = false end
                 obj.line.Visible = false
+                if obj.selBox  then obj.selBox.Visible  = false end
+                if obj.selBox2 then obj.selBox2.Visible = false end
+                if obj.healthBg  then obj.healthBg.Visible  = false end
+                if obj.healthBar then obj.healthBar.Visible = false end
+                if obj.distTag   then obj.distTag.Visible   = false end
+                if obj.itemTag   then obj.itemTag.Visible   = false end
+                continue
+            end
+
+            local char = p.Character
+            local function allOff()
+                for _, hl in pairs(obj.highlights) do pcall(function() hl.Enabled = false end) end
+                if obj.billboard      then obj.billboard.Enabled      = false end
+                if obj.nameBillboard  then obj.nameBillboard.Enabled  = false end
+                obj.line.Visible = false; obj.hbx.Visible  = false
+                if obj.selBox then obj.selBox.Visible = false end
+                if obj.healthBg  then obj.healthBg.Visible  = false end
+                if obj.healthBar then obj.healthBar.Visible = false end
+                if obj.distTag   then obj.distTag.Visible   = false end
+                if obj.itemTag   then obj.itemTag.Visible   = false end
+            end
+            if not char then allOff(); continue end
+            local root = char:FindFirstChild("HumanoidRootPart")
+            local hum  = char:FindFirstChildOfClass("Humanoid")
+            if not root or not hum or hum.Health <= 0 then allOff(); continue end
+
+            -- ══ VISIBILITY CACHING: Recalcular solo cada 5 frames ══
+            local isVis = false
+            if shouldCheckVis and S.hbx_vis_check then
+                isVis = isVisible(root, myChar)
+                obj._cachedVis = isVis
+            else
+                isVis = obj._cachedVis or false
+            end
+
+            -- ▸ Highlight aura — actualizar al instante si ESP cambió de estado
+            if S.esp_on and not streamModeOn then
+                if not obj._highlightActive then
+                    obj._highlightActive = true
+                    applyHighlights(obj, char, isVis)
+                end
+                for _, hl in pairs(obj.highlights) do
+                    pcall(function() hl.Enabled = true end)
+                end
+            else
+                if obj._highlightActive then
+                    obj._highlightActive = false
+                    for _, hl in pairs(obj.highlights) do
+                        pcall(function() hl.Enabled = false end)
+                    end
+                end
+            end
+
+            -- ▸ Hitbox proxy ajuste dinámico
+            if S.hbx_on and S.hbx_vis_check and _hbxOriginals[p] and _hbxOriginals[p].proxy then
+                local targetSize = isVis and (S.hbx_size * 2) or 2
+                pcall(function()
+                    local currentSize = _hbxOriginals[p].proxy.Size.X
+                    if math.abs(currentSize - targetSize) > 0.1 then
+                        _hbxOriginals[p].proxy.Size = Vector3.new(targetSize, targetSize, targetSize)
+                    end
+                    _hbxOriginals[p].proxy.CanCollide = false
+                end)
+            end
+
+            -- ▸ Nombre encima del personaje
+            if obj.nameBillboard then
+                local showName = S.esp_on and S.esp_names and not streamModeOn
+                obj.nameBillboard.Enabled = showName
+                if showName then
+                    local nameLbl = obj.nameBillboard:FindFirstChild("NameLbl")
+                    if nameLbl then
+                        if S.hbx_vis_check then
+                            nameLbl.TextColor3 = isVis 
+                                and getEspColor()
+                                or  Color3.fromRGB(220, 80, 80)
+                        else
+                            nameLbl.TextColor3 = getEspColor()
+                        end
+                    end
+                end
+            end
+
+            -- ▸ Avatar
+            if obj.billboard then
+                local showAv = S.esp_on and S.esp_avatar and not streamModeOn
+                obj.billboard.Enabled = showAv
+                if showAv then
+                    local bg2 = obj.billboard:FindFirstChildOfClass("Frame")
+                    if bg2 then
+                        local st = bg2:FindFirstChild("AvatarStroke")
+                        if st then
+                            if S.hbx_vis_check then
+                                st.Color = isVis and getEspColor() or Color3.fromRGB(220, 80, 80)
+                            else
+                                st.Color = getEspColor()
+                            end
+                        end
+                    end
+                end
+            end
+
+            -- ▸ Drawing: posición en pantalla
+            local sp, onS = camera:WorldToViewportPoint(root.Position)
+            local sp2 = Vector2.new(sp.X, sp.Y)
+            
+            if not onS then
+                obj.line.Visible = false
+                if obj.selBox  then obj.selBox.Visible  = false end
+                if obj.selBox2 then obj.selBox2.Visible = false end
+                if obj.healthBg  then obj.healthBg.Visible  = false end
+                if obj.healthBar then obj.healthBar.Visible = false end
+                if obj.distTag   then obj.distTag.Visible   = false end
+                if obj.itemTag   then obj.itemTag.Visible   = false end
+                continue
+            end
+
+            local headPart = char:FindFirstChild("Head")
+            local topY = headPart and camera:WorldToViewportPoint(headPart.Position + Vector3.new(0, 0.7, 0)).Y or (sp.Y - 40)
+
+            -- ESP Lines
+            if S.esp_on and S.esp_lines and HAS_DRAWING then
+                obj.line.Visible   = true
+                obj.line.Color     = getEspColor()
+                obj.line.Thickness = 1.5
+                obj.line.From      = Vector2.new(vpSize.X / 2, vpSize.Y - 2)
+                obj.line.To        = sp2
+            else
+                obj.line.Visible = false
+            end
+
+            -- Show Hitbox
+            if obj.selBox and typeof(obj.selBox) == "Instance" then
+                if S.hbx_on and S.hbx_show and _hbxOriginals[p] and _hbxOriginals[p].proxy then
+                    local col3d = (S.hbx_vis_check and not isVis)
+                        and Color3.fromRGB(220, 80, 80)
+                        or  getEspColor()
+                    obj.selBox.Adornee       = _hbxOriginals[p].proxy
+                    obj.selBox.Color3        = col3d
+                    obj.selBox.SurfaceColor3 = col3d
+                    obj.selBox.Visible       = true
+                else
+                    obj.selBox.Visible = false
+                end
+            end
+
+            -- Show Hitbox (Always)
+            if obj.selBox2 and typeof(obj.selBox2) == "Instance" then
+                if S.hbx_on and S.hbx_show2 and _hbxOriginals[p] and _hbxOriginals[p].proxy then
+                    obj.selBox2.Adornee       = _hbxOriginals[p].proxy
+                    obj.selBox2.Color3        = Color3.fromRGB(255, 200, 0)
+                    obj.selBox2.SurfaceColor3 = Color3.fromRGB(255, 200, 0)
+                    obj.selBox2.Visible       = true
+                else
+                    obj.selBox2.Visible = false
+                end
+            end
+
+            -- ▸ EXTRAS: Health Bar, Distance, Item
+            if HAS_DRAWING then
+                local myRoot2 = myChar and myChar:FindFirstChild("HumanoidRootPart")
+                local dist3D  = myRoot2 and (root.Position - myRoot2.Position).Magnitude or 0
+                local headPart2 = char:FindFirstChild("Head")
+                local footPart  = char:FindFirstChild("LeftFoot") or root
+
+                if headPart2 and footPart then
+                    local topSP  = Vector2.new(camera:WorldToViewportPoint(headPart2.Position + Vector3.new(0,0.6,0)).X,
+                                               camera:WorldToViewportPoint(headPart2.Position + Vector3.new(0,0.6,0)).Y)
+                    local botSP  = Vector2.new(camera:WorldToViewportPoint(footPart.Position  - Vector3.new(0,0.2,0)).X,
+                                               camera:WorldToViewportPoint(footPart.Position  - Vector3.new(0,0.2,0)).Y)
+                    local boxH   = math.abs(botSP.Y - topSP.Y)
+                    local boxW   = boxH * 0.45
+
+                    -- Health Bar
+                    local hp = hum.Health / math.max(hum.MaxHealth, 1)
+                    if S.EspHealthBar and S.esp_on then
+                        local bx = sp2.X - boxW * 0.5 - 7
+                        obj.healthBg.Visible   = true
+                        obj.healthBg.Position  = Vector2.new(bx, topSP.Y)
+                        obj.healthBg.Size      = Vector2.new(4, boxH)
+                        obj.healthBg.Color     = Color3.fromRGB(20, 20, 20)
+                        local barH = boxH * hp
+                        local r = hp < 0.5 and 255 or math.floor(255*(1-hp)*2)
+                        local g = hp > 0.5 and 255 or math.floor(255*hp*2)
+                        obj.healthBar.Visible  = true
+                        obj.healthBar.Position = Vector2.new(bx, topSP.Y + boxH - barH)
+                        obj.healthBar.Size     = Vector2.new(4, barH)
+                        obj.healthBar.Color    = Color3.fromRGB(r, g, 0)
+                    else
+                        obj.healthBg.Visible  = false
+                        obj.healthBar.Visible = false
+                    end
+
+                    -- Distance
+                    if S.EspDistance and S.esp_on then
+                        obj.distTag.Visible   = true
+                        obj.distTag.Text      = math.floor(dist3D) .. "m"
+                        obj.distTag.Position  = Vector2.new(sp2.X - boxW * 0.5, botSP.Y + 2)
+                        obj.distTag.Color     = Color3.fromRGB(70, 160, 210)
+                    else
+                        obj.distTag.Visible = false
+                    end
+
+                    -- Item in Hand
+                    if S.ItemInHand and S.esp_on then
+                        local iname = nil
+                        for _, v in ipairs(char:GetChildren()) do
+                            if v:IsA("Tool") then iname = v.Name; break end
+                        end
+                        if iname then
+                            obj.itemTag.Visible   = true
+                            obj.itemTag.Text      = "[" .. iname .. "]"
+                            obj.itemTag.Position  = Vector2.new(sp2.X, topSP.Y - 16)
+                            obj.itemTag.Color     = Color3.fromRGB(255, 215, 0)
+                        else
+                            obj.itemTag.Visible = false
+                        end
+                    else
+                        obj.itemTag.Visible = false
+                    end
+                else
+                    obj.healthBg.Visible  = false
+                    obj.healthBar.Visible = false
+                    obj.distTag.Visible   = false
+                    obj.itemTag.Visible   = false
+                end
+            else
+                obj.healthBg.Visible  = false
+                obj.healthBar.Visible = false
+                obj.distTag.Visible   = false
+                obj.itemTag.Visible   = false
+            end
+
+            obj.hbx.Visible = false
+        end
+    end)
+end)
                 obj.hbx.Visible = false
                 if obj.selBox then obj.selBox.Visible = false end
                 if obj.selBox2 then obj.selBox2.Visible = false end
@@ -2900,6 +3019,112 @@ end)
 
 task.defer(function()
     panel.BackgroundTransparency = S.panel_bg and 0 or 0.15
+end)
+
+-- ══════════════════════════════════════════════════════════════
+--  PLAYER FEATURES — Speed Hack & Ghost Mode
+-- ══════════════════════════════════════════════════════════════
+local ghostModeActive = false
+local ghostWeld = nil
+local originalHitboxState = {}
+
+-- ── Speed Hack ──────────────────────────────────────────────
+-- Multiplica la velocidad de caminata del jugador
+task.spawn(function()
+    while task.wait(0.1) do
+        if not S.speed_hack_on then continue end
+        
+        local char = player.Character
+        if not char then continue end
+        
+        local hum = char:FindFirstChildOfClass("Humanoid")
+        if not hum then continue end
+        
+        -- Aplicar multiplicador de velocidad (rango 1-100)
+        -- 50 = velocidad normal (1x), 100 = 2x velocidad, 1 = 0.02x
+        local speedMultiplier = S.speed_hack_value / 50
+        hum.WalkSpeed = 16 * speedMultiplier  -- 16 es la velocidad por defecto
+    end
+end)
+
+-- ── Ghost Mode ──────────────────────────────────────────────
+-- Hace el personaje invencible (no recibe daño)
+local function toggleGhostMode(state)
+    ghostModeActive = state
+    local char = player.Character
+    if not char then return end
+    
+    local hum = char:FindFirstChildOfClass("Humanoid")
+    if not hum then return end
+    
+    if state then
+        -- Activar Ghost Mode: hacerlo invencible
+        if not originalHitboxState.maxHealth then
+            originalHitboxState.maxHealth = hum.MaxHealth
+            originalHitboxState.health = hum.Health
+        end
+        
+        -- Opción 1: MaxHealth infinito
+        pcall(function()
+            hum.MaxHealth = math.huge
+            hum.Health = math.huge
+        end)
+        
+        -- Opción 2: Conectar a cambios de salud para mantener infinita
+        local ghostConnection
+        ghostConnection = hum.HealthChanged:Connect(function()
+            if ghostModeActive and hum and hum.Health < math.huge then
+                pcall(function()
+                    hum.Health = math.huge
+                end)
+            end
+        end)
+        originalHitboxState.healthConnection = ghostConnection
+    else
+        -- Desactivar Ghost Mode: restaurar valores originales
+        if originalHitboxState.healthConnection then
+            originalHitboxState.healthConnection:Disconnect()
+            originalHitboxState.healthConnection = nil
+        end
+        
+        pcall(function()
+            if hum then
+                hum.MaxHealth = originalHitboxState.maxHealth or 100
+                hum.Health = math.min(originalHitboxState.health or 100, hum.MaxHealth)
+            end
+        end)
+        
+        originalHitboxState = {}
+    end
+end
+
+-- Reset Ghost Mode al respawnear
+player.CharacterAdded:Connect(function()
+    ghostModeActive = false
+    if originalHitboxState.healthConnection then
+        originalHitboxState.healthConnection:Disconnect()
+    end
+    originalHitboxState = {}
+end)
+
+-- ── Keybinds para Speed Hack y Ghost Mode ──────────────────
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+    if gameProcessed then return end
+    
+    -- Speed Hack toggle
+    if input.KeyCode == Enum.KeyCode[S.speed_hack_key] then
+        S.speed_hack_on = not S.speed_hack_on
+        if refreshers["speed_hack_on"] then refreshers["speed_hack_on"]() end
+        save()
+    end
+    
+    -- Ghost Mode toggle
+    if input.KeyCode == Enum.KeyCode[S.ghost_mode_key] then
+        S.ghost_mode_on = not S.ghost_mode_on
+        toggleGhostMode(S.ghost_mode_on)
+        if refreshers["ghost_mode_on"] then refreshers["ghost_mode_on"]() end
+        save()
+    end
 end)
 
 
