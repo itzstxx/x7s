@@ -2058,20 +2058,31 @@ local function createAvatarBillboard(p, char)
 end
 
 local function newLine()
-    if not HAS_DRAWING then return newDrawingFallback() end
-    local l = Drawing.new("Line"); l.Visible = false; l.Thickness = 1.5
-    l.Color = getEspColor(); return l
+    local ok, obj = pcall(function() return Drawing.new("Line") end)
+    if not ok or not obj then return newDrawingFallback() end
+    obj.Visible = false
+    obj.Thickness = 1.5
+    obj.Color = getEspColor()
+    return obj
 end
 local function newText()
-    if not HAS_DRAWING then return newDrawingFallback() end
-    local t = Drawing.new("Text"); t.Visible = false; t.Size = 13
-    t.Color = Color3.fromRGB(200, 190, 220); t.Outline = true
-    t.OutlineColor = Color3.fromRGB(0, 0, 0); return t
+    local ok, obj = pcall(function() return Drawing.new("Text") end)
+    if not ok or not obj then return newDrawingFallback() end
+    obj.Visible = false
+    obj.Size = 13
+    obj.Color = Color3.fromRGB(200, 190, 220)
+    obj.Outline = true
+    obj.OutlineColor = Color3.fromRGB(0, 0, 0)
+    return obj
 end
 local function newBox()
-    if not HAS_DRAWING then return newDrawingFallback() end
-    local b = Drawing.new("Square"); b.Visible = false; b.Filled = false
-    b.Thickness = 1.5; b.Color = getEspColor(); return b
+    local ok, obj = pcall(function() return Drawing.new("Square") end)
+    if not ok or not obj then return newDrawingFallback() end
+    obj.Visible = false
+    obj.Filled = false
+    obj.Thickness = 1.5
+    obj.Color = getEspColor()
+    return obj
 end
 
 -- Crea una SelectionBox 3D para el hitbox visual (caja con color del ESP)
@@ -2106,13 +2117,22 @@ local function createSelectionBox3D_always(char)
 end
 
 local function newFilledRect()
-    if not HAS_DRAWING then return newDrawingFallback() end
-    local r = Drawing.new("Square"); r.Visible=false; r.Filled=true; r.Thickness=1; return r
+    local ok, r = pcall(function() return Drawing.new("Square") end)
+    if not ok or not r then return newDrawingFallback() end
+    r.Visible = false
+    r.Filled = true
+    r.Thickness = 1
+    return r
 end
+
 local function newSmallText(sz)
-    if not HAS_DRAWING then return newDrawingFallback() end
-    local t = Drawing.new("Text"); t.Visible=false; t.Size=sz or 11; t.Outline=true
-    t.OutlineColor=Color3.fromRGB(0,0,0); return t
+    local ok, t = pcall(function() return Drawing.new("Text") end)
+    if not ok or not t then return newDrawingFallback() end
+    t.Visible = false
+    t.Size = sz or 11
+    t.Outline = true
+    t.OutlineColor = Color3.fromRGB(0, 0, 0)
+    return t
 end
 
 local function createEspObj(p)
@@ -2636,28 +2656,30 @@ RunService.RenderStepped:Connect(function()
                         for _, v in ipairs(char:GetChildren()) do
                             if v:IsA("Tool") then iname = v.Name; break end
                         end
-                        if iname then
-                            obj.itemTag.Visible   = true
-                            obj.itemTag.Text      = "[" .. iname .. "]"
-                            obj.itemTag.Position  = Vector2.new(sp2.X, topSP.Y - 16)
-                            obj.itemTag.Color     = Color3.fromRGB(255, 215, 0)
+                            if iname then
+                                if obj.itemTag then
+                                    obj.itemTag.Visible   = true
+                                    obj.itemTag.Text      = "[" .. iname .. "]"
+                                    obj.itemTag.Position  = Vector2.new(sp2.X, topSP.Y - 16)
+                                    obj.itemTag.Color     = Color3.fromRGB(255, 215, 0)
+                                end
+                            else
+                                if obj.itemTag then obj.itemTag.Visible = false end
+                            end
                         else
-                            obj.itemTag.Visible = false
+                            if obj.itemTag then obj.itemTag.Visible = false end
                         end
                     else
-                        obj.itemTag.Visible = false
+                        if obj.healthBg  then obj.healthBg.Visible  = false end
+                        if obj.healthBar then obj.healthBar.Visible = false end
+                        if obj.distTag   then obj.distTag.Visible   = false end
+                        if obj.itemTag   then obj.itemTag.Visible   = false end
                     end
                 else
-                    obj.healthBg.Visible  = false
-                    obj.healthBar.Visible = false
-                    obj.distTag.Visible   = false
-                    obj.itemTag.Visible   = false
-                end
-            else
-                obj.healthBg.Visible  = false
-                obj.healthBar.Visible = false
-                obj.distTag.Visible   = false
-                obj.itemTag.Visible   = false
+                    if obj.healthBg  then obj.healthBg.Visible  = false end
+                    if obj.healthBar then obj.healthBar.Visible = false end
+                    if obj.distTag   then obj.distTag.Visible   = false end
+                    if obj.itemTag   then obj.itemTag.Visible   = false end
             end
 
             obj.hbx.Visible = false
