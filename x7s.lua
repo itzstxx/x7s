@@ -2338,10 +2338,9 @@ Players.PlayerRemoving:Connect(function() task.defer(function() _plrList = Playe
 local _frame = 0
 
 -- ════════════════════════════════════════════════════════════════════════════
---  ESP + CAMLOCK OPTIMIZED V2.1 + HITBOX FIX + OBJECT ESP — INTEGRADO
+--  ESP + CAMLOCK OPTIMIZED V2.1 INSTANT + HITBOX FIX + OBJECT ESP
 -- ════════════════════════════════════════════════════════════════════════════
 
-local espPool = {billboards = {}, nameLabels = {}, highlights = {}, selBoxes = {}, lines = {}, reusable = true}
 local espPartCache = {}
 local espVisibilityCache = {}
 local objectESPLabels = {}
@@ -2350,16 +2349,13 @@ local raycastParams = RaycastParams.new()
 raycastParams.FilterType = Enum.RaycastFilterType.Blacklist
 
 local function cachePlayerParts(player)
-    local char = player.Character
-    if not char then return end
+    local char = player.Character; if not char then return end
     local cache = espPartCache[player] or {}
     cache.root = char:FindFirstChild("HumanoidRootPart")
     cache.head = char:FindFirstChild("Head")
-    cache.torso = char:FindFirstChild("Torso") or char:FindFirstChild("UpperTorso")
     cache.hum = char:FindFirstChildOfClass("Humanoid")
     cache.timestamp = tick()
-    espPartCache[player] = cache
-    return cache
+    espPartCache[player] = cache; return cache
 end
 
 local function getPlayerPartCache(player)
@@ -2379,105 +2375,50 @@ local function isVisibleOptimized(targetPos, sourcePos, ignoreList)
 end
 
 local function getDetailLevel(distance)
-    if distance <= 30 then return "ULTRA"
-    elseif distance <= 80 then return "HIGH"
-    elseif distance <= 180 then return "MID"
-    elseif distance <= 400 then return "LOW"
+    if distance <= 30 then return "ULTRA" elseif distance <= 80 then return "HIGH"
+    elseif distance <= 180 then return "MID" elseif distance <= 400 then return "LOW"
     else return "CULL" end
 end
 
-local function hasVisibilityChanged(player, newVis)
-    local oldVis = espVisibilityCache[player]
-    espVisibilityCache[player] = newVis
-    return oldVis ~= newVis
-end
-
--- ── OBJECT ESP ───────────────────────────────────────────────────────────
 local function updateObjectESP()
     pcall(function()
         for obj, label in pairs(objectESPLabels) do
-            if not obj.Parent then
-                pcall(function() label:Destroy() end)
-                objectESPLabels[obj] = nil
-            end
+            if not obj.Parent then pcall(function() label:Destroy() end); objectESPLabels[obj] = nil end
         end
-        
-        local itemPatterns = {
-            "item", "object", "pickup", "drop", "loot", "weapon", "gun", "sword",
-            "cash", "money", "coin", "crystal", "gem", "resource", "material",
-            "prop", "tool", "equipment", "chest", "crate", "box"
-        }
-        
+        local itemPatterns = {"item", "object", "pickup", "drop", "loot", "weapon", "gun", "sword", "cash", "money", "coin", "crystal", "gem", "resource", "material", "prop", "tool", "equipment", "chest", "crate", "box"}
         for _, obj in ipairs(workspace:GetDescendants()) do
             if not obj:IsA("BasePart") then continue end
             if obj.Parent:FindFirstChildOfClass("Humanoid") then continue end
-            if obj:FindFirstChildOfClass("Humanoid") then continue end
-            if obj.Parent.Parent and obj.Parent.Parent:FindFirstChildOfClass("Humanoid") then continue end
-            
-            local isItem = false
-            local name = obj.Name:lower()
-            for _, pattern in ipairs(itemPatterns) do
-                if name:find(pattern) then
-                    isItem = true
-                    break
-                end
-            end
-            
-            if not isItem then continue end
-            if objectESPLabels[obj] then continue end
-            
+            local isItem = false; local name = obj.Name:lower()
+            for _, pattern in ipairs(itemPatterns) do if name:find(pattern) then isItem = true; break end end
+            if not isItem or objectESPLabels[obj] then continue end
             local label = Instance.new("BillboardGui")
-            label.Adornee = obj
-            label.MaxDistance = 300
-            label.Size = UDim2.fromOffset(100, 30)
-            label.StudsOffset = Vector3.new(0, 2, 0)
-            
+            label.Adornee = obj; label.MaxDistance = 300; label.Size = UDim2.fromOffset(100, 30); label.StudsOffset = Vector3.new(0, 2, 0)
             local textLabel = Instance.new("TextLabel", label)
-            textLabel.Size = UDim2.new(1, 0, 1, 0)
-            textLabel.BackgroundColor3 = Color3.fromRGB(255, 200, 0)
-            textLabel.BackgroundTransparency = 0.2
-            textLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
-            textLabel.TextSize = 12
-            textLabel.Font = Enum.Font.GothamBold
-            textLabel.Text = obj.Name
-            
-            local corner = Instance.new("UICorner", textLabel)
-            corner.CornerRadius = UDim.new(0, 4)
-            
-            label.Parent = obj
-            objectESPLabels[obj] = label
+            textLabel.Size = UDim2.new(1, 0, 1, 0); textLabel.BackgroundColor3 = Color3.fromRGB(255, 200, 0); textLabel.BackgroundTransparency = 0.2
+            textLabel.TextColor3 = Color3.fromRGB(255, 255, 255); textLabel.TextSize = 12; textLabel.Font = Enum.Font.GothamBold; textLabel.Text = obj.Name
+            Instance.new("UICorner", textLabel).CornerRadius = UDim.new(0, 4)
+            label.Parent = obj; objectESPLabels[obj] = label
         end
     end)
 end
 
--- ── HITBOX POSITION UPDATE ───────────────────────────────────────────────
 local function updateHitboxPosition(player)
     pcall(function()
         if not player or not player.Character then return end
-        
-        local char = player.Character
-        local root = char:FindFirstChild("HumanoidRootPart")
+        local char = player.Character; local root = char:FindFirstChild("HumanoidRootPart")
         if not root then return end
-        
         if espObjects[player] and espObjects[player].selBox then
             local selBox = espObjects[player].selBox
-            
             if _hbxOriginals[player] and _hbxOriginals[player].proxy then
                 local proxy = _hbxOriginals[player].proxy
-                proxy.CFrame = root.CFrame
-                proxy.CanCollide = false
-                proxy.Transparency = 1
+                proxy.CFrame = root.CFrame; proxy.CanCollide = false; proxy.Transparency = 1
                 selBox.Adornee = proxy
-            else
-                selBox.Adornee = root
-            end
-            
+            else selBox.Adornee = root end
             if S.hbx_vis_check and espObjects[player]._cachedVis ~= nil then
                 local isVis = espObjects[player]._cachedVis
                 selBox.Color3 = isVis and getEspColor() or Color3.fromRGB(220, 80, 80)
-            else
-                selBox.Color3 = getEspColor()
-            end
+            else selBox.Color3 = getEspColor() end
         end
     end)
 end
@@ -2485,125 +2426,81 @@ end
 RunService.RenderStepped:Connect(function()
     frameCounter = frameCounter + 1
     pcall(function()
-        if S.esp_rainbow then
-            _rainbowHue = (_rainbowHue + 0.004) % 1
-        end
-        
-        local myChar = player.Character
-        local myRoot = myChar and myChar:FindFirstChild("HumanoidRootPart")
+        if S.esp_rainbow then _rainbowHue = (_rainbowHue + 0.004) % 1 end
+        local myChar = player.Character; local myRoot = myChar and myChar:FindFirstChild("HumanoidRootPart")
         if not myRoot then return end
-        
         local vpSize = camera.ViewportSize
-        
-        -- HITBOX UPDATE CADA FRAME
         if S.hbx_on then
             for _, p in ipairs(_plrList) do
-                if p ~= player and p.Character then
-                    updateHitboxPosition(p)
-                end
+                if p ~= player and p.Character then updateHitboxPosition(p) end
             end
         end
-        
         if frameCounter % 2 ~= 0 then return end
-        
         for p, obj in pairs(espObjects) do
             if shouldSkipPlayer(p) then
                 for _, hl in pairs(obj.highlights) do pcall(function() hl.Enabled = false end) end
                 if obj.billboard then obj.billboard.Enabled = false end
                 if obj.nameBillboard then obj.nameBillboard.Enabled = false end
-                obj.line.Visible = false
-                obj.hbx.Visible = false
+                obj.line.Visible = false; obj.hbx.Visible = false
                 if obj.selBox then obj.selBox.Visible = false end
                 if obj.selBox2 then obj.selBox2.Visible = false end
                 if obj.healthBg then obj.healthBg.Visible = false end
                 if obj.healthBar then obj.healthBar.Visible = false end
-                if obj.distTag then obj.distTag.Visible = false end
-                if obj.itemTag then obj.itemTag.Visible = false end
                 continue
             end
-            
             local cache = getPlayerPartCache(p)
             if not cache or not cache.root or not cache.hum or cache.hum.Health <= 0 then
                 for _, hl in pairs(obj.highlights) do pcall(function() hl.Enabled = false end) end
                 if obj.billboard then obj.billboard.Enabled = false end
                 if obj.nameBillboard then obj.nameBillboard.Enabled = false end
-                obj.line.Visible = false
-                obj.hbx.Visible = false
+                obj.line.Visible = false; obj.hbx.Visible = false
                 if obj.selBox then obj.selBox.Visible = false end
-                if obj.selBox2 then obj.selBox2.Visible = false end
                 continue
             end
-            
-            local root = cache.root
-            local head = cache.head
-            local dist3D = (root.Position - myRoot.Position).Magnitude
+            local root = cache.root; local head = cache.head; local dist3D = (root.Position - myRoot.Position).Magnitude
             local detailLevel = getDetailLevel(dist3D)
-            
             if detailLevel == "CULL" then
                 for _, hl in pairs(obj.highlights) do pcall(function() hl.Enabled = false end) end
                 if obj.billboard then obj.billboard.Enabled = false end
                 if obj.nameBillboard then obj.nameBillboard.Enabled = false end
-                obj.line.Visible = false
-                obj.hbx.Visible = false
+                obj.line.Visible = false; obj.hbx.Visible = false
                 if obj.selBox then obj.selBox.Visible = false end
                 continue
             end
-            
             local isVis = false
             if frameCounter % 2 == 0 then
                 isVis = isVisibleOptimized(root.Position, myRoot.Position, {myChar, p.Character})
                 obj._cachedVis = isVis
-            else
-                isVis = obj._cachedVis or false
-            end
-            
+            else isVis = obj._cachedVis or false end
             if S.esp_on and not streamModeOn then
                 if frameCounter % (detailLevel == "ULTRA" and 1 or (detailLevel == "HIGH" and 2 or 4)) == 0 then
                     applyHighlights(obj, p.Character, isVis)
                 end
-                for _, hl in pairs(obj.highlights) do
-                    pcall(function() hl.Enabled = true end)
-                end
+                for _, hl in pairs(obj.highlights) do pcall(function() hl.Enabled = true end) end
             else
-                for _, hl in pairs(obj.highlights) do
-                    pcall(function() hl.Enabled = false end)
-                end
+                for _, hl in pairs(obj.highlights) do pcall(function() hl.Enabled = false end) end
             end
-            
             if obj.nameBillboard then
                 local showName = S.esp_on and S.esp_names and not streamModeOn and (detailLevel == "ULTRA" or detailLevel == "HIGH")
                 obj.nameBillboard.Enabled = showName
                 if showName then
                     local nameLbl = obj.nameBillboard:FindFirstChild("NameLbl")
-                    if nameLbl then
-                        nameLbl.TextColor3 = (isVis and getEspColor() or Color3.fromRGB(220, 80, 80))
-                    end
+                    if nameLbl then nameLbl.TextColor3 = (isVis and getEspColor() or Color3.fromRGB(220, 80, 80)) end
                 end
             end
-            
             if obj.billboard then
                 local showAv = S.esp_on and S.esp_avatar and not streamModeOn and detailLevel == "ULTRA"
                 obj.billboard.Enabled = showAv
                 if showAv then
                     local bg2 = obj.billboard:FindFirstChildOfClass("Frame")
-                    if bg2 then
-                        local st = bg2:FindFirstChild("AvatarStroke")
-                        if st then st.Color = (isVis and getEspColor() or Color3.fromRGB(220, 80, 80)) end
-                    end
+                    if bg2 then local st = bg2:FindFirstChild("AvatarStroke"); if st then st.Color = (isVis and getEspColor() or Color3.fromRGB(220, 80, 80)) end end
                 end
             end
-            
             local sp, onS = camera:WorldToViewportPoint(root.Position)
             if S.esp_on and S.esp_lines and onS and HAS_DRAWING and (detailLevel == "ULTRA" or detailLevel == "HIGH" or detailLevel == "MID") then
-                obj.line.Visible = true
-                obj.line.Color = getEspColor()
-                obj.line.Thickness = 1.2
-                obj.line.From = Vector2.new(vpSize.X / 2, vpSize.Y - 2)
-                obj.line.To = Vector2.new(sp.X, sp.Y)
-            else
-                obj.line.Visible = false
-            end
-            
+                obj.line.Visible = true; obj.line.Color = getEspColor(); obj.line.Thickness = 1.2
+                obj.line.From = Vector2.new(vpSize.X / 2, vpSize.Y - 2); obj.line.To = Vector2.new(sp.X, sp.Y)
+            else obj.line.Visible = false end
             if S.hbx_on and S.hbx_vis_check and _hbxOriginals[p] and _hbxOriginals[p].proxy then
                 local targetSize = (isVis and S.hbx_size * 2) or 2
                 pcall(function()
@@ -2613,127 +2510,65 @@ RunService.RenderStepped:Connect(function()
                     _hbxOriginals[p].proxy.CanCollide = false
                 end)
             end
-            
             if obj.selBox and S.hbx_on and S.hbx_show and onS and _hbxOriginals[p] and _hbxOriginals[p].proxy then
                 local col3d = (S.hbx_vis_check and not isVis) and Color3.fromRGB(220, 80, 80) or getEspColor()
-                pcall(function()
-                    obj.selBox.Adornee = _hbxOriginals[p].proxy
-                    obj.selBox.Color3 = col3d
-                    obj.selBox.Visible = true
-                end)
-            else
-                if obj.selBox then obj.selBox.Visible = false end
-            end
+                pcall(function() obj.selBox.Adornee = _hbxOriginals[p].proxy; obj.selBox.Color3 = col3d; obj.selBox.Visible = true end)
+            else if obj.selBox then obj.selBox.Visible = false end end
         end
     end)
 end)
 
-local camLockTarget = nil
-local camLockVelocityTracker = {}
-
+local camLockTarget = nil; local camLockVelocityTracker = {}
 local function updateVelocityTracker(targetRoot)
     if not targetRoot then return end
-    local currentPos = targetRoot.Position
-    local prevPos = camLockVelocityTracker[targetRoot] or currentPos
-    local vel = (currentPos - prevPos) * 0.85
-    camLockVelocityTracker[targetRoot] = vel
+    local currentPos = targetRoot.Position; local prevPos = camLockVelocityTracker[targetRoot] or currentPos
+    local vel = (currentPos - prevPos) * 0.85; camLockVelocityTracker[targetRoot] = vel
 end
 
 RunService:BindToRenderStep("x7sCamLockV2", Enum.RenderPriority.Camera.Value + 1, function()
     pcall(function()
-        if not S.CamLockEnabled then
-            camLockTarget = nil
-            return
-        end
-        
-        local myChar = player.Character
-        local myRoot = myChar and myChar:FindFirstChild("HumanoidRootPart")
+        if not S.CamLockEnabled then camLockTarget = nil; return end
+        local myChar = player.Character; local myRoot = myChar and myChar:FindFirstChild("HumanoidRootPart")
         if not myRoot then return end
-        
-        local bestRoot = nil
-        local bestHead = nil
-        local bestDist = math.huge
-        
+        local bestRoot = nil; local bestHead = nil; local bestDist = math.huge
         for _, p in ipairs(_plrList) do
             if shouldSkipPlayer(p) then continue end
             local cache = getPlayerPartCache(p)
-            if not cache or not cache.root or not cache.hum or cache.hum.Health <= 0 then
-                continue
-            end
-            
-            local root = cache.root
-            local head = cache.head
-            local dist3D = (root.Position - myRoot.Position).Magnitude
-            
+            if not cache or not cache.root or not cache.hum or cache.hum.Health <= 0 then continue end
+            local root = cache.root; local head = cache.head; local dist3D = (root.Position - myRoot.Position).Magnitude
             if dist3D > S.CamLockRange then continue end
-            if S.CamLockSafeZone and p.Character:FindFirstChild("SafeZoneShield") then
-                continue
-            end
-            
+            if S.CamLockSafeZone and p.Character:FindFirstChild("SafeZoneShield") then continue end
             if S.CamLockWallCheck then
                 raycastParams.FilterDescendantsInstances = {myChar, p.Character}
                 local ray = workspace:Raycast(camera.CFrame.Position, (root.Position - camera.CFrame.Position).Unit * dist3D, raycastParams)
                 if ray then continue end
             end
-            
             if S.fov_on and not isInFov(root) then continue end
-            
-            if dist3D < bestDist then
-                bestDist = dist3D
-                bestRoot = root
-                bestHead = head
-            end
+            if dist3D < bestDist then bestDist = dist3D; bestRoot = root; bestHead = head end
         end
-        
         camLockTarget = bestRoot
         if not bestRoot or not bestHead then return end
-        
         updateVelocityTracker(bestRoot)
-        
-        local camPos = camera.CFrame.Position
-        local targetTracking = bestHead or bestRoot
-        local baseTargetPos = targetTracking.Position
-        
-        local targetVel = camLockVelocityTracker[bestRoot] or Vector3.new()
-        local velMagnitude = targetVel.Magnitude
-        local predictAmount = math.clamp(velMagnitude * 0.08, 0, 2)
-        local predictedPos = baseTargetPos + (targetVel.Unit * predictAmount)
-        
-        local targetPos = predictedPos + Vector3.new(0, 1.8, 0)
-        
-        local rawDir = targetPos - camPos
+        local camPos = camera.CFrame.Position; local targetTracking = bestHead or bestRoot; local baseTargetPos = targetTracking.Position
+        local targetVel = camLockVelocityTracker[bestRoot] or Vector3.new(); local velMagnitude = targetVel.Magnitude
+        local predictAmount = math.clamp(velMagnitude * 0.08, 0, 2); local predictedPos = baseTargetPos + (targetVel.Unit * predictAmount)
+        local targetPos = predictedPos + Vector3.new(0, 1.8, 0); local rawDir = targetPos - camPos
         if rawDir.Magnitude < 0.01 then return end
-        
-        local distanceFactor = math.clamp(bestDist / 200, 0.3, 1)
-        local speedFactor = math.clamp(1 - (velMagnitude / 50), 0.1, 1)
-        
-        local baseStrength = math.clamp(S.CamLockStrength, 1, 100) * 0.003
-        local adaptiveStrength = baseStrength * distanceFactor * speedFactor
-        
-        local currentLook = camera.CFrame.LookVector
-        local targetLook = rawDir.Unit
-        
-        local maxAngleChange = math.rad(15)
-        local angleBetween = math.acos(math.clamp(currentLook:Dot(targetLook), -1, 1))
-        
+        local distanceFactor = math.clamp(bestDist / 200, 0.3, 1); local speedFactor = math.clamp(1 - (velMagnitude / 50), 0.1, 1)
+        local baseStrength = math.clamp(S.CamLockStrength, 1, 100) * 0.003; local adaptiveStrength = baseStrength * distanceFactor * speedFactor
+        local currentLook = camera.CFrame.LookVector; local targetLook = rawDir.Unit
+        local maxAngleChange = math.rad(15); local angleBetween = math.acos(math.clamp(currentLook:Dot(targetLook), -1, 1))
         local finalStrength = adaptiveStrength
-        if angleBetween > maxAngleChange then
-            finalStrength = maxAngleChange / angleBetween * 0.5
-        end
-        
+        if angleBetween > maxAngleChange then finalStrength = maxAngleChange / angleBetween * 0.5 end
         local newLook = currentLook:Lerp(targetLook, finalStrength)
-        
-        if newLook.Magnitude > 0.01 then
-            camera.CFrame = CFrame.lookAt(camPos, camPos + newLook.Unit)
-        end
+        if newLook.Magnitude > 0.01 then camera.CFrame = CFrame.lookAt(camPos, camPos + newLook.Unit) end
     end)
 end)
 
 RunService.RenderStepped:Connect(function()
     fovCircle.Visible = S.fov_visible
     if S.fov_visible then
-        fovCircle.Position = getFovCenter()
-        fovCircle.Radius = S.fov_radius
+        fovCircle.Position = getFovCenter(); fovCircle.Radius = S.fov_radius
         fovCircle.Color = S.fov_on and Color3.fromRGB(141, 122, 174) or Color3.fromRGB(110, 110, 110)
     end
 end)
@@ -2741,39 +2576,40 @@ end)
 task.spawn(function()
     while true do
         task.wait(0.5)
-        if S.esp_objects_on then
-            updateObjectESP()
-        else
-            for obj, label in pairs(objectESPLabels) do
-                pcall(function() label:Destroy() end)
-            end
-            objectESPLabels = {}
-        end
+        if S.esp_objects_on then updateObjectESP()
+        else for obj, label in pairs(objectESPLabels) do pcall(function() label:Destroy() end) end; objectESPLabels = {} end
     end
 end)
 
 player.CharacterAdded:Connect(function()
-    espPartCache = {}
-    espVisibilityCache = {}
-    camLockVelocityTracker = {}
-    for obj, label in pairs(objectESPLabels) do
-        pcall(function() label:Destroy() end)
-    end
-    objectESPLabels = {}
-    camLockTarget = nil
+    espPartCache = {}; espVisibilityCache = {}; camLockVelocityTracker = {}
+    for obj, label in pairs(objectESPLabels) do pcall(function() label:Destroy() end) end
+    objectESPLabels = {}; camLockTarget = nil
 end)
 
 Players.PlayerRemoving:Connect(function(p)
-    espPartCache[p] = nil
-    espVisibilityCache[p] = nil
-    camLockVelocityTracker[p] = nil
-    if espObjects[p] then
-        espObjects[p] = nil
-    end
+    espPartCache[p] = nil; espVisibilityCache[p] = nil; camLockVelocityTracker[p] = nil
+    if espObjects[p] then espObjects[p] = nil end
 end)
 
-print("[x7s] ESP + Camlock v2.1 + Hitbox Fix + Object ESP cargado ✓")
+print("[x7s] ESP + Camlock v2.1 INSTANT + Hitbox Fix + Object ESP cargado ✓")
 
+print("[x7s] ESP + Camlock Optimized v2 cargado ✓")
+
+
+
+-- ══════════════════════════════════════════════
+--  KEYBINDS globales
+-- ══════════════════════════════════════════════
+UserInputService.InputBegan:Connect(function(inp, proc)
+    if proc then return end
+    if inp.UserInputType ~= Enum.UserInputType.Keyboard then return end
+    local kn = inp.KeyCode.Name
+
+    -- Toggle GUI
+    if kn == S.gui_key then
+        if streamModeOn then return end  -- No mostrar GUI en stream mode
+        if panel.Visible then
             TweenService:Create(panel, TweenInfo.new(0.15, Enum.EasingStyle.Quad), {BackgroundTransparency=1}):Play()
             TweenService:Create(glow,  TweenInfo.new(0.15), {BackgroundTransparency=1}):Play()
             task.delay(0.16, function()
