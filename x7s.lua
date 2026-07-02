@@ -2732,7 +2732,7 @@ RunService:BindToRenderStep("x7sCamLock", Enum.RenderPriority.Camera.Value+1, fu
 end)
 
 -- ══════════════════════════════════════════════
---  SILENT AIM
+--  SILENT AIM (Interceptor de Disparos)
 -- ══════════════════════════════════════════════
 local function getTargetPartPos(root, partName)
     if not root or not root.Parent then return root.Position end
@@ -2783,14 +2783,43 @@ RunService:BindToRenderStep("x7sSilentAim", Enum.RenderPriority.Camera.Value, fu
 
     -- Obtener la parte objetivo según la configuración
     local targetPos = getTargetPartPos(bestRoot, S.SilentAimTargetPart)
+    local myRootPos = myRoot and myRoot.Position or camera.CFrame.Position
     
-    -- Modificar el mouse.Hit para apuntar silenciosamente
-    local strength=math.clamp(S.SilentAimStrength,1,100)*0.01
-    local currentHit = mouse.Hit
-    local targetCFrame = CFrame.new(targetPos)
-    mouse.Hit = currentHit:Lerp(targetCFrame, strength)
+    -- Hacer que la cámara apunte al objetivo (para los raycast del arma)
+    local dirToTarget = (targetPos - myRootPos)
+    if dirToTarget.Magnitude > 0.1 then
+        local strength = math.clamp(S.SilentAimStrength, 1, 100) * 0.01
+        local targetCFrame = CFrame.lookAt(myRootPos, targetPos)
+        local currentCFrame = camera.CFrame
+        
+        -- Interpolación suave
+        camera.CFrame = currentCFrame:Lerp(targetCFrame, strength)
+    end
     
     end)
+end)
+
+-- Hook para interceptar disparos y dirigirlos al objetivo
+local originalMouseHit = nil
+local function interceptMouseHit()
+    if not S.SilentAimEnabled or not silentAimTarget then return end
+    
+    local targetPos = getTargetPartPos(silentAimTarget, S.SilentAimTargetPart)
+    mouse.Hit = CFrame.new(targetPos)
+end
+
+-- Interceptar cada vez que se usa el mouse
+mouse.Move:Connect(function()
+    if S.SilentAimEnabled and silentAimTarget then
+        interceptMouseHit()
+    end
+end)
+
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+    if gameProcessed then return end
+    if input.UserInputType == Enum.UserInputType.MouseButton1 and S.SilentAimEnabled and silentAimTarget then
+        interceptMouseHit()
+    end
 end)
 
 -- ══════════════════════════════════════════════
