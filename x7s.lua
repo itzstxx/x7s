@@ -2752,9 +2752,73 @@ local function getTargetPartPos(root, partName)
     end
 end
 
+-- ══════════════════════════════════════════════════════════════════════════════
+--  SILENT AIM - HOOKMETAMETHOD RAYCAST (Funciona en PC y Móvil)
+-- ══════════════════════════════════════════════════════════════════════════════
+local wallbreakParams=RaycastParams.new()
+wallbreakParams.FilterType=Enum.RaycastFilterType.Include
+wallbreakParams.FilterDescendantsInstances={}
+
+local cachedTargetPos = nil
+
+-- HOOK METAMETHOD - Intercepta Raycast y FireServer
+pcall(function()
+    local oldNC
+    oldNC=hookmetamethod(game,"__namecall",newcclosure(function(...)
+        local method=getnamecallmethod()
+
+        -- ── UNIVERSAL SILENT AIM: FireServer / InvokeServer ──────────
+        if S.SilentAimEnabled and cachedTargetPos
+           and (method=="FireServer" or method=="InvokeServer") then
+            local args={...}
+            local myC=player.Character
+            local myR=myC and myC:FindFirstChild("HumanoidRootPart")
+            local replaced=false
+            for i=2,math.min(#args,8) do
+                if typeof(args[i])=="Vector3" then
+                    local v=args[i]
+                    -- Saltar vectores dirección (magnitud ~1) y vectores nulos
+                    if v.Magnitude>2 then
+                        if myR then
+                            local d=(v-myR.Position).Magnitude
+                            if d>5 and d<2000 then args[i]=cachedTargetPos; replaced=true end
+                        end
+                    end
+                end
+            end
+            if replaced then return oldNC(table.unpack(args)) end
+        end
+
+        -- ── RAYCAST SILENT AIM ───────────────────────────────────────
+        local usePos=nil
+        if S.SilentAimEnabled and cachedTargetPos then usePos=cachedTargetPos end
+        if not usePos then return oldNC(...) end
+        if checkcaller() then return oldNC(...) end
+        
+        local args={...}
+        if args[1]~=Workspace then return oldNC(...) end
+        
+        if method=="Raycast" then
+            if typeof(args[2])~="Vector3" or typeof(args[3])~="Vector3" then return oldNC(...) end
+            args[3]=(usePos-args[2]).Unit*1000
+            return oldNC(table.unpack(args))
+        elseif method=="FindPartOnRayWithIgnoreList" or method=="FindPartOnRay" then
+            if typeof(args[2])~="Ray" then return oldNC(...) end
+            local o=args[2].Origin; args[2]=Ray.new(o,(usePos-o).Unit*1000)
+            return oldNC(table.unpack(args))
+        end
+        return oldNC(...)
+    end))
+end)
+
+-- Actualizar target cada frame
 RunService:BindToRenderStep("x7sSilentAim", Enum.RenderPriority.Camera.Value, function()
     pcall(function()
-    if not S.SilentAimEnabled then silentAimTarget=nil; return end
+    if not S.SilentAimEnabled then 
+        cachedTargetPos=nil
+        silentAimTarget=nil
+        return 
+    end
 
     local myChar=player.Character
     local myRoot=myChar and myChar:FindFirstChild("HumanoidRootPart")
@@ -2779,47 +2843,15 @@ RunService:BindToRenderStep("x7sSilentAim", Enum.RenderPriority.Camera.Value, fu
     end
 
     silentAimTarget=bestRoot
-    if not bestRoot then return end
-
-    -- Obtener la parte objetivo según la configuración
-    local targetPos = getTargetPartPos(bestRoot, S.SilentAimTargetPart)
-    local myRootPos = myRoot and myRoot.Position or camera.CFrame.Position
-    
-    -- Hacer que la cámara apunte al objetivo (para los raycast del arma)
-    local dirToTarget = (targetPos - myRootPos)
-    if dirToTarget.Magnitude > 0.1 then
-        local strength = math.clamp(S.SilentAimStrength, 1, 100) * 0.01
-        local targetCFrame = CFrame.lookAt(myRootPos, targetPos)
-        local currentCFrame = camera.CFrame
-        
-        -- Interpolación suave
-        camera.CFrame = currentCFrame:Lerp(targetCFrame, strength)
+    if not bestRoot then 
+        cachedTargetPos=nil
+        return 
     end
+
+    -- Cachear la posición del target
+    cachedTargetPos = getTargetPartPos(bestRoot, S.SilentAimTargetPart)
     
     end)
-end)
-
--- Hook para interceptar disparos y dirigirlos al objetivo
-local originalMouseHit = nil
-local function interceptMouseHit()
-    if not S.SilentAimEnabled or not silentAimTarget then return end
-    
-    local targetPos = getTargetPartPos(silentAimTarget, S.SilentAimTargetPart)
-    mouse.Hit = CFrame.new(targetPos)
-end
-
--- Interceptar cada vez que se usa el mouse
-mouse.Move:Connect(function()
-    if S.SilentAimEnabled and silentAimTarget then
-        interceptMouseHit()
-    end
-end)
-
-UserInputService.InputBegan:Connect(function(input, gameProcessed)
-    if gameProcessed then return end
-    if input.UserInputType == Enum.UserInputType.MouseButton1 and S.SilentAimEnabled and silentAimTarget then
-        interceptMouseHit()
-    end
 end)
 
 -- ══════════════════════════════════════════════
