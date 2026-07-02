@@ -100,6 +100,14 @@ local function mkDefault()
         camlock_key = "F",
         fov_on = false, fov_visible = true, fov_radius = 120,
         CamLockSafeZone = true,
+        -- === SILENT AIM ===
+        SilentAimEnabled = false,
+        SilentAimStrength = 20,
+        SilentAimRange = 150,
+        SilentAimWallCheck = true,
+        SilentAimSafeZone = true,
+        SilentAimTargetPart = "Random",
+        silentaim_key = "H",
         -- === TARGET ===
         TargetPart = "Random",
 
@@ -215,6 +223,14 @@ local Locale = {
         camlock_wallcheck="Wall Check",     camlock_wallcheck_d="Only lock on visible enemies.",
         camlock_safezone="Safe Zone",       camlock_safezone_d="Don't lock on players inside a safe zone.",
 
+        silentaim_on="Enable Silent Aim",  silentaim_on_d="Automatically aims at the closest enemy.",
+        silentaim_key="Silent Aim Keybind",
+        silentaim_strength="Silent Aim Strength", silentaim_strength_d="How smoothly the aim follows (1-100).",
+        silentaim_range="Silent Aim Range",     silentaim_range_d="Maximum distance to target (50-500).",
+        silentaim_wallcheck="Wall Check (SA)",  silentaim_wallcheck_d="Only aim at visible enemies.",
+        silentaim_safezone="Safe Zone (SA)",    silentaim_safezone_d="Don't aim at players inside a safe zone.",
+        silentaim_targetpart="Target Part (SA)",
+
         whitelist_title="Whitelist Manager", whitelist_add="Add Player", whitelist_remove="Remove",
 
         target_part="Target Part",
@@ -263,6 +279,14 @@ local Locale = {
         camlock_range="Rango Cam Lock",     camlock_range_d="Distancia máxima al objetivo (50-500).",
         camlock_wallcheck="Wall Check",     camlock_wallcheck_d="Solo bloquea enemigos visibles.",
         camlock_safezone="Safe Zone",       camlock_safezone_d="No bloquea a jugadores dentro de una zona segura.",
+
+        silentaim_on="Activar Silent Aim",  silentaim_on_d="Apunta automáticamente al enemigo más cercano.",
+        silentaim_key="Tecla Silent Aim",
+        silentaim_strength="Fuerza Silent Aim", silentaim_strength_d="Qué tan suavemente sigue la puntería (1-100).",
+        silentaim_range="Rango Silent Aim",     silentaim_range_d="Distancia máxima al objetivo (50-500).",
+        silentaim_wallcheck="Wall Check (SA)",  silentaim_wallcheck_d="Solo apunta a enemigos visibles.",
+        silentaim_safezone="Safe Zone (SA)",    silentaim_safezone_d="No apunta a jugadores dentro de una zona segura.",
+        silentaim_targetpart="Parte Objetivo (SA)",
 
         whitelist_title="Gestor de Whitelist", whitelist_add="Añadir Jugador", whitelist_remove="Eliminar",
         target_part="Parte Objetivo",
@@ -1475,6 +1499,25 @@ makeToggle(camLockCard, "camlock_safezone", "camlock_safezone_d", "CamLockSafeZo
 makeDivider(camLockCard)
 makeKeybind(camLockCard, "camlock_key", "camlock_key")
 
+-- ══ SILENT AIM CARD ═══════════════════════════════════════════════════
+local silentAimCard = makeCard(pg_aim)
+makeSecHeader(silentAimCard, "S", "Silent Aim")
+makeToggle(silentAimCard, "silentaim_on", "silentaim_on_d", "SilentAimEnabled", function(on)
+    showNotif("✝  Silent Aim", on and L("n_on") or L("n_off"), on)
+end)
+makeDivider(silentAimCard)
+makeSlider(silentAimCard, "silentaim_strength", "SilentAimStrength", 1, 100)
+makeDivider(silentAimCard)
+makeSlider(silentAimCard, "silentaim_range", "SilentAimRange", 50, 500)
+makeDivider(silentAimCard)
+makeToggle(silentAimCard, "silentaim_wallcheck", "silentaim_wallcheck_d", "SilentAimWallCheck")
+makeDivider(silentAimCard)
+makeToggle(silentAimCard, "silentaim_safezone", "silentaim_safezone_d", "SilentAimSafeZone")
+makeDivider(silentAimCard)
+makeDropdown(silentAimCard, "silentaim_targetpart", "SilentAimTargetPart", {"Head","UpperTorso","LowerTorso","Pierna","Pecho","Combo","Random"})
+makeDivider(silentAimCard)
+makeKeybind(silentAimCard, "silentaim_key", "silentaim_key")
+
 -- ══ FOV CIRCLE CARD ═══════════════════════════════════════════
 local fovCard = makeCard(pg_aim)
 makeSecHeader(fovCard, "o", "FOV Circle")
@@ -2599,6 +2642,10 @@ end)
 --  CAM LOCK (EXACTAMENTE igual a SyyClient)
 -- ══════════════════════════════════════════════
 local camLockTarget=nil
+local silentAimTarget=nil
+
+-- Variable para almacenar el mouse original hit
+local originalMouseHit = nil
 
 
 -- ══════════════════════════════════════════════
@@ -2684,6 +2731,67 @@ RunService:BindToRenderStep("x7sCamLock", Enum.RenderPriority.Camera.Value+1, fu
     end)
 end)
 
+-- ══════════════════════════════════════════════
+--  SILENT AIM
+-- ══════════════════════════════════════════════
+local function getTargetPartPos(root, partName)
+    if not root or not root.Parent then return root.Position end
+    local char = root.Parent
+    
+    if partName == "Random" then
+        local parts = {"Head", "Torso", "UpperTorso", "LowerTorso"}
+        local rng = math.random(1, #parts)
+        local part = char:FindFirstChild(parts[rng])
+        return part and part.Position or root.Position
+    elseif partName == "Head" then
+        local head = char:FindFirstChild("Head")
+        return head and head.Position or root.Position
+    else
+        local part = char:FindFirstChild(partName)
+        return part and part.Position or root.Position
+    end
+end
+
+RunService:BindToRenderStep("x7sSilentAim", Enum.RenderPriority.Camera.Value, function()
+    pcall(function()
+    if not S.SilentAimEnabled then silentAimTarget=nil; return end
+
+    local myChar=player.Character
+    local myRoot=myChar and myChar:FindFirstChild("HumanoidRootPart")
+    local bestRoot=nil; local bestDist=math.huge
+
+    for _,p in ipairs(_plrList) do
+        if shouldSkipPlayer(p) then continue end
+        local char=p.Character; if not char then continue end
+        local hum=char:FindFirstChildOfClass("Humanoid")
+        local root=char:FindFirstChild("HumanoidRootPart")
+        if not hum or hum.Health<=0 or not root then continue end
+        if S.SilentAimSafeZone and char:FindFirstChild("SafeZoneShield") then continue end
+        local dist3D=myRoot and (root.Position-myRoot.Position).Magnitude or math.huge
+        if dist3D>S.SilentAimRange then continue end
+        if S.SilentAimWallCheck and myChar then
+            local ok,obs=pcall(function()
+                return camera:GetPartsObscuringTarget({root.Position},{myChar,char})
+            end)
+            if ok and #obs>0 then continue end
+        end
+        if dist3D<bestDist then bestDist=dist3D; bestRoot=root end
+    end
+
+    silentAimTarget=bestRoot
+    if not bestRoot then return end
+
+    -- Obtener la parte objetivo según la configuración
+    local targetPos = getTargetPartPos(bestRoot, S.SilentAimTargetPart)
+    
+    -- Modificar el mouse.Hit para apuntar silenciosamente
+    local strength=math.clamp(S.SilentAimStrength,1,100)*0.01
+    local currentHit = mouse.Hit
+    local targetCFrame = CFrame.new(targetPos)
+    mouse.Hit = currentHit:Lerp(targetCFrame, strength)
+    
+    end)
+end)
 
 -- ══════════════════════════════════════════════
 --  KEYBINDS globales
@@ -2742,6 +2850,14 @@ UserInputService.InputBegan:Connect(function(inp, proc)
         S.CamLockEnabled = not S.CamLockEnabled; save()
         if refreshers["CamLockEnabled"] then refreshers["CamLockEnabled"]() end
         showNotif("✝  Cam Lock", S.CamLockEnabled and L("n_on") or L("n_off"), S.CamLockEnabled)
+        return
+    end
+
+    -- Toggle Silent Aim
+    if kn == S.silentaim_key then
+        S.SilentAimEnabled = not S.SilentAimEnabled; save()
+        if refreshers["SilentAimEnabled"] then refreshers["SilentAimEnabled"]() end
+        showNotif("✝  Silent Aim", S.SilentAimEnabled and L("n_on") or L("n_off"), S.SilentAimEnabled)
         return
     end
 
