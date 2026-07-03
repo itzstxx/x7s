@@ -2760,33 +2760,42 @@ wallbreakParams.FilterType=Enum.RaycastFilterType.Include
 wallbreakParams.FilterDescendantsInstances={}
 
 local cachedTargetPos = nil
+local raycastCount = 0
 
 -- HOOK METAMETHOD - Intercepta SOLO Raycast de armas, NO la cámara
 pcall(function()
     local oldNC
     oldNC=hookmetamethod(game,"__namecall",newcclosure(function(...)
         local method=getnamecallmethod()
+        local args={...}
 
         -- ── RAYCAST SILENT AIM ───────────────────────────────────────
-        -- SOLO si el caller NO es Roblox (checkcaller = false)
-        if method=="Raycast" or method=="FindPartOnRayWithIgnoreList" or method=="FindPartOnRay" then
+        if (method=="Raycast" or method=="FindPartOnRayWithIgnoreList" or method=="FindPartOnRay") then
             if checkcaller() then return oldNC(...) end
             
             local usePos=nil
             if S.SilentAimEnabled and cachedTargetPos then usePos=cachedTargetPos end
-            if not usePos then return oldNC(...) end
             
-            local args={...}
-            if args[1]~=Workspace then return oldNC(...) end
-            
-            if method=="Raycast" then
-                if typeof(args[2])~="Vector3" or typeof(args[3])~="Vector3" then return oldNC(...) end
-                args[3]=(usePos-args[2]).Unit*1000
-                return oldNC(table.unpack(args))
-            elseif method=="FindPartOnRayWithIgnoreList" or method=="FindPartOnRay" then
-                if typeof(args[2])~="Ray" then return oldNC(...) end
-                local o=args[2].Origin; args[2]=Ray.new(o,(usePos-o).Unit*1000)
-                return oldNC(table.unpack(args))
+            if usePos and args[1]==Workspace then
+                raycastCount = raycastCount + 1
+                
+                if method=="Raycast" then
+                    if typeof(args[2])=="Vector3" and typeof(args[3])=="Vector3" then
+                        local origin = args[2]
+                        local direction = args[3]
+                        local newDirection = (usePos - origin).Unit * 1000
+                        args[3] = newDirection
+                        return oldNC(table.unpack(args))
+                    end
+                elseif method=="FindPartOnRayWithIgnoreList" or method=="FindPartOnRay" then
+                    if typeof(args[2])=="Ray" then
+                        local ray = args[2]
+                        local origin = ray.Origin
+                        local newRay = Ray.new(origin, (usePos - origin).Unit * 1000)
+                        args[2] = newRay
+                        return oldNC(table.unpack(args))
+                    end
+                end
             end
         end
 
@@ -2795,18 +2804,20 @@ pcall(function()
            and (method=="FireServer" or method=="InvokeServer") then
             if checkcaller() then return oldNC(...) end
             
-            local args={...}
             local myC=player.Character
             local myR=myC and myC:FindFirstChild("HumanoidRootPart")
             local replaced=false
+            
             for i=2,math.min(#args,8) do
                 if typeof(args[i])=="Vector3" then
                     local v=args[i]
-                    -- Saltar vectores dirección (magnitud ~1) y vectores nulos
                     if v.Magnitude>2 then
                         if myR then
                             local d=(v-myR.Position).Magnitude
-                            if d>5 and d<2000 then args[i]=cachedTargetPos; replaced=true end
+                            if d>5 and d<2000 then 
+                                args[i]=cachedTargetPos
+                                replaced=true 
+                            end
                         end
                     end
                 end
