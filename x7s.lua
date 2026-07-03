@@ -2753,61 +2753,125 @@ local function getTargetPartPos(root, partName)
 end
 
 -- ══════════════════════════════════════════════════════════════════════════════
---  SILENT AIM - HOOKMETAMETHOD RAYCAST (Funciona en PC y Móvil)
+--  SILENT AIM REAL - Selecciona target por FOV en pantalla, no distancia 3D
 -- ══════════════════════════════════════════════════════════════════════════════
-local wallbreakParams=RaycastParams.new()
-wallbreakParams.FilterType=Enum.RaycastFilterType.Include
-wallbreakParams.FilterDescendantsInstances={}
-
 local cachedTargetPos = nil
-local raycastCount = 0
+local fovCenter2D = Vector2.new(0, 0)
 
--- HOOK METAMETHOD - Intercepta SOLO Raycast de armas, NO la cámara
+-- Actualizar target cada frame - BASADO EN FOV PANTALLA, no distancia
+RunService.RenderStepped:Connect(function()
+    pcall(function()
+    if not S.SilentAimEnabled then 
+        cachedTargetPos=nil
+        return 
+    end
+
+    -- Obtener centro de pantalla
+    local vp = camera.ViewportSize
+    fovCenter2D = Vector2.new(vp.X * 0.5, vp.Y * 0.5)
+
+    local myChar=player.Character
+    local bestDist=math.huge
+    local bestPos=nil
+
+    for _,p in ipairs(_plrList) do
+        if shouldSkipPlayer(p) then continue end
+        local char=p.Character; if not char then continue end
+        local hum=char:FindFirstChildOfClass("Humanoid")
+        local root=char:FindFirstChild("HumanoidRootPart")
+        if not hum or hum.Health<=0 or not root then continue end
+        
+        -- Wall Check: si está activado, chequear visibilidad
+        if S.SilentAimWallCheck and myChar then
+            local ok,obs=pcall(function()
+                return camera:GetPartsObscuringTarget({root.Position},{myChar,char})
+            end)
+            if ok and #obs>0 then continue end
+        end
+        
+        -- Safe Zone: no apuntar si están en safe zone
+        if S.SilentAimSafeZone and char:FindFirstChild("SafeZoneShield") then continue end
+        
+        -- Convertir posición 3D a pantalla 2D
+        local screenPos, onScreen = camera:WorldToViewportPoint(root.Position)
+        if not onScreen then continue end
+        
+        -- Calcular distancia en pantalla (FOV)
+        local screenDist = (Vector2.new(screenPos.X, screenPos.Y) - fovCenter2D).Magnitude
+        
+        -- Limitar por rango de FOV (SilentAimRange en este caso)
+        if screenDist > S.SilentAimRange then continue end
+        
+        -- Obtener el target más cercano en pantalla
+        if screenDist < bestDist then
+            bestDist = screenDist
+            local partName = S.SilentAimTargetPart
+            if partName == "Random" then
+                local parts = {"Head", "UpperTorso", "LowerTorso"}
+                local rng = math.random(1, #parts)
+                local part = char:FindFirstChild(parts[rng])
+                bestPos = part and part.Position or root.Position
+            else
+                local part = char:FindFirstChild(partName)
+                bestPos = part and part.Position or root.Position
+            end
+        end
+    end
+
+    cachedTargetPos = bestPos
+    silentAimTarget = bestPos and true or false
+    
+    end)
+end)
+
+-- HOOK METAMETHOD - Intercepta Raycast y cambia dirección al target
 pcall(function()
     local oldNC
     oldNC=hookmetamethod(game,"__namecall",newcclosure(function(...)
         local method=getnamecallmethod()
-        local args={...}
 
-        -- ── RAYCAST SILENT AIM ───────────────────────────────────────
-        if (method=="Raycast" or method=="FindPartOnRayWithIgnoreList" or method=="FindPartOnRay") then
+        -- SILENT AIM EN RAYCAST
+        if method=="Raycast" then
             if checkcaller() then return oldNC(...) end
+            if not S.SilentAimEnabled or not cachedTargetPos then return oldNC(...) end
             
-            local usePos=nil
-            if S.SilentAimEnabled and cachedTargetPos then usePos=cachedTargetPos end
-            
-            if usePos and args[1]==Workspace then
-                raycastCount = raycastCount + 1
-                
-                if method=="Raycast" then
-                    if typeof(args[2])=="Vector3" and typeof(args[3])=="Vector3" then
-                        local origin = args[2]
-                        local direction = args[3]
-                        local newDirection = (usePos - origin).Unit * 1000
-                        args[3] = newDirection
-                        return oldNC(table.unpack(args))
-                    end
-                elseif method=="FindPartOnRayWithIgnoreList" or method=="FindPartOnRay" then
-                    if typeof(args[2])=="Ray" then
-                        local ray = args[2]
-                        local origin = ray.Origin
-                        local newRay = Ray.new(origin, (usePos - origin).Unit * 1000)
-                        args[2] = newRay
-                        return oldNC(table.unpack(args))
-                    end
-                end
+            local args={...}
+            if args[1]~=Workspace or typeof(args[2])~="Vector3" or typeof(args[3])~="Vector3" then 
+                return oldNC(...) 
             end
+            
+            -- Cambiar dirección hacia el target
+            local origin = args[2]
+            args[3] = (cachedTargetPos - origin).Unit * 1000
+            return oldNC(table.unpack(args))
+        end
+        
+        -- SILENT AIM EN FINDPARTONRAY
+        if method=="FindPartOnRay" or method=="FindPartOnRayWithIgnoreList" then
+            if checkcaller() then return oldNC(...) end
+            if not S.SilentAimEnabled or not cachedTargetPos then return oldNC(...) end
+            
+            local args={...}
+            if args[1]~=Workspace or typeof(args[2])~="Ray" then 
+                return oldNC(...) 
+            end
+            
+            local origin = args[2].Origin
+            args[2] = Ray.new(origin, (cachedTargetPos - origin).Unit * 1000)
+            return oldNC(table.unpack(args))
         end
 
-        -- ── UNIVERSAL SILENT AIM: FireServer / InvokeServer ──────────
-        if S.SilentAimEnabled and cachedTargetPos
-           and (method=="FireServer" or method=="InvokeServer") then
+        -- UNIVERSAL SILENT AIM - Interceptar remotes (para algunos juegos)
+        if (method=="FireServer" or method=="InvokeServer") then
             if checkcaller() then return oldNC(...) end
+            if not S.SilentAimEnabled or not cachedTargetPos then return oldNC(...) end
             
+            local args={...}
             local myC=player.Character
             local myR=myC and myC:FindFirstChild("HumanoidRootPart")
-            local replaced=false
             
+            -- Buscar argumentos Vector3 y reemplazarlos con targetPos
+            local replaced=false
             for i=2,math.min(#args,8) do
                 if typeof(args[i])=="Vector3" then
                     local v=args[i]
@@ -2827,49 +2891,6 @@ pcall(function()
         
         return oldNC(...)
     end))
-end)
-
--- Actualizar target cada frame
-RunService:BindToRenderStep("x7sSilentAim", Enum.RenderPriority.Camera.Value, function()
-    pcall(function()
-    if not S.SilentAimEnabled then 
-        cachedTargetPos=nil
-        silentAimTarget=nil
-        return 
-    end
-
-    local myChar=player.Character
-    local myRoot=myChar and myChar:FindFirstChild("HumanoidRootPart")
-    local bestRoot=nil; local bestDist=math.huge
-
-    for _,p in ipairs(_plrList) do
-        if shouldSkipPlayer(p) then continue end
-        local char=p.Character; if not char then continue end
-        local hum=char:FindFirstChildOfClass("Humanoid")
-        local root=char:FindFirstChild("HumanoidRootPart")
-        if not hum or hum.Health<=0 or not root then continue end
-        if S.SilentAimSafeZone and char:FindFirstChild("SafeZoneShield") then continue end
-        local dist3D=myRoot and (root.Position-myRoot.Position).Magnitude or math.huge
-        if dist3D>S.SilentAimRange then continue end
-        if S.SilentAimWallCheck and myChar then
-            local ok,obs=pcall(function()
-                return camera:GetPartsObscuringTarget({root.Position},{myChar,char})
-            end)
-            if ok and #obs>0 then continue end
-        end
-        if dist3D<bestDist then bestDist=dist3D; bestRoot=root end
-    end
-
-    silentAimTarget=bestRoot
-    if not bestRoot then 
-        cachedTargetPos=nil
-        return 
-    end
-
-    -- Cachear la posición del target
-    cachedTargetPos = getTargetPartPos(bestRoot, S.SilentAimTargetPart)
-    
-    end)
 end)
 
 -- ══════════════════════════════════════════════
