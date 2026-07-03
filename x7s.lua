@@ -2761,15 +2761,40 @@ wallbreakParams.FilterDescendantsInstances={}
 
 local cachedTargetPos = nil
 
--- HOOK METAMETHOD - Intercepta Raycast y FireServer
+-- HOOK METAMETHOD - Intercepta SOLO Raycast de armas, NO la cámara
 pcall(function()
     local oldNC
     oldNC=hookmetamethod(game,"__namecall",newcclosure(function(...)
         local method=getnamecallmethod()
 
+        -- ── RAYCAST SILENT AIM ───────────────────────────────────────
+        -- SOLO si el caller NO es Roblox (checkcaller = false)
+        if method=="Raycast" or method=="FindPartOnRayWithIgnoreList" or method=="FindPartOnRay" then
+            if checkcaller() then return oldNC(...) end
+            
+            local usePos=nil
+            if S.SilentAimEnabled and cachedTargetPos then usePos=cachedTargetPos end
+            if not usePos then return oldNC(...) end
+            
+            local args={...}
+            if args[1]~=Workspace then return oldNC(...) end
+            
+            if method=="Raycast" then
+                if typeof(args[2])~="Vector3" or typeof(args[3])~="Vector3" then return oldNC(...) end
+                args[3]=(usePos-args[2]).Unit*1000
+                return oldNC(table.unpack(args))
+            elseif method=="FindPartOnRayWithIgnoreList" or method=="FindPartOnRay" then
+                if typeof(args[2])~="Ray" then return oldNC(...) end
+                local o=args[2].Origin; args[2]=Ray.new(o,(usePos-o).Unit*1000)
+                return oldNC(table.unpack(args))
+            end
+        end
+
         -- ── UNIVERSAL SILENT AIM: FireServer / InvokeServer ──────────
         if S.SilentAimEnabled and cachedTargetPos
            and (method=="FireServer" or method=="InvokeServer") then
+            if checkcaller() then return oldNC(...) end
+            
             local args={...}
             local myC=player.Character
             local myR=myC and myC:FindFirstChild("HumanoidRootPart")
@@ -2788,25 +2813,7 @@ pcall(function()
             end
             if replaced then return oldNC(table.unpack(args)) end
         end
-
-        -- ── RAYCAST SILENT AIM ───────────────────────────────────────
-        local usePos=nil
-        if S.SilentAimEnabled and cachedTargetPos then usePos=cachedTargetPos end
-        if not usePos then return oldNC(...) end
-        if checkcaller() then return oldNC(...) end
         
-        local args={...}
-        if args[1]~=Workspace then return oldNC(...) end
-        
-        if method=="Raycast" then
-            if typeof(args[2])~="Vector3" or typeof(args[3])~="Vector3" then return oldNC(...) end
-            args[3]=(usePos-args[2]).Unit*1000
-            return oldNC(table.unpack(args))
-        elseif method=="FindPartOnRayWithIgnoreList" or method=="FindPartOnRay" then
-            if typeof(args[2])~="Ray" then return oldNC(...) end
-            local o=args[2].Origin; args[2]=Ray.new(o,(usePos-o).Unit*1000)
-            return oldNC(table.unpack(args))
-        end
         return oldNC(...)
     end))
 end)
