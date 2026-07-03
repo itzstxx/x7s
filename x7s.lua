@@ -100,6 +100,14 @@ local function mkDefault()
         camlock_key = "F",
         fov_on = false, fov_visible = true, fov_radius = 120,
         CamLockSafeZone = true,
+        -- === SILENT AIM ===
+        SilentAimEnabled = false,
+        SilentAimStrength = 20,
+        SilentAimRange = 150,
+        SilentAimWallCheck = true,
+        SilentAimSafeZone = true,
+        SilentAimTargetPart = "Random",
+        silentaim_key = "H",
         -- === TARGET ===
         TargetPart = "Random",
 
@@ -215,6 +223,14 @@ local Locale = {
         camlock_wallcheck="Wall Check",     camlock_wallcheck_d="Only lock on visible enemies.",
         camlock_safezone="Safe Zone",       camlock_safezone_d="Don't lock on players inside a safe zone.",
 
+        silentaim_on="Enable Silent Aim",  silentaim_on_d="Automatically aims at the closest enemy.",
+        silentaim_key="Silent Aim Keybind",
+        silentaim_strength="Silent Aim Strength", silentaim_strength_d="How smoothly the aim follows (1-100).",
+        silentaim_range="Silent Aim Range",     silentaim_range_d="Maximum distance to target (50-500).",
+        silentaim_wallcheck="Wall Check (SA)",  silentaim_wallcheck_d="Only aim at visible enemies.",
+        silentaim_safezone="Safe Zone (SA)",    silentaim_safezone_d="Don't aim at players inside a safe zone.",
+        silentaim_targetpart="Target Part (SA)",
+
         whitelist_title="Whitelist Manager", whitelist_add="Add Player", whitelist_remove="Remove",
 
         target_part="Target Part",
@@ -263,6 +279,14 @@ local Locale = {
         camlock_range="Rango Cam Lock",     camlock_range_d="Distancia máxima al objetivo (50-500).",
         camlock_wallcheck="Wall Check",     camlock_wallcheck_d="Solo bloquea enemigos visibles.",
         camlock_safezone="Safe Zone",       camlock_safezone_d="No bloquea a jugadores dentro de una zona segura.",
+
+        silentaim_on="Activar Silent Aim",  silentaim_on_d="Apunta automáticamente al enemigo más cercano.",
+        silentaim_key="Tecla Silent Aim",
+        silentaim_strength="Fuerza Silent Aim", silentaim_strength_d="Qué tan suavemente sigue la puntería (1-100).",
+        silentaim_range="Rango Silent Aim",     silentaim_range_d="Distancia máxima al objetivo (50-500).",
+        silentaim_wallcheck="Wall Check (SA)",  silentaim_wallcheck_d="Solo apunta a enemigos visibles.",
+        silentaim_safezone="Safe Zone (SA)",    silentaim_safezone_d="No apunta a jugadores dentro de una zona segura.",
+        silentaim_targetpart="Parte Objetivo (SA)",
 
         whitelist_title="Gestor de Whitelist", whitelist_add="Añadir Jugador", whitelist_remove="Eliminar",
         target_part="Parte Objetivo",
@@ -1475,6 +1499,25 @@ makeToggle(camLockCard, "camlock_safezone", "camlock_safezone_d", "CamLockSafeZo
 makeDivider(camLockCard)
 makeKeybind(camLockCard, "camlock_key", "camlock_key")
 
+-- ══ SILENT AIM CARD ═══════════════════════════════════════════════════
+local silentAimCard = makeCard(pg_aim)
+makeSecHeader(silentAimCard, "S", "Silent Aim")
+makeToggle(silentAimCard, "silentaim_on", "silentaim_on_d", "SilentAimEnabled", function(on)
+    showNotif("✝  Silent Aim", on and L("n_on") or L("n_off"), on)
+end)
+makeDivider(silentAimCard)
+makeSlider(silentAimCard, "silentaim_strength", "SilentAimStrength", 1, 100)
+makeDivider(silentAimCard)
+makeSlider(silentAimCard, "silentaim_range", "SilentAimRange", 50, 500)
+makeDivider(silentAimCard)
+makeToggle(silentAimCard, "silentaim_wallcheck", "silentaim_wallcheck_d", "SilentAimWallCheck")
+makeDivider(silentAimCard)
+makeToggle(silentAimCard, "silentaim_safezone", "silentaim_safezone_d", "SilentAimSafeZone")
+makeDivider(silentAimCard)
+makeDropdown(silentAimCard, "silentaim_targetpart", "SilentAimTargetPart", {"Head","UpperTorso","LowerTorso","Pierna","Pecho","Combo","Random"})
+makeDivider(silentAimCard)
+makeKeybind(silentAimCard, "silentaim_key", "silentaim_key")
+
 -- ══ FOV CIRCLE CARD ═══════════════════════════════════════════
 local fovCard = makeCard(pg_aim)
 makeSecHeader(fovCard, "o", "FOV Circle")
@@ -2599,6 +2642,10 @@ end)
 --  CAM LOCK (EXACTAMENTE igual a SyyClient)
 -- ══════════════════════════════════════════════
 local camLockTarget=nil
+local silentAimTarget=nil
+
+-- Variable para almacenar el mouse original hit
+local originalMouseHit = nil
 
 
 -- ══════════════════════════════════════════════
@@ -2684,6 +2731,144 @@ RunService:BindToRenderStep("x7sCamLock", Enum.RenderPriority.Camera.Value+1, fu
     end)
 end)
 
+-- ══════════════════════════════════════════════
+--  SILENT AIM (Interceptor de Disparos)
+-- ══════════════════════════════════════════════
+local function getTargetPartPos(root, partName)
+    if not root or not root.Parent then return root.Position end
+    local char = root.Parent
+    
+    if partName == "Random" then
+        local parts = {"Head", "Torso", "UpperTorso", "LowerTorso"}
+        local rng = math.random(1, #parts)
+        local part = char:FindFirstChild(parts[rng])
+        return part and part.Position or root.Position
+    elseif partName == "Head" then
+        local head = char:FindFirstChild("Head")
+        return head and head.Position or root.Position
+    else
+        local part = char:FindFirstChild(partName)
+        return part and part.Position or root.Position
+    end
+end
+
+-- ══════════════════════════════════════════════════════════════════════════════
+--  SILENT AIM - SISTEMA SYYCLIENT (Funciona con MCP de Roblox)
+-- ══════════════════════════════════════════════════════════════════════════════
+local cachedTargetPos = nil
+local fovCenter2D = Vector2.new(0, 0)
+
+-- Actualizar target cada frame - BASADO EN FOV PANTALLA
+RunService.RenderStepped:Connect(function()
+    pcall(function()
+    if not S.SilentAimEnabled then 
+        cachedTargetPos=nil
+        return 
+    end
+
+    local vp = camera.ViewportSize
+    fovCenter2D = Vector2.new(vp.X * 0.5, vp.Y * 0.5)
+
+    local myChar=player.Character
+    local bestDist=math.huge
+    local bestPos=nil
+
+    for _,p in ipairs(_plrList) do
+        if shouldSkipPlayer(p) then continue end
+        local char=p.Character; if not char then continue end
+        local hum=char:FindFirstChildOfClass("Humanoid")
+        local root=char:FindFirstChild("HumanoidRootPart")
+        if not hum or hum.Health<=0 or not root then continue end
+        
+        if S.SilentAimWallCheck and myChar then
+            local ok,obs=pcall(function()
+                return camera:GetPartsObscuringTarget({root.Position},{myChar,char})
+            end)
+            if ok and #obs>0 then continue end
+        end
+        
+        if S.SilentAimSafeZone and char:FindFirstChild("SafeZoneShield") then continue end
+        
+        local screenPos, onScreen = camera:WorldToViewportPoint(root.Position)
+        if not onScreen then continue end
+        
+        local screenDist = (Vector2.new(screenPos.X, screenPos.Y) - fovCenter2D).Magnitude
+        if screenDist > S.SilentAimRange then continue end
+        
+        if screenDist < bestDist then
+            bestDist = screenDist
+            local partName = S.SilentAimTargetPart
+            if partName == "Random" then
+                local parts = {"Head", "UpperTorso", "LowerTorso"}
+                local rng = math.random(1, #parts)
+                local part = char:FindFirstChild(parts[rng])
+                bestPos = part and part.Position or root.Position
+            else
+                local part = char:FindFirstChild(partName)
+                bestPos = part and part.Position or root.Position
+            end
+        end
+    end
+
+    cachedTargetPos = bestPos
+    silentAimTarget = bestPos and true or false
+    
+    end)
+end)
+
+-- HOOK METAMETHOD - COMO SYYCLIENT
+pcall(function()
+    local oldNC
+    oldNC=hookmetamethod(game,"__namecall",newcclosure(function(...)
+        local method=getnamecallmethod()
+        local args={...}
+
+        -- ── UNIVERSAL SILENT AIM: FireServer / InvokeServer ──────────
+        if S.SilentAimEnabled and cachedTargetPos
+           and not checkcaller()
+           and (method=="FireServer" or method=="InvokeServer") then
+            local myC=player.Character
+            local myR=myC and myC:FindFirstChild("HumanoidRootPart")
+            local replaced=false
+            for i=2,math.min(#args,8) do
+                if typeof(args[i])=="Vector3" then
+                    local v=args[i]
+                    if v.Magnitude>2 then
+                        if myR then
+                            local d=(v-myR.Position).Magnitude
+                            if d>5 and d<2000 then 
+                                args[i]=cachedTargetPos
+                                replaced=true 
+                            end
+                        end
+                    end
+                end
+            end
+            if replaced then return oldNC(table.unpack(args)) end
+        end
+
+        -- ── RAYCAST SILENT AIM ───────────────────────────────────────
+        local usePos=nil
+        if S.SilentAimEnabled and cachedTargetPos then usePos=cachedTargetPos end
+        if not usePos then return oldNC(...) end
+        if checkcaller() then return oldNC(...) end
+        
+        if args[1]~=Workspace then return oldNC(...) end
+        
+        if method=="Raycast" then
+            if typeof(args[2])~="Vector3" or typeof(args[3])~="Vector3" then return oldNC(...) end
+            args[3]=(usePos-args[2]).Unit*1000
+            return oldNC(table.unpack(args))
+        elseif method=="FindPartOnRayWithIgnoreList" or method=="FindPartOnRay" then
+            if typeof(args[2])~="Ray" then return oldNC(...) end
+            local o=args[2].Origin
+            args[2]=Ray.new(o,(usePos-o).Unit*1000)
+            return oldNC(table.unpack(args))
+        end
+        
+        return oldNC(...)
+    end))
+end)
 
 -- ══════════════════════════════════════════════
 --  KEYBINDS globales
@@ -2742,6 +2927,14 @@ UserInputService.InputBegan:Connect(function(inp, proc)
         S.CamLockEnabled = not S.CamLockEnabled; save()
         if refreshers["CamLockEnabled"] then refreshers["CamLockEnabled"]() end
         showNotif("✝  Cam Lock", S.CamLockEnabled and L("n_on") or L("n_off"), S.CamLockEnabled)
+        return
+    end
+
+    -- Toggle Silent Aim
+    if kn == S.silentaim_key then
+        S.SilentAimEnabled = not S.SilentAimEnabled; save()
+        if refreshers["SilentAimEnabled"] then refreshers["SilentAimEnabled"]() end
+        showNotif("✝  Silent Aim", S.SilentAimEnabled and L("n_on") or L("n_off"), S.SilentAimEnabled)
         return
     end
 
