@@ -225,10 +225,10 @@ local Locale = {
 
         silentaim_on="Enable Silent Aim",  silentaim_on_d="Automatically aims at the closest enemy.",
         silentaim_key="Silent Aim Keybind",
-        silentaim_strength="Silent Aim Strength", silentaim_strength_d="How smoothly the aim follows (1-100).",
         silentaim_range="Silent Aim Range",     silentaim_range_d="Maximum distance to target (50-500).",
-        silentaim_wallcheck="Wall Check (SA)",  silentaim_wallcheck_d="Only aim at visible enemies.",
-        silentaim_safezone="Safe Zone (SA)",    silentaim_safezone_d="Don't aim at players inside a safe zone.",
+        silentaim_wallcheck="Visible Check (SA)",  silentaim_wallcheck_d="Only aim at visible enemies (no wallhack).",
+        manipulation_d="Wall Break: Raycast ignores obstacles and walls.",
+        hitchance_lbl="Hit Chance %",
         silentaim_targetpart="Target Part (SA)",
 
         whitelist_title="Whitelist Manager", whitelist_add="Add Player", whitelist_remove="Remove",
@@ -282,10 +282,10 @@ local Locale = {
 
         silentaim_on="Activar Silent Aim",  silentaim_on_d="Apunta automáticamente al enemigo más cercano.",
         silentaim_key="Tecla Silent Aim",
-        silentaim_strength="Fuerza Silent Aim", silentaim_strength_d="Qué tan suavemente sigue la puntería (1-100).",
         silentaim_range="Rango Silent Aim",     silentaim_range_d="Distancia máxima al objetivo (50-500).",
-        silentaim_wallcheck="Wall Check (SA)",  silentaim_wallcheck_d="Solo apunta a enemigos visibles.",
-        silentaim_safezone="Safe Zone (SA)",    silentaim_safezone_d="No apunta a jugadores dentro de una zona segura.",
+        silentaim_wallcheck="Visible Check (SA)",  silentaim_wallcheck_d="Solo apunta a enemigos visibles (sin wallhack).",
+        manipulation_d="Wallbreak: Los raycast ignoran obstáculos y paredes.",
+        hitchance_lbl="Probabilidad Hit %",
         silentaim_targetpart="Parte Objetivo (SA)",
 
         whitelist_title="Gestor de Whitelist", whitelist_add="Añadir Jugador", whitelist_remove="Eliminar",
@@ -1506,15 +1506,15 @@ makeToggle(silentAimCard, "silentaim_on", "silentaim_on_d", "SilentAimEnabled", 
     showNotif("✝  Silent Aim", on and L("n_on") or L("n_off"), on)
 end)
 makeDivider(silentAimCard)
-makeSlider(silentAimCard, "silentaim_strength", "SilentAimStrength", 1, 100)
-makeDivider(silentAimCard)
 makeSlider(silentAimCard, "silentaim_range", "SilentAimRange", 50, 500)
 makeDivider(silentAimCard)
 makeToggle(silentAimCard, "silentaim_wallcheck", "silentaim_wallcheck_d", "SilentAimWallCheck")
 makeDivider(silentAimCard)
-makeToggle(silentAimCard, "silentaim_safezone", "silentaim_safezone_d", "SilentAimSafeZone")
+makeToggle(silentAimCard, "hitmanip", "manipulation_d", "Manipulation")
 makeDivider(silentAimCard)
-makeDropdown(silentAimCard, "silentaim_targetpart", "SilentAimTargetPart", {"Head","UpperTorso","LowerTorso","Pierna","Pecho","Combo","Random"})
+makeSlider(silentAimCard, "hitchance_lbl", "HitChance", 1, 100)
+makeDivider(silentAimCard)
+makeDropdown(silentAimCard, "silentaim_targetpart", "SilentAimTargetPart", {"Head","UpperTorso","LowerTorso","Random"})
 makeDivider(silentAimCard)
 makeKeybind(silentAimCard, "silentaim_key", "silentaim_key")
 
