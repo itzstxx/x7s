@@ -195,29 +195,16 @@ end
 -- Función para verificar si dos jugadores están en el mismo team
 local function isSameTeam(p1, p2)
     if not p1 or not p2 then return false end
-    
-    -- Método 1: Usar sistema nativo de Teams de Roblox
+    -- PRINCIPAL: este juego usa player:GetAttribute("Team") = "TeamBlue"/"TeamRed"
+    local t1 = p1:GetAttribute("Team")
+    local t2 = p2:GetAttribute("Team")
+    if t1 and t2 and typeof(t1) == "string" and typeof(t2) == "string" then
+        return t1 == t2
+    end
+    -- Fallback: sistema nativo Roblox Teams
     if p1.Team and p2.Team and p1.Team == p2.Team then
         return true
     end
-    
-    -- Método 2: Verificar si tienen atributos de team customizados
-    local char1 = p1.Character
-    local char2 = p2.Character
-    if char1 and char2 then
-        -- Buscar valores de team customizados (algunos juegos los usan)
-        local t1 = char1:FindFirstChild("Team") or char1:FindFirstChild("TeamValue")
-        local t2 = char2:FindFirstChild("Team") or char2:FindFirstChild("TeamValue")
-        
-        if t1 and t2 then
-            if t1:IsA("StringValue") and t2:IsA("StringValue") then
-                return t1.Value == t2.Value
-            elseif t1:IsA("IntValue") and t2:IsA("IntValue") then
-                return t1.Value == t2.Value
-            end
-        end
-    end
-    
     return false
 end
 
