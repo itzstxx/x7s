@@ -102,7 +102,6 @@ local function mkDefault()
         CamLockSafeZone = true,
         -- === SILENT AIM ===
         SilentAimEnabled = false,
-        Manipulation = false,
         SilentAimStrength = 20,
         SilentAimRange = 150,
         SilentAimWallCheck = true,
