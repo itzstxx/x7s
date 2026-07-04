@@ -3018,7 +3018,6 @@ RunService.RenderStepped:Connect(function()
         else cachedNpcPos=nil; npcSilentVisible=true end
     end)
 end)
-end)
 
 -- ══════════════════════════════════════════════
 --  KEYBINDS globales
