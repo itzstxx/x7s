@@ -100,14 +100,17 @@ local function mkDefault()
         camlock_key = "F",
         fov_on = false, fov_visible = true, fov_radius = 120,
         CamLockSafeZone = true,
-        -- === SILENT AIM (SyyClient System — Fix v2) ===
-        SilentAimEnabled = false,   -- Activar con keybind H o toggle en UI
-        VisibleCheck = true,        -- Solo targets visibles (OFF = wallhack)
-        Manipulation = false,       -- Bypass paredes en el raycast (ON = wallhack nivel 2)
-        SilentAimTeamCheck = true,  -- NO apuntar a compañeros de equipo (TeamRed/TeamBlue)
-        HitChance = 100,            -- Probabilidad de redirigir cada disparo (1-100)
-        silentaim_key = "H",        -- Keybind de toggle rápido
-        SilentAimTargetPart = "Head",  -- Parte del cuerpo objetivo por defecto
+        -- === SILENT AIM (SyyClient — copy exacto) ===
+        SilentAimEnabled = false,
+        VisibleCheck = true,
+        Manipulation = false,
+        SilentAimTeamCheck = true,
+        HitChance = 100,
+        silentaim_key = "H",
+        SilentAimTargetPart = "Head",
+        NpcSilentAimEnabled = false,
+        NpcTargetPart = "UpperTorso",
+        UniversalSAEnabled = false,
         -- === TARGET ===
         TargetPart = "Random",
 
@@ -281,11 +284,14 @@ local Locale = {
         camlock_safezone="Safe Zone",       camlock_safezone_d="Don't lock on players inside a safe zone.",
 
         silentaim_on="Silent Aim",         silentaim_on_d="Redirects shots to the closest enemy.",
-        silentaim_hitchance="Hit Chance %",    silentaim_hitchance_d="Probability of redirecting each shot (1-100).",
-        silentaim_range="Silent Aim Range",     silentaim_range_d="Maximum target selection distance in pixels from FOV center.",
+        silentaim_hitchance="Hit Chance %",
         silentaim_wallcheck="Visible Check", silentaim_wallcheck_d="Only aim at visible enemies. OFF = wallhack.",
         hitmanip="Manipulation",             manipulation_d="Raycast ignores walls and obstacles.",
         silentaim_teamcheck="Team Check",    silentaim_teamcheck_d="Don't aim at teammates.",
+        silentaim_targetpart="Target Part",
+        npcsa_on="NPC Silent Aim",           npcsa_on_d="Redirects shots to the closest NPC/bot.",
+        npcsa_part="NPC Part",               npcsa_part_d="Body part to aim at on NPCs.",
+        universalsa_on="Universal SA",       universalsa_on_d="Also redirects FireServer/InvokeServer remotes.",
 
         silentaim_key="Silent Aim Keybind", silentaim_key_d="Toggle Silent Aim on/off.",
         whitelist_title="Whitelist Manager", whitelist_add="Add Player", whitelist_remove="Remove",
@@ -338,11 +344,14 @@ local Locale = {
         camlock_safezone="Safe Zone",       camlock_safezone_d="No bloquea a jugadores dentro de una zona segura.",
 
         silentaim_on="Silent Aim",         silentaim_on_d="Redirige los disparos al enemigo más cercano.",
-        silentaim_hitchance="Hit Chance %",    silentaim_hitchance_d="Probabilidad de redirigir cada disparo (1-100).",
-        silentaim_range="Silent Aim Range",     silentaim_range_d="Distancia máxima de selección de target en píxeles desde el centro del FOV.",
+        silentaim_hitchance="Hit Chance %",
         silentaim_wallcheck="Visible Check", silentaim_wallcheck_d="Solo apunta a enemigos visibles. OFF = wallhack.",
         hitmanip="Manipulation",             manipulation_d="El raycast ignora paredes y obstáculos.",
         silentaim_teamcheck="Team Check",    silentaim_teamcheck_d="No apunta a compañeros de equipo.",
+        silentaim_targetpart="Parte Objetivo",
+        npcsa_on="NPC Silent Aim",           npcsa_on_d="Redirige los disparos al NPC/bot más cercano.",
+        npcsa_part="Parte NPC",              npcsa_part_d="Parte del cuerpo del NPC a apuntar.",
+        universalsa_on="Universal SA",       universalsa_on_d="También redirige remotes FireServer/InvokeServer.",
 
         silentaim_key="Keybind Silent Aim", silentaim_key_d="Activa/desactiva el Silent Aim.",
         whitelist_title="Gestor de Whitelist", whitelist_add="Añadir Jugador", whitelist_remove="Eliminar",
@@ -1567,12 +1576,22 @@ makeToggle(silentAimCard, "silentaim_wallcheck", "silentaim_wallcheck_d", "Visib
 makeDivider(silentAimCard)
 makeToggle(silentAimCard, "hitmanip", "manipulation_d", "Manipulation")
 makeDivider(silentAimCard)
-makeToggle(silentAimCard, "silentaim_teamcheck", "silentaim_teamcheck_d", "SilentAimTeamCheck")
-makeDivider(silentAimCard)
 makeSlider(silentAimCard, "silentaim_hitchance", "HitChance", 1, 100)
 makeDivider(silentAimCard)
-makeSlider(silentAimCard, "silentaim_range", "fov_radius", 20, 600)
-makeKeybind(silentAimCard, "silentaim_key", "silentaim_key")
+makeDropdown(silentAimCard, "silentaim_targetpart", "SilentAimTargetPart", {"Head","UpperTorso","LowerTorso","Pierna","Pecho","Combo","Random"})
+makeDivider(silentAimCard)
+makeToggle(silentAimCard, "silentaim_teamcheck", "silentaim_teamcheck_d", "SilentAimTeamCheck")
+
+-- ══ NPC SILENT AIM CARD ═══════════════════════════════════════════════
+local npcSACard = makeCard(pg_aim)
+makeSecHeader(npcSACard, "N", "NPC Silent Aim")
+makeToggle(npcSACard, "npcsa_on", "npcsa_on_d", "NpcSilentAimEnabled", function(on)
+    showNotif("✝  NPC Silent Aim", on and L("n_on") or L("n_off"), on)
+end)
+makeDivider(npcSACard)
+makeDropdown(npcSACard, "npcsa_part", "npcsa_part_d", "NpcTargetPart", {"Head","UpperTorso","LowerTorso","HumanoidRootPart"})
+makeDivider(npcSACard)
+makeToggle(npcSACard, "universalsa_on", "universalsa_on_d", "UniversalSAEnabled")
 
 -- ══ FOV CIRCLE CARD ═══════════════════════════════════════════
 local fovCard = makeCard(pg_aim)
@@ -2809,167 +2828,57 @@ local function getTargetPartPos(root, partName)
 end
 
 -- ══════════════════════════════════════════════════════════════════════════════
---  SILENT AIM - SISTEMA SYYCLIENT (Funciona con MCP de Roblox)
+--  SILENT AIM + NPC SILENT AIM — COPIADO EXACTO DE SYYCLIENT
 -- ══════════════════════════════════════════════════════════════════════════════
--- ══════════════════════════════════════════════════════════════════════════════
---  SILENT AIM SYSTEM (SyyClient - ULTRA PRECISO + WALLHACK)
---  Mejoras:
---    • Predicción de movimiento del target
---    • Wallhack cuando Visible Check = OFF
---    • Mejor selección de target (distancia pantalla + 3D)
---    • Precisión máxima en hitbox
--- ══════════════════════════════════════════════════════════════════════════════
+local cachedTargetPos=nil
+local cachedNpcPos=nil
+local npcSilentVisible=true
 
--- SILENT AIM — loop copiado de SyyClient
--- ═══════════════════════════════════════════════════════════════════════════════
--- SILENT AIM LOOP v2 — Fix aplicado via MCP inspection
--- Cambios:
---   • Team Check usa isSameTeam() mejorado (TeamRed/TeamBlue por GetAttribute)
---   • Wall check robusto: respeta Manipulation y distancia mínima
---   • Selección de target: prioriza FOV center + distancia 3D combinada
---   • Lead prediction: predice posición del target según velocidad
---   • Dead body filter: verifica Health > 0 Y HumanoidRootPart existe
--- ═══════════════════════════════════════════════════════════════════════════════
-RunService.RenderStepped:Connect(function()
-    pcall(function()
-        if not S.SilentAimEnabled then
-            cachedTargetPos = nil
-            return
+-- Cache de NPCs: refresca cada 90 frames
+local cachedNpcHumanoids={}
+local npcCacheFrame=0
+local function rebuildNpcCache()
+    local tbl={}
+    for _,obj in ipairs(Workspace:GetDescendants()) do
+        if obj:IsA("Humanoid") then
+            local isPlayer=false
+            for _,pl in ipairs(Players:GetPlayers()) do
+                if pl.Character==obj.Parent then isPlayer=true; break end
+            end
+            if not isPlayer then table.insert(tbl,obj) end
         end
+    end
+    cachedNpcHumanoids=tbl
+end
+rebuildNpcCache()
 
-        local center        = fovCenter2D
-        local bestScore     = math.huge    -- Score combinado (FOV dist + 3D dist normalizado)
-        local bestPos       = nil
-        local myChar        = player.Character
-        local myRoot        = myChar and myChar:FindFirstChild("HumanoidRootPart")
-        local fovLimit      = S.fov_on and S.fov_radius or math.huge  -- Si FOV está OFF, no limitamos
-
-        -- ── ITERACIÓN DE JUGADORES ────────────────────────────────────────────
-        for _, p in ipairs(_plrList) do
-            -- Validaciones básicas
-            if shouldSkipPlayer(p) then continue end
-
-            -- ── TEAM CHECK (FIX: usa isSameTeam mejorado) ────────────────────
-            if S.SilentAimTeamCheck then
-                local ok, isTeam = pcall(isSameTeam, player, p)
-                if ok and isTeam then continue end  -- Saltar compañeros de equipo
-            end
-
-            -- ── VALIDAR PERSONAJE Y HUMANOID ─────────────────────────────────
-            local char = p.Character
-            if not char then continue end
-            local hum  = char:FindFirstChildOfClass("Humanoid")
-            local root = char:FindFirstChild("HumanoidRootPart")
-            if not hum or not root then continue end
-
-            -- ── DEAD BODY FILTER (FIX #1 de x7s_v3) ─────────────────────────
-            -- Verifica Health > 0 para evitar apuntar a cadáveres con hitbox residual
-            if hum.Health <= 0 then continue end
-            -- Verificar que el personaje no haya sido eliminado del juego
-            if not char.Parent then continue end
-
-            -- ── PROYECCIÓN A PANTALLA ────────────────────────────────────────
-            local sp2, onScreen = camera:WorldToViewportPoint(root.Position)
-            local screenPos2D   = Vector2.new(sp2.X, sp2.Y)
-            local fovDist       = (screenPos2D - center).Magnitude
-
-            -- ── FOV FILTER ───────────────────────────────────────────────────
-            if fovDist > fovLimit then continue end
-            if not onScreen then continue end  -- Target detrás de la cámara
-
-            -- ── VISIBLE CHECK + MANIPULATION ─────────────────────────────────
-            if S.VisibleCheck and not S.Manipulation then
-                local lc = player.Character
-                if lc then
-                    local distTo3D = myRoot and (root.Position - myRoot.Position).Magnitude or math.huge
-
-                    -- Bypass del wall check si está MUY cerca (< 12 studs)
-                    -- Esto previene que el check de paredes falle en close range
-                    if distTo3D > 12 then
-                        local ok, obs = pcall(function()
-                            return camera:GetPartsObscuringTarget(
-                                {root.Position},
-                                {lc, char}
-                            )
-                        end)
-                        if ok and #obs > 0 then continue end
-                    end
-                end
-            end
-
-            -- ── SCORE: distancia en pantalla + distancia 3D normalizada ──────
-            local dist3D     = myRoot and (root.Position - myRoot.Position).Magnitude or 0
-            local normDist3D = math.min(dist3D / 500, 1)  -- Normalizar a 0-1 (max 500 studs)
-            local score      = fovDist + (normDist3D * 100)  -- Peso: pantalla prioritaria
-
-            if score < bestScore then
-                bestScore = score
-
-                -- ── SELECCIÓN DE PARTE DEL CUERPO ────────────────────────────
-                local pn = S.SilentAimTargetPart
-                if pn == "Random" then
-                    local r = math.random(100)
-                    pn = r <= 30 and "Head"
-                      or r <= 70 and "UpperTorso"
-                      or           "LowerTorso"
-                elseif pn == "Pierna" then
-                    pn = "LowerTorso"
-                elseif pn == "Pecho" then
-                    pn = "UpperTorso"
-                elseif pn == "Combo" then
-                    -- Combo: alterna cabeza/torso según RNG con peso
-                    local r = math.random(100)
-                    pn = r <= 55 and "Head" or "UpperTorso"
-                end
-
-                local targetPart = char:FindFirstChild(pn) or root
-                local targetPos  = targetPart.Position
-
-                -- ── LEAD PREDICTION (si el target se mueve) ──────────────────
-                -- Predice dónde estará el target cuando el rayo llegue
-                local vel = root.AssemblyLinearVelocity
-                if vel and vel.Magnitude > 2 and myRoot then
-                    local dist3DForLead = (targetPos - myRoot.Position).Magnitude
-                    local travelTime    = dist3DForLead / 1000  -- Velocidad raycast estimada
-                    targetPos = targetPos + vel * travelTime * 0.5  -- 50% de predicción
-                end
-
-                bestPos = targetPos
-            end
-        end
-
-        -- Actualizar posición cacheada para el hook
-        cachedTargetPos = bestPos
-    end)
-end)
-
--- HOOK — copiado de SyyClient exacto
-local wallbreakParams = RaycastParams.new()
-wallbreakParams.FilterType = Enum.RaycastFilterType.Include
-wallbreakParams.FilterDescendantsInstances = {}
+local wallbreakParams=RaycastParams.new()
+wallbreakParams.FilterType=Enum.RaycastFilterType.Include
+wallbreakParams.FilterDescendantsInstances={}
 
 pcall(function()
     local oldNC
-    oldNC = hookmetamethod(game, "__namecall", newcclosure(function(...)
-        local method = getnamecallmethod()
+    oldNC=hookmetamethod(game,"__namecall",newcclosure(function(...)
+        local method=getnamecallmethod()
 
         -- ── UNIVERSAL SILENT AIM: FireServer / InvokeServer ──────────
-        if S.SilentAimEnabled and not checkcaller()
-           and (method == "FireServer" or method == "InvokeServer") then
-            local usePos2 = nil
-            if S.SilentAimEnabled and cachedTargetPos then usePos2 = cachedTargetPos end
-            if usePos2 and math.random(100) <= S.HitChance then
-                local args = {...}
-                local myC = player.Character
-                local myR = myC and myC:FindFirstChild("HumanoidRootPart")
-                local replaced = false
-                for i = 2, math.min(#args, 8) do
-                    if typeof(args[i]) == "Vector3" then
-                        local v = args[i]
-                        if v.Magnitude > 2 then
+        if S.UniversalSAEnabled and not checkcaller()
+           and (method=="FireServer" or method=="InvokeServer") then
+            local usePos2=nil
+            if S.SilentAimEnabled and cachedTargetPos then usePos2=cachedTargetPos end
+            if S.NpcSilentAimEnabled and cachedNpcPos and not usePos2 then usePos2=cachedNpcPos end
+            if usePos2 and math.random(100)<=S.HitChance then
+                local args={...}
+                local myC=player.Character
+                local myR=myC and myC:FindFirstChild("HumanoidRootPart")
+                local replaced=false
+                for i=2,math.min(#args,8) do
+                    if typeof(args[i])=="Vector3" then
+                        local v=args[i]
+                        if v.Magnitude>2 then
                             if myR then
-                                local d = (v - myR.Position).Magnitude
-                                if d > 5 and d < 2000 then args[i] = usePos2; replaced = true end
+                                local d=(v-myR.Position).Magnitude
+                                if d>5 and d<2000 then args[i]=usePos2; replaced=true end
                             end
                         end
                     end
@@ -2979,26 +2888,136 @@ pcall(function()
         end
 
         -- ── RAYCAST SILENT AIM ───────────────────────────────────────
-        local usePos = nil
-        if S.SilentAimEnabled and cachedTargetPos then usePos = cachedTargetPos end
+        local usePos=nil
+        if S.SilentAimEnabled and cachedTargetPos then usePos=cachedTargetPos end
+        if S.NpcSilentAimEnabled and cachedNpcPos and not usePos then usePos=cachedNpcPos end
         if not usePos then return oldNC(...) end
         if checkcaller() then return oldNC(...) end
-        if math.random(100) > S.HitChance then return oldNC(...) end
-        local args = {...}
-        if args[1] ~= Workspace then return oldNC(...) end
-        if method == "Raycast" then
-            if typeof(args[2]) ~= "Vector3" or typeof(args[3]) ~= "Vector3" then return oldNC(...) end
-            args[3] = (usePos - args[2]).Unit * 1000
-            if S.Manipulation then args[4] = wallbreakParams end
+        if math.random(100)>S.HitChance then return oldNC(...) end
+        local args={...}
+        if args[1]~=Workspace then return oldNC(...) end
+        if method=="Raycast" then
+            if typeof(args[2])~="Vector3" or typeof(args[3])~="Vector3" then return oldNC(...) end
+            args[3]=(usePos-args[2]).Unit*1000
+            if S.Manipulation then args[4]=wallbreakParams end
             return oldNC(table.unpack(args))
-        elseif method == "FindPartOnRayWithIgnoreList" or method == "FindPartOnRay" then
-            if typeof(args[2]) ~= "Ray" then return oldNC(...) end
-            local o = args[2].Origin; args[2] = Ray.new(o, (usePos - o).Unit * 1000)
-            if S.Manipulation and method == "FindPartOnRayWithIgnoreList" then args[3] = {} end
+        elseif method=="FindPartOnRayWithIgnoreList" or method=="FindPartOnRay" then
+            if typeof(args[2])~="Ray" then return oldNC(...) end
+            local o=args[2].Origin; args[2]=Ray.new(o,(usePos-o).Unit*1000)
+            if S.Manipulation and method=="FindPartOnRayWithIgnoreList" then args[3]={} end
             return oldNC(table.unpack(args))
         end
         return oldNC(...)
     end))
+end)
+RunService.RenderStepped:Connect(function()
+    pcall(function()
+        local myChar=player.Character
+        local myRoot=myChar and myChar:FindFirstChild("HumanoidRootPart")
+        local center=fovCenter2D
+
+        -- Actualizar wallbreakParams con chars de todos los jugadores
+        if S.Manipulation then
+            local chars={}
+            for _,p in ipairs(_plrList) do
+                if p~=player and p.Character then chars[#chars+1]=p.Character end
+            end
+            wallbreakParams.FilterDescendantsInstances=chars
+        end
+
+        -- ── PLAYER SILENT AIM ────────────────────────────────────────
+        if S.SilentAimEnabled then
+            local bestD=math.huge; local bestPos=nil
+            local fovLimit=S.fov_radius
+
+            for _,p in ipairs(_plrList) do
+                if shouldSkipPlayer(p) then continue end
+                -- Team Check: usa GetAttribute("Team") para este juego
+                if S.SilentAimTeamCheck then
+                    local t1=player:GetAttribute("Team")
+                    local t2=p:GetAttribute("Team")
+                    if t1 and t2 and t1==t2 then continue end
+                    -- Fallback nativo
+                    if not t1 and player.Team and p.Team and player.Team==p.Team then continue end
+                end
+                local char=p.Character; if not char then continue end
+                local hum=char:FindFirstChildOfClass("Humanoid")
+                local root=char:FindFirstChild("HumanoidRootPart")
+                if not hum or hum.Health<=0 or not root then continue end
+
+                local sp2,onS=camera:WorldToViewportPoint(root.Position)
+                local d2=(Vector2.new(sp2.X,sp2.Y)-center).Magnitude
+
+                if S.VisibleCheck then
+                    if not onS then continue end
+                    if d2>fovLimit then continue end
+                    if not S.Manipulation then
+                        local lc=player.Character
+                        if lc then
+                            local ok,obs=pcall(function() return camera:GetPartsObscuringTarget({root.Position},{lc,char}) end)
+                            if ok and #obs>0 then continue end
+                        end
+                    end
+                else
+                    if d2>fovLimit then continue end
+                    if not onS then continue end
+                    if not S.Manipulation then
+                        local lc=player.Character
+                        if lc then
+                            local ok,obs=pcall(function() return camera:GetPartsObscuringTarget({root.Position},{lc,char}) end)
+                            if ok and #obs>0 then continue end
+                        end
+                    end
+                end
+
+                if d2<bestD then
+                    bestD=d2
+                    local pn=S.SilentAimTargetPart
+                    if pn=="Random" then local r=math.random(100); pn=r<=30 and "Head" or (r<=80 and "UpperTorso" or "LowerTorso")
+                    elseif pn=="Pierna" then pn="LowerTorso"
+                    elseif pn=="Pecho" then pn="UpperTorso"
+                    elseif pn=="Combo" then local r=math.random(100); pn=r<=35 and "LowerTorso" or (r<=85 and "UpperTorso" or "Head") end
+                    local hp2=char:FindFirstChild(pn) or root
+                    bestPos=hp2.Position
+                end
+            end
+            cachedTargetPos=bestPos
+        else cachedTargetPos=nil end
+
+        -- ── NPC SILENT AIM ───────────────────────────────────────────
+        if S.NpcSilentAimEnabled then
+            npcCacheFrame=npcCacheFrame+1
+            if npcCacheFrame>=90 then npcCacheFrame=0; rebuildNpcCache() end
+            local bestD=math.huge; cachedNpcPos=nil; npcSilentVisible=true
+            local npcFovLimit=S.fov_radius
+            for _,hum in ipairs(cachedNpcHumanoids) do
+                if not hum or not hum.Parent then continue end
+                if hum.Health<=0 then continue end
+                local npcRoot=hum.Parent:FindFirstChild("HumanoidRootPart")
+                if not npcRoot then continue end
+                local sp2,onS=camera:WorldToViewportPoint(npcRoot.Position)
+                if not onS then continue end
+                local d2=(Vector2.new(sp2.X,sp2.Y)-center).Magnitude
+                if d2>npcFovLimit then continue end
+                if d2<bestD then
+                    bestD=d2
+                    local pn=S.NpcTargetPart
+                    local part=hum.Parent:FindFirstChild(pn) or npcRoot
+                    local visible=true
+                    if not S.Manipulation and myChar then
+                        local ok,obs=pcall(function()
+                            return camera:GetPartsObscuringTarget({part.Position},{myChar,hum.Parent})
+                        end)
+                        if ok and #obs>0 then visible=false end
+                    end
+                    npcSilentVisible=visible
+                    if visible or S.Manipulation then cachedNpcPos=part.Position
+                    else cachedNpcPos=nil end
+                end
+            end
+        else cachedNpcPos=nil; npcSilentVisible=true end
+    end)
+end)
 end)
 
 -- ══════════════════════════════════════════════
