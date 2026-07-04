@@ -109,6 +109,7 @@ local function mkDefault()
         HitChance = 100,                   -- Probabilidad de hit (1-100)
         Manipulation = false,              -- Wall break forzado
         SilentAimLead = 0.1,               -- Predicción de movimiento (segundos)
+        SilentAimTeamCheck = true,        -- No apunta a miembros del mismo equipo
         -- === TARGET ===
         TargetPart = "Random",
 
@@ -193,6 +194,13 @@ local function shouldSkipPlayer(p)
     return false
 end
 
+-- Función auxiliar para Silent Aim con Team Check
+local function shouldSkipPlayerForSilentAim(p)
+    if shouldSkipPlayer(p) then return true end    -- Usa la lógica base
+    if S.SilentAimTeamCheck and p.Team == player.Team then return true end  -- Team check
+    return false
+end
+
 local Locale = {
     English = {
         tab_esp="ESP", tab_hbx="HBX", tab_trg="TRG", tab_cfg="CFG",
@@ -232,6 +240,7 @@ local Locale = {
         hitchance_lbl="Hit Chance %",
         lead_prediction="Lead Prediction",
         silentaim_targetpart="Target Part (SA)",
+        silentaim_teamcheck="Team Check (SA)", silentaim_teamcheck_d="Don't aim at teammates.",
 
         whitelist_title="Whitelist Manager", whitelist_add="Add Player", whitelist_remove="Remove",
 
@@ -290,6 +299,7 @@ local Locale = {
         hitchance_lbl="Probabilidad Hit %",
         lead_prediction="Predicción de Movimiento",
         silentaim_targetpart="Parte Objetivo (SA)",
+        silentaim_teamcheck="Team Check (SA)", silentaim_teamcheck_d="No apunta a compañeros de equipo.",
 
         whitelist_title="Gestor de Whitelist", whitelist_add="Añadir Jugador", whitelist_remove="Eliminar",
         target_part="Parte Objetivo",
@@ -1520,6 +1530,8 @@ makeDivider(silentAimCard)
 makeDropdown(silentAimCard, "silentaim_targetpart", "SilentAimTargetPart", {"Head","UpperTorso","LowerTorso","Random"})
 makeDivider(silentAimCard)
 makeSlider(silentAimCard, "lead_prediction", "SilentAimLead", 0, 1)
+makeDivider(silentAimCard)
+makeToggle(silentAimCard, "silentaim_teamcheck", "silentaim_teamcheck_d", "SilentAimTeamCheck")
 makeDivider(silentAimCard)
 makeKeybind(silentAimCard, "silentaim_key", "silentaim_key")
 
@@ -2800,7 +2812,7 @@ RunService.RenderStepped:Connect(function()
 
     -- Iterar todos los jugadores
     for _, p in ipairs(_plrList) do
-        if shouldSkipPlayer(p) then continue end
+        if shouldSkipPlayerForSilentAim(p) then continue end
         local char = p.Character; if not char then continue end
         local hum = char:FindFirstChildOfClass("Humanoid")
         local root = char:FindFirstChild("HumanoidRootPart")
