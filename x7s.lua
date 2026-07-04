@@ -102,14 +102,12 @@ local function mkDefault()
         CamLockSafeZone = true,
         -- === SILENT AIM (SyyClient System) ===
         SilentAimEnabled = false,
-        SilentAimRange = 150,
-        SilentAimWallCheck = true,         -- OFF = wallhack (ignora paredes)
-        SilentAimTargetPart = "Random",
-        SilentAimTeamCheck = true,         -- No apuntar a teammates
+        VisibleCheck = true,
+        Manipulation = false,
+        SilentAimTeamCheck = true,
+        HitChance = 100,
         silentaim_key = "H",
-        HitChance = 100,                   -- Probabilidad de hit (1-100)
-        Manipulation = false,              -- Wall break forzado
-        SilentAimLead = 0.1,               -- Predicción de movimiento (segundos)
+        SilentAimTargetPart = "Head",
         -- === TARGET ===
         TargetPart = "Random",
 
@@ -254,15 +252,10 @@ local Locale = {
         camlock_wallcheck="Wall Check",     camlock_wallcheck_d="Only lock on visible enemies.",
         camlock_safezone="Safe Zone",       camlock_safezone_d="Don't lock on players inside a safe zone.",
 
-        silentaim_on="Enable Silent Aim",  silentaim_on_d="Automatically aims at the closest enemy.",
-        silentaim_key="Silent Aim Keybind",
-        silentaim_range="Silent Aim Range",     silentaim_range_d="Maximum distance to target (50-500).",
-        silentaim_wallcheck="Visible Check (SA)",  silentaim_wallcheck_d="Only aim at visible enemies (no wallhack).",
-        silentaim_teamcheck="Team Check (SA)",  silentaim_teamcheck_d="Don't aim at teammates (same team).",
-        manipulation_d="Wall Break: Raycast ignores obstacles and walls.",
-        hitchance_lbl="Hit Chance %",
-        lead_prediction="Lead Prediction",
-        silentaim_targetpart="Target Part (SA)",
+        silentaim_on="Silent Aim",         silentaim_on_d="Redirects shots to the closest enemy.",
+        silentaim_wallcheck="Visible Check", silentaim_wallcheck_d="Only aim at visible enemies. OFF = wallhack.",
+        hitmanip="Manipulation",             manipulation_d="Raycast ignores walls and obstacles.",
+        silentaim_teamcheck="Team Check",    silentaim_teamcheck_d="Don't aim at teammates.",
 
         whitelist_title="Whitelist Manager", whitelist_add="Add Player", whitelist_remove="Remove",
 
@@ -313,15 +306,10 @@ local Locale = {
         camlock_wallcheck="Wall Check",     camlock_wallcheck_d="Solo bloquea enemigos visibles.",
         camlock_safezone="Safe Zone",       camlock_safezone_d="No bloquea a jugadores dentro de una zona segura.",
 
-        silentaim_on="Activar Silent Aim",  silentaim_on_d="Apunta automáticamente al enemigo más cercano.",
-        silentaim_key="Tecla Silent Aim",
-        silentaim_range="Rango Silent Aim",     silentaim_range_d="Distancia máxima al objetivo (50-500).",
-        silentaim_wallcheck="Visible Check (SA)",  silentaim_wallcheck_d="Solo apunta a enemigos visibles (sin wallhack).",
-        silentaim_teamcheck="Team Check (SA)",  silentaim_teamcheck_d="No apunta a compañeros de equipo (mismo team).",
-        manipulation_d="Wallbreak: Los raycast ignoran obstáculos y paredes.",
-        hitchance_lbl="Probabilidad Hit %",
-        lead_prediction="Predicción de Movimiento",
-        silentaim_targetpart="Parte Objetivo (SA)",
+        silentaim_on="Silent Aim",         silentaim_on_d="Redirige los disparos al enemigo más cercano.",
+        silentaim_wallcheck="Visible Check", silentaim_wallcheck_d="Solo apunta a enemigos visibles. OFF = wallhack.",
+        hitmanip="Manipulation",             manipulation_d="El raycast ignora paredes y obstáculos.",
+        silentaim_teamcheck="Team Check",    silentaim_teamcheck_d="No apunta a compañeros de equipo.",
 
         whitelist_title="Gestor de Whitelist", whitelist_add="Añadir Jugador", whitelist_remove="Eliminar",
         target_part="Parte Objetivo",
@@ -1541,21 +1529,11 @@ makeToggle(silentAimCard, "silentaim_on", "silentaim_on_d", "SilentAimEnabled", 
     showNotif("✝  Silent Aim", on and L("n_on") or L("n_off"), on)
 end)
 makeDivider(silentAimCard)
-makeSlider(silentAimCard, "silentaim_range", "SilentAimRange", 50, 500)
-makeDivider(silentAimCard)
-makeToggle(silentAimCard, "silentaim_wallcheck", "silentaim_wallcheck_d", "SilentAimWallCheck")
-makeDivider(silentAimCard)
-makeToggle(silentAimCard, "silentaim_teamcheck", "silentaim_teamcheck_d", "SilentAimTeamCheck")
+makeToggle(silentAimCard, "silentaim_wallcheck", "silentaim_wallcheck_d", "VisibleCheck")
 makeDivider(silentAimCard)
 makeToggle(silentAimCard, "hitmanip", "manipulation_d", "Manipulation")
 makeDivider(silentAimCard)
-makeSlider(silentAimCard, "hitchance_lbl", "HitChance", 1, 100)
-makeDivider(silentAimCard)
-makeDropdown(silentAimCard, "silentaim_targetpart", "SilentAimTargetPart", {"Head","UpperTorso","LowerTorso","Random"})
-makeDivider(silentAimCard)
-makeSlider(silentAimCard, "lead_prediction", "SilentAimLead", 0, 1)
-makeDivider(silentAimCard)
-makeKeybind(silentAimCard, "silentaim_key", "silentaim_key")
+makeToggle(silentAimCard, "silentaim_teamcheck", "silentaim_teamcheck_d", "SilentAimTeamCheck")
 
 -- ══ FOV CIRCLE CARD ═══════════════════════════════════════════
 local fovCard = makeCard(pg_aim)
@@ -2803,224 +2781,125 @@ end
 --    • Precisión máxima en hitbox
 -- ══════════════════════════════════════════════════════════════════════════════
 
--- Predicción de movimiento (lead shot) - configurable
-local function predictTargetPos(root, part, leadAmount)
-    if not part then return root.Position end
-    local leadAmount = leadAmount or S.SilentAimLead or 0.1
-    local vel = Vector3.new(0, 0, 0)
-    pcall(function()
-        vel = root.AssemblyLinearVelocity
-    end)
-    return part.Position + (vel * leadAmount)
-end
-
--- Render loop para Silent Aim - VERSIÓN MEJORADA
+-- SILENT AIM — loop copiado de SyyClient
 RunService.RenderStepped:Connect(function()
     pcall(function()
-    if not S.SilentAimEnabled then 
-        cachedTargetPos = nil
-        return 
-    end
+        if S.SilentAimEnabled then
+            local center = fovCenter2D
+            local bestD = math.huge; local bestPos = nil
+            local myChar = player.Character
+            local myRoot = myChar and myChar:FindFirstChild("HumanoidRootPart")
+            local fovLimit = S.fov_radius
 
-    local vp = camera.ViewportSize
-    fovCenter2D = Vector2.new(vp.X * 0.5, vp.Y * 0.5)
+            for _, p in ipairs(_plrList) do
+                if shouldSkipPlayer(p) then continue end
+                if S.SilentAimTeamCheck and isSameTeam(player, p) then continue end
+                local char = p.Character; if not char then continue end
+                local hum = char:FindFirstChildOfClass("Humanoid")
+                local root = char:FindFirstChild("HumanoidRootPart")
+                if not hum or hum.Health <= 0 or not root then continue end
 
-    local myChar = player.Character
-    local myRoot = myChar and myChar:FindFirstChild("HumanoidRootPart")
-    local bestDist = math.huge
-    local bestPos = nil
-    local bestPart = nil
-    local bestRoot = nil
+                local sp2, onS = camera:WorldToViewportPoint(root.Position)
+                local d2 = (Vector2.new(sp2.X, sp2.Y) - center).Magnitude
 
-    -- Iterar todos los jugadores
-    for _, p in ipairs(_plrList) do
-        if shouldSkipPlayer(p) then continue end
-        
-        -- TEAM CHECK - No apuntar a teammates si está activado
-        if S.SilentAimTeamCheck and isSameTeam(player, p) then
-            continue
-        end
-        
-        local char = p.Character; if not char then continue end
-        local hum = char:FindFirstChildOfClass("Humanoid")
-        local root = char:FindFirstChild("HumanoidRootPart")
-        if not hum or hum.Health <= 0 or not root then continue end
-        
-        -- ─────────────────────────────────────────────────────────
-        -- VISIBLE CHECK LOGIC (WALLHACK cuando está OFF)
-        -- ─────────────────────────────────────────────────────────
-        local isVisible = true
-        if S.SilentAimWallCheck then
-            -- Visible Check ON: solo apunta a enemigos visibles
-            local ok, obs = pcall(function()
-                return camera:GetPartsObscuringTarget({root.Position}, {myChar, char})
-            end)
-            if ok and #obs > 0 then 
-                isVisible = false
-                continue  -- Skip if not visible and check is ON
+                if S.VisibleCheck then
+                    if not onS then continue end
+                    if d2 > fovLimit then continue end
+                    if not S.Manipulation then
+                        local lc = player.Character
+                        if lc then
+                            local ok, obs = pcall(function()
+                                return camera:GetPartsObscuringTarget({root.Position}, {lc, char})
+                            end)
+                            if ok and #obs > 0 then continue end
+                        end
+                    end
+                else
+                    if d2 > fovLimit then continue end
+                    if not onS then continue end
+                    if not S.Manipulation then
+                        local lc = player.Character
+                        if lc then
+                            local ok, obs = pcall(function()
+                                return camera:GetPartsObscuringTarget({root.Position}, {lc, char})
+                            end)
+                            if ok and #obs > 0 then continue end
+                        end
+                    end
+                end
+
+                if d2 < bestD then
+                    bestD = d2
+                    local pn = S.SilentAimTargetPart
+                    if pn == "Random" then
+                        local r = math.random(100)
+                        pn = r <= 30 and "Head" or (r <= 80 and "UpperTorso" or "LowerTorso")
+                    end
+                    local hp2 = char:FindFirstChild(pn) or root
+                    bestPos = hp2.Position
+                end
             end
+            cachedTargetPos = bestPos
+        else
+            cachedTargetPos = nil
         end
-        -- Si SilentAimWallCheck = false, isVisible = true siempre (wallhack)
-        
-        -- ─────────────────────────────────────────────────────────
-        -- FOV CHECK (distancia en pantalla)
-        -- ─────────────────────────────────────────────────────────
-        local screenPos, onScreen = camera:WorldToViewportPoint(root.Position)
-        if not onScreen then continue end
-        
-        local screenDist = (Vector2.new(screenPos.X, screenPos.Y) - fovCenter2D).Magnitude
-        if screenDist > S.SilentAimRange then continue end
-        
-        -- ─────────────────────────────────────────────────────────
-        -- SELECCIONAR TARGET MÁS CERCANO (por distancia pantalla)
-        -- ─────────────────────────────────────────────────────────
-        if screenDist < bestDist then
-            bestDist = screenDist
-            bestRoot = root
-            bestPart = nil
-            
-            -- Seleccionar parte objetivo con precisión
-            local pn = S.SilentAimTargetPart
-            if pn == "Random" then
-                local r = math.random(100)
-                pn = r <= 30 and "Head" or (r <= 70 and "UpperTorso" or "LowerTorso")
-            end
-            
-            -- Buscar la parte con prioridad
-            bestPart = char:FindFirstChild(pn) 
-                    or char:FindFirstChild("Head")
-                    or char:FindFirstChild("UpperTorso")
-                    or char:FindFirstChild("LowerTorso")
-                    or root
-            
-            -- Predicción de movimiento (usa config SilentAimLead)
-            if bestPart then
-                bestPos = predictTargetPos(root, bestPart)
-            else
-                bestPos = root.Position
-            end
-        end
-    end
-
-    -- Actualizar cached target
-    cachedTargetPos = bestPos
-    silentAimTarget = bestPos and true or false
-    
     end)
 end)
 
--- ══════════════════════════════════════════════════════════════════════════════
---  HOOK METAMETHOD — SyyClient System ULTRA PRECISO
---    • HitChance check agresivo
---    • Manipulation forzado (wall break)
---    • Raycast hooks múltiples
---    • Precisión máxima en argumentos
--- ══════════════════════════════════════════════════════════════════════════════
-
--- Preparar params para wall break (Manipulation)
-local wallbreakParams = nil
-pcall(function()
-    wallbreakParams = RaycastParams.new()
-    wallbreakParams.FilterType = Enum.RaycastFilterType.Include
-    wallbreakParams.FilterDescendantsInstances = {}
-end)
+-- HOOK — copiado de SyyClient exacto
+local wallbreakParams = RaycastParams.new()
+wallbreakParams.FilterType = Enum.RaycastFilterType.Include
+wallbreakParams.FilterDescendantsInstances = {}
 
 pcall(function()
     local oldNC
     oldNC = hookmetamethod(game, "__namecall", newcclosure(function(...)
         local method = getnamecallmethod()
-        local args = {...}
 
-        -- ════════════════════════════════════════════════════════════════════
-        --  UNIVERSAL SILENT AIM: FireServer / InvokeServer (AGRESIVO)
-        -- ════════════════════════════════════════════════════════════════════
-        if S.SilentAimEnabled and cachedTargetPos 
-           and not checkcaller()
+        -- ── UNIVERSAL SILENT AIM: FireServer / InvokeServer ──────────
+        if S.SilentAimEnabled and not checkcaller()
            and (method == "FireServer" or method == "InvokeServer") then
-            
-            -- HitChance: solo procesar si pasa el random
-            if math.random(100) <= S.HitChance then
+            local usePos2 = nil
+            if S.SilentAimEnabled and cachedTargetPos then usePos2 = cachedTargetPos end
+            if usePos2 and math.random(100) <= S.HitChance then
+                local args = {...}
                 local myC = player.Character
                 local myR = myC and myC:FindFirstChild("HumanoidRootPart")
                 local replaced = false
-                
-                -- Buscar TODOS los Vector3 en los argumentos (no solo 2-8)
-                for i = 2, #args do
+                for i = 2, math.min(#args, 8) do
                     if typeof(args[i]) == "Vector3" then
                         local v = args[i]
-                        -- Filtrar: solo reemplazar posiciones significativas (>2 studs)
                         if v.Magnitude > 2 then
                             if myR then
                                 local d = (v - myR.Position).Magnitude
-                                -- Distancia válida: entre 5 y 2000 studs
-                                if d > 5 and d < 2000 then
-                                    args[i] = cachedTargetPos
-                                    replaced = true
-                                    break  -- Reemplazar el primero que encontremos
-                                end
+                                if d > 5 and d < 2000 then args[i] = usePos2; replaced = true end
                             end
                         end
                     end
                 end
-                
                 if replaced then return oldNC(table.unpack(args)) end
             end
         end
 
-        -- ════════════════════════════════════════════════════════════════════
-        --  RAYCAST SILENT AIM (MÁS PRECISO)
-        -- ════════════════════════════════════════════════════════════════════
+        -- ── RAYCAST SILENT AIM ───────────────────────────────────────
         local usePos = nil
         if S.SilentAimEnabled and cachedTargetPos then usePos = cachedTargetPos end
-        
-        -- Si no hay target, pasar por defecto
         if not usePos then return oldNC(...) end
-        
-        -- No hookear si es llamada del script mismo (checkcaller)
         if checkcaller() then return oldNC(...) end
-        
-        -- HitChance: random chance de que el aim funcione
         if math.random(100) > S.HitChance then return oldNC(...) end
-        
         local args = {...}
         if args[1] ~= Workspace then return oldNC(...) end
-        
-        -- ─────────────────────────────────────────────────────────────────
-        -- RAYCAST METHOD (workspace:Raycast)
-        -- ─────────────────────────────────────────────────────────────────
         if method == "Raycast" then
-            if typeof(args[2]) ~= "Vector3" or typeof(args[3]) ~= "Vector3" then 
-                return oldNC(...) 
-            end
-            
-            -- Reemplazar dirección para apuntar al target
+            if typeof(args[2]) ~= "Vector3" or typeof(args[3]) ~= "Vector3" then return oldNC(...) end
             args[3] = (usePos - args[2]).Unit * 1000
-            
-            -- Si Manipulation está ON o Visible Check está OFF: ignorar obstáculos
-            if (S.Manipulation or not S.SilentAimWallCheck) and wallbreakParams then
-                args[4] = wallbreakParams
-            end
-            
+            if S.Manipulation then args[4] = wallbreakParams end
             return oldNC(table.unpack(args))
-        
-        -- ─────────────────────────────────────────────────────────────────
-        -- FindPartOnRay / FindPartOnRayWithIgnoreList METHODS
-        -- ─────────────────────────────────────────────────────────────────
         elseif method == "FindPartOnRayWithIgnoreList" or method == "FindPartOnRay" then
             if typeof(args[2]) ~= "Ray" then return oldNC(...) end
-            
-            local o = args[2].Origin
-            -- Reemplazar ray para apuntar al target
-            args[2] = Ray.new(o, (usePos - o).Unit * 1000)
-            
-            -- Si Manipulation está ON o Visible Check está OFF: wall break
-            if (S.Manipulation or not S.SilentAimWallCheck) and method == "FindPartOnRayWithIgnoreList" then
-                args[3] = {}  -- Empty ignore list = hits everything
-            end
-            
+            local o = args[2].Origin; args[2] = Ray.new(o, (usePos - o).Unit * 1000)
+            if S.Manipulation and method == "FindPartOnRayWithIgnoreList" then args[3] = {} end
             return oldNC(table.unpack(args))
         end
-        
         return oldNC(...)
     end))
 end)
