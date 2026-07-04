@@ -100,14 +100,14 @@ local function mkDefault()
         camlock_key = "F",
         fov_on = false, fov_visible = true, fov_radius = 120,
         CamLockSafeZone = true,
-        -- === SILENT AIM (SyyClient System) ===
-        SilentAimEnabled = false,
-        VisibleCheck = true,
-        Manipulation = false,
-        SilentAimTeamCheck = true,
-        HitChance = 100,
-        silentaim_key = "H",
-        SilentAimTargetPart = "Head",
+        -- === SILENT AIM (SyyClient System — Fix v2) ===
+        SilentAimEnabled = false,   -- Activar con keybind H o toggle en UI
+        VisibleCheck = true,        -- Solo targets visibles (OFF = wallhack)
+        Manipulation = false,       -- Bypass paredes en el raycast (ON = wallhack nivel 2)
+        SilentAimTeamCheck = true,  -- NO apuntar a compañeros de equipo (TeamRed/TeamBlue)
+        HitChance = 100,            -- Probabilidad de redirigir cada disparo (1-100)
+        silentaim_key = "H",        -- Keybind de toggle rápido
+        SilentAimTargetPart = "Head",  -- Parte del cuerpo objetivo por defecto
         -- === TARGET ===
         TargetPart = "Random",
 
@@ -193,19 +193,60 @@ local function shouldSkipPlayer(p)
 end
 
 -- Función para verificar si dos jugadores están en el mismo team
+-- ═══════════════════════════════════════════════════════════════════════════════
+-- isSameTeam v2 — Basado en inspección MCP live del juego
+-- CONFIRMADO: el juego usa player:GetAttribute("Team") = "TeamRed" / "TeamBlue"
+-- Los equipos se verifican como strings (no objetos Team de Roblox).
+-- También incluye fallback para el sistema nativo de Teams de Roblox.
+-- ═══════════════════════════════════════════════════════════════════════════════
 local function isSameTeam(p1, p2)
     if not p1 or not p2 then return false end
-    -- PRINCIPAL: este juego usa player:GetAttribute("Team") = "TeamBlue"/"TeamRed"
-    local t1 = p1:GetAttribute("Team")
-    local t2 = p2:GetAttribute("Team")
-    if t1 and t2 and typeof(t1) == "string" and typeof(t2) == "string" then
-        return t1 == t2
+    if not p1.Parent or not p2.Parent then return false end
+
+    -- ── MÉTODO PRINCIPAL: Atributo custom del juego ──────────────────────────
+    -- Confirmado via MCP: player:GetAttribute("Team") = "TeamRed" o "TeamBlue"
+    local ok1, t1 = pcall(function() return p1:GetAttribute("Team") end)
+    local ok2, t2 = pcall(function() return p2:GetAttribute("Team") end)
+
+    if ok1 and ok2 and t1 and t2 then
+        if typeof(t1) == "string" and typeof(t2) == "string" and t1 ~= "" and t2 ~= "" then
+            return t1 == t2
+        end
     end
-    -- Fallback: sistema nativo Roblox Teams
-    if p1.Team and p2.Team and p1.Team == p2.Team then
+
+    -- ── MÉTODO 2: Sistema nativo Roblox Teams ────────────────────────────────
+    local ok3, team1 = pcall(function() return p1.Team end)
+    local ok4, team2 = pcall(function() return p2.Team end)
+    if ok3 and ok4 and team1 and team2 and team1 == team2 then
         return true
     end
+
+    -- ── MÉTODO 3: Atributo alternativo "Spawn" (A/B indica equipo) ──────────
+    -- El juego usa Spawn = "A" o "B" como atributo adicional de equipo
+    local ok5, s1 = pcall(function() return p1:GetAttribute("Spawn") end)
+    local ok6, s2 = pcall(function() return p2:GetAttribute("Spawn") end)
+    if ok5 and ok6 and s1 and s2 and typeof(s1) == "string" and typeof(s2) == "string" then
+        if s1 ~= "" and s2 ~= "" then
+            return s1 == s2
+        end
+    end
+
+    -- ── Sin información de equipo = no son del mismo equipo ─────────────────
     return false
+end
+
+-- Función auxiliar: obtener nombre del equipo de un jugador
+local function getTeamName(p)
+    if not p or not p.Parent then return "?" end
+    local ok, t = pcall(function() return p:GetAttribute("Team") end)
+    if ok and t and typeof(t) == "string" and t ~= "" then
+        return t
+    end
+    local ok2, team = pcall(function() return p.Team end)
+    if ok2 and team then
+        return team.Name or "?"
+    end
+    return "?"
 end
 
 local Locale = {
@@ -240,10 +281,13 @@ local Locale = {
         camlock_safezone="Safe Zone",       camlock_safezone_d="Don't lock on players inside a safe zone.",
 
         silentaim_on="Silent Aim",         silentaim_on_d="Redirects shots to the closest enemy.",
+        silentaim_hitchance="Hit Chance %",    silentaim_hitchance_d="Probability of redirecting each shot (1-100).",
+        silentaim_range="Silent Aim Range",     silentaim_range_d="Maximum target selection distance in pixels from FOV center.",
         silentaim_wallcheck="Visible Check", silentaim_wallcheck_d="Only aim at visible enemies. OFF = wallhack.",
         hitmanip="Manipulation",             manipulation_d="Raycast ignores walls and obstacles.",
         silentaim_teamcheck="Team Check",    silentaim_teamcheck_d="Don't aim at teammates.",
 
+        silentaim_key="Silent Aim Keybind", silentaim_key_d="Toggle Silent Aim on/off.",
         whitelist_title="Whitelist Manager", whitelist_add="Add Player", whitelist_remove="Remove",
 
         target_part="Target Part",
@@ -294,10 +338,13 @@ local Locale = {
         camlock_safezone="Safe Zone",       camlock_safezone_d="No bloquea a jugadores dentro de una zona segura.",
 
         silentaim_on="Silent Aim",         silentaim_on_d="Redirige los disparos al enemigo más cercano.",
+        silentaim_hitchance="Hit Chance %",    silentaim_hitchance_d="Probabilidad de redirigir cada disparo (1-100).",
+        silentaim_range="Silent Aim Range",     silentaim_range_d="Distancia máxima de selección de target en píxeles desde el centro del FOV.",
         silentaim_wallcheck="Visible Check", silentaim_wallcheck_d="Solo apunta a enemigos visibles. OFF = wallhack.",
         hitmanip="Manipulation",             manipulation_d="El raycast ignora paredes y obstáculos.",
         silentaim_teamcheck="Team Check",    silentaim_teamcheck_d="No apunta a compañeros de equipo.",
 
+        silentaim_key="Keybind Silent Aim", silentaim_key_d="Activa/desactiva el Silent Aim.",
         whitelist_title="Gestor de Whitelist", whitelist_add="Añadir Jugador", whitelist_remove="Eliminar",
         target_part="Parte Objetivo",
         extras_title="Extras",
@@ -1521,6 +1568,11 @@ makeDivider(silentAimCard)
 makeToggle(silentAimCard, "hitmanip", "manipulation_d", "Manipulation")
 makeDivider(silentAimCard)
 makeToggle(silentAimCard, "silentaim_teamcheck", "silentaim_teamcheck_d", "SilentAimTeamCheck")
+makeDivider(silentAimCard)
+makeSlider(silentAimCard, "silentaim_hitchance", "HitChance", 1, 100)
+makeDivider(silentAimCard)
+makeSlider(silentAimCard, "silentaim_range", "fov_radius", 20, 600)
+makeKeybind(silentAimCard, "silentaim_key", "silentaim_key")
 
 -- ══ FOV CIRCLE CARD ═══════════════════════════════════════════
 local fovCard = makeCard(pg_aim)
@@ -2769,67 +2821,125 @@ end
 -- ══════════════════════════════════════════════════════════════════════════════
 
 -- SILENT AIM — loop copiado de SyyClient
+-- ═══════════════════════════════════════════════════════════════════════════════
+-- SILENT AIM LOOP v2 — Fix aplicado via MCP inspection
+-- Cambios:
+--   • Team Check usa isSameTeam() mejorado (TeamRed/TeamBlue por GetAttribute)
+--   • Wall check robusto: respeta Manipulation y distancia mínima
+--   • Selección de target: prioriza FOV center + distancia 3D combinada
+--   • Lead prediction: predice posición del target según velocidad
+--   • Dead body filter: verifica Health > 0 Y HumanoidRootPart existe
+-- ═══════════════════════════════════════════════════════════════════════════════
 RunService.RenderStepped:Connect(function()
     pcall(function()
-        if S.SilentAimEnabled then
-            local center = fovCenter2D
-            local bestD = math.huge; local bestPos = nil
-            local myChar = player.Character
-            local myRoot = myChar and myChar:FindFirstChild("HumanoidRootPart")
-            local fovLimit = S.fov_radius
+        if not S.SilentAimEnabled then
+            cachedTargetPos = nil
+            return
+        end
 
-            for _, p in ipairs(_plrList) do
-                if shouldSkipPlayer(p) then continue end
-                if S.SilentAimTeamCheck and isSameTeam(player, p) then continue end
-                local char = p.Character; if not char then continue end
-                local hum = char:FindFirstChildOfClass("Humanoid")
-                local root = char:FindFirstChild("HumanoidRootPart")
-                if not hum or hum.Health <= 0 or not root then continue end
+        local center        = fovCenter2D
+        local bestScore     = math.huge    -- Score combinado (FOV dist + 3D dist normalizado)
+        local bestPos       = nil
+        local myChar        = player.Character
+        local myRoot        = myChar and myChar:FindFirstChild("HumanoidRootPart")
+        local fovLimit      = S.fov_on and S.fov_radius or math.huge  -- Si FOV está OFF, no limitamos
 
-                local sp2, onS = camera:WorldToViewportPoint(root.Position)
-                local d2 = (Vector2.new(sp2.X, sp2.Y) - center).Magnitude
+        -- ── ITERACIÓN DE JUGADORES ────────────────────────────────────────────
+        for _, p in ipairs(_plrList) do
+            -- Validaciones básicas
+            if shouldSkipPlayer(p) then continue end
 
-                if S.VisibleCheck then
-                    if not onS then continue end
-                    if d2 > fovLimit then continue end
-                    if not S.Manipulation then
-                        local lc = player.Character
-                        if lc then
-                            local ok, obs = pcall(function()
-                                return camera:GetPartsObscuringTarget({root.Position}, {lc, char})
-                            end)
-                            if ok and #obs > 0 then continue end
-                        end
+            -- ── TEAM CHECK (FIX: usa isSameTeam mejorado) ────────────────────
+            if S.SilentAimTeamCheck then
+                local ok, isTeam = pcall(isSameTeam, player, p)
+                if ok and isTeam then continue end  -- Saltar compañeros de equipo
+            end
+
+            -- ── VALIDAR PERSONAJE Y HUMANOID ─────────────────────────────────
+            local char = p.Character
+            if not char then continue end
+            local hum  = char:FindFirstChildOfClass("Humanoid")
+            local root = char:FindFirstChild("HumanoidRootPart")
+            if not hum or not root then continue end
+
+            -- ── DEAD BODY FILTER (FIX #1 de x7s_v3) ─────────────────────────
+            -- Verifica Health > 0 para evitar apuntar a cadáveres con hitbox residual
+            if hum.Health <= 0 then continue end
+            -- Verificar que el personaje no haya sido eliminado del juego
+            if not char.Parent then continue end
+
+            -- ── PROYECCIÓN A PANTALLA ────────────────────────────────────────
+            local sp2, onScreen = camera:WorldToViewportPoint(root.Position)
+            local screenPos2D   = Vector2.new(sp2.X, sp2.Y)
+            local fovDist       = (screenPos2D - center).Magnitude
+
+            -- ── FOV FILTER ───────────────────────────────────────────────────
+            if fovDist > fovLimit then continue end
+            if not onScreen then continue end  -- Target detrás de la cámara
+
+            -- ── VISIBLE CHECK + MANIPULATION ─────────────────────────────────
+            if S.VisibleCheck and not S.Manipulation then
+                local lc = player.Character
+                if lc then
+                    local distTo3D = myRoot and (root.Position - myRoot.Position).Magnitude or math.huge
+
+                    -- Bypass del wall check si está MUY cerca (< 12 studs)
+                    -- Esto previene que el check de paredes falle en close range
+                    if distTo3D > 12 then
+                        local ok, obs = pcall(function()
+                            return camera:GetPartsObscuringTarget(
+                                {root.Position},
+                                {lc, char}
+                            )
+                        end)
+                        if ok and #obs > 0 then continue end
                     end
-                else
-                    if d2 > fovLimit then continue end
-                    if not onS then continue end
-                    if not S.Manipulation then
-                        local lc = player.Character
-                        if lc then
-                            local ok, obs = pcall(function()
-                                return camera:GetPartsObscuringTarget({root.Position}, {lc, char})
-                            end)
-                            if ok and #obs > 0 then continue end
-                        end
-                    end
-                end
-
-                if d2 < bestD then
-                    bestD = d2
-                    local pn = S.SilentAimTargetPart
-                    if pn == "Random" then
-                        local r = math.random(100)
-                        pn = r <= 30 and "Head" or (r <= 80 and "UpperTorso" or "LowerTorso")
-                    end
-                    local hp2 = char:FindFirstChild(pn) or root
-                    bestPos = hp2.Position
                 end
             end
-            cachedTargetPos = bestPos
-        else
-            cachedTargetPos = nil
+
+            -- ── SCORE: distancia en pantalla + distancia 3D normalizada ──────
+            local dist3D     = myRoot and (root.Position - myRoot.Position).Magnitude or 0
+            local normDist3D = math.min(dist3D / 500, 1)  -- Normalizar a 0-1 (max 500 studs)
+            local score      = fovDist + (normDist3D * 100)  -- Peso: pantalla prioritaria
+
+            if score < bestScore then
+                bestScore = score
+
+                -- ── SELECCIÓN DE PARTE DEL CUERPO ────────────────────────────
+                local pn = S.SilentAimTargetPart
+                if pn == "Random" then
+                    local r = math.random(100)
+                    pn = r <= 30 and "Head"
+                      or r <= 70 and "UpperTorso"
+                      or           "LowerTorso"
+                elseif pn == "Pierna" then
+                    pn = "LowerTorso"
+                elseif pn == "Pecho" then
+                    pn = "UpperTorso"
+                elseif pn == "Combo" then
+                    -- Combo: alterna cabeza/torso según RNG con peso
+                    local r = math.random(100)
+                    pn = r <= 55 and "Head" or "UpperTorso"
+                end
+
+                local targetPart = char:FindFirstChild(pn) or root
+                local targetPos  = targetPart.Position
+
+                -- ── LEAD PREDICTION (si el target se mueve) ──────────────────
+                -- Predice dónde estará el target cuando el rayo llegue
+                local vel = root.AssemblyLinearVelocity
+                if vel and vel.Magnitude > 2 and myRoot then
+                    local dist3DForLead = (targetPos - myRoot.Position).Magnitude
+                    local travelTime    = dist3DForLead / 1000  -- Velocidad raycast estimada
+                    targetPos = targetPos + vel * travelTime * 0.5  -- 50% de predicción
+                end
+
+                bestPos = targetPos
+            end
         end
+
+        -- Actualizar posición cacheada para el hook
+        cachedTargetPos = bestPos
     end)
 end)
 
