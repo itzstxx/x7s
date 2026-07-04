@@ -1,4 +1,3 @@
-
 local MaintenanceEnabled = false
 
 if MaintenanceEnabled then
