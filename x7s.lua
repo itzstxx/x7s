@@ -100,14 +100,14 @@ local function mkDefault()
         camlock_key = "F",
         fov_on = false, fov_visible = true, fov_radius = 120,
         CamLockSafeZone = true,
-        -- === SILENT AIM ===
+        -- === SILENT AIM (SyyClient System) ===
         SilentAimEnabled = false,
-        SilentAimStrength = 20,
         SilentAimRange = 150,
         SilentAimWallCheck = true,
-        SilentAimSafeZone = true,
         SilentAimTargetPart = "Random",
         silentaim_key = "H",
+        HitChance = 100,              -- Probability of hitting (1-100)
+        Manipulation = false,         -- Wall break (ignore obstacles)
         -- === TARGET ===
         TargetPart = "Random",
 
@@ -2755,10 +2755,27 @@ end
 -- ══════════════════════════════════════════════════════════════════════════════
 --  SILENT AIM - SISTEMA SYYCLIENT (Funciona con MCP de Roblox)
 -- ══════════════════════════════════════════════════════════════════════════════
+-- ══════════════════════════════════════════════════════════════════════════════
+--  SILENT AIM SYSTEM (Basado en SyyClient - mejorado)
+--  Características:
+--    • Raycast Hook (Raycast, FindPartOnRayWithIgnoreList, FindPartOnRay)
+--    • Universal Remote Hook (FireServer / InvokeServer)
+--    • HitChance configurable
+--    • Manipulation (wall break)
+--    • Visible check con GetPartsObscuringTarget
+-- ══════════════════════════════════════════════════════════════════════════════
 local cachedTargetPos = nil
 local fovCenter2D = Vector2.new(0, 0)
+local wallbreakParams = nil
 
--- Actualizar target cada frame - BASADO EN FOV PANTALLA
+-- Preparar params para wall break (Manipulation)
+pcall(function()
+    wallbreakParams = RaycastParams.new()
+    wallbreakParams.FilterType = Enum.RaycastFilterType.Include
+    wallbreakParams.FilterDescendantsInstances = {}
+end)
+
+-- Actualizar target cada frame - Sistema mejorado SyyClient
 RunService.RenderStepped:Connect(function()
     pcall(function()
     if not S.SilentAimEnabled then 
@@ -2769,26 +2786,26 @@ RunService.RenderStepped:Connect(function()
     local vp = camera.ViewportSize
     fovCenter2D = Vector2.new(vp.X * 0.5, vp.Y * 0.5)
 
-    local myChar=player.Character
-    local bestDist=math.huge
-    local bestPos=nil
+    local myChar = player.Character
+    local bestDist = math.huge
+    local bestPos = nil
 
-    for _,p in ipairs(_plrList) do
+    for _, p in ipairs(_plrList) do
         if shouldSkipPlayer(p) then continue end
-        local char=p.Character; if not char then continue end
-        local hum=char:FindFirstChildOfClass("Humanoid")
-        local root=char:FindFirstChild("HumanoidRootPart")
-        if not hum or hum.Health<=0 or not root then continue end
+        local char = p.Character; if not char then continue end
+        local hum = char:FindFirstChildOfClass("Humanoid")
+        local root = char:FindFirstChild("HumanoidRootPart")
+        if not hum or hum.Health <= 0 or not root then continue end
         
-        if S.SilentAimWallCheck and myChar then
-            local ok,obs=pcall(function()
-                return camera:GetPartsObscuringTarget({root.Position},{myChar,char})
+        -- Wall check (visible check con GetPartsObscuringTarget)
+        if S.SilentAimWallCheck and not S.Manipulation and myChar then
+            local ok, obs = pcall(function()
+                return camera:GetPartsObscuringTarget({root.Position}, {myChar, char})
             end)
-            if ok and #obs>0 then continue end
+            if ok and #obs > 0 then continue end
         end
         
-        if S.SilentAimSafeZone and char:FindFirstChild("SafeZoneShield") then continue end
-        
+        -- Screen position y FOV
         local screenPos, onScreen = camera:WorldToViewportPoint(root.Position)
         if not onScreen then continue end
         
@@ -2797,16 +2814,15 @@ RunService.RenderStepped:Connect(function()
         
         if screenDist < bestDist then
             bestDist = screenDist
-            local partName = S.SilentAimTargetPart
-            if partName == "Random" then
-                local parts = {"Head", "UpperTorso", "LowerTorso"}
-                local rng = math.random(1, #parts)
-                local part = char:FindFirstChild(parts[rng])
-                bestPos = part and part.Position or root.Position
-            else
-                local part = char:FindFirstChild(partName)
-                bestPos = part and part.Position or root.Position
+            
+            -- Seleccionar parte objetivo
+            local pn = S.SilentAimTargetPart
+            if pn == "Random" then
+                local r = math.random(100)
+                pn = r <= 30 and "Head" or (r <= 70 and "UpperTorso" or "LowerTorso")
             end
+            local targetPart = char:FindFirstChild(pn) or root
+            bestPos = targetPart.Position
         end
     end
 
@@ -2816,53 +2832,63 @@ RunService.RenderStepped:Connect(function()
     end)
 end)
 
--- HOOK METAMETHOD - COMO SYYCLIENT
+-- ══════════════════════════════════════════════════════════════════════════════
+--  HOOK METAMETHOD — SyyClient System (mejorado)
+--    Includes: HitChance check, Manipulation (wall break), both raycast & remote hooks
+-- ══════════════════════════════════════════════════════════════════════════════
 pcall(function()
     local oldNC
     oldNC=hookmetamethod(game,"__namecall",newcclosure(function(...)
         local method=getnamecallmethod()
         local args={...}
 
-        -- ── UNIVERSAL SILENT AIM: FireServer / InvokeServer ──────────
-        if S.SilentAimEnabled and cachedTargetPos
+        -- ── UNIVERSAL SILENT AIM: FireServer / InvokeServer ──────────────────
+        if S.SilentAimEnabled and cachedTargetPos 
            and not checkcaller()
            and (method=="FireServer" or method=="InvokeServer") then
-            local myC=player.Character
-            local myR=myC and myC:FindFirstChild("HumanoidRootPart")
-            local replaced=false
-            for i=2,math.min(#args,8) do
-                if typeof(args[i])=="Vector3" then
-                    local v=args[i]
-                    if v.Magnitude>2 then
-                        if myR then
-                            local d=(v-myR.Position).Magnitude
-                            if d>5 and d<2000 then 
-                                args[i]=cachedTargetPos
-                                replaced=true 
+            -- HitChance check
+            if math.random(100) <= S.HitChance then
+                local myC=player.Character
+                local myR=myC and myC:FindFirstChild("HumanoidRootPart")
+                local replaced=false
+                for i=2,math.min(#args,8) do
+                    if typeof(args[i])=="Vector3" then
+                        local v=args[i]
+                        if v.Magnitude>2 then
+                            if myR then
+                                local d=(v-myR.Position).Magnitude
+                                if d>5 and d<2000 then 
+                                    args[i]=cachedTargetPos
+                                    replaced=true 
+                                end
                             end
                         end
                     end
                 end
+                if replaced then return oldNC(table.unpack(args)) end
             end
-            if replaced then return oldNC(table.unpack(args)) end
         end
 
-        -- ── RAYCAST SILENT AIM ───────────────────────────────────────
+        -- ── RAYCAST SILENT AIM (Raycast, FindPartOnRayWithIgnoreList, FindPartOnRay) ─
         local usePos=nil
         if S.SilentAimEnabled and cachedTargetPos then usePos=cachedTargetPos end
         if not usePos then return oldNC(...) end
         if checkcaller() then return oldNC(...) end
+        if math.random(100) > S.HitChance then return oldNC(...) end
         
+        local args={...}
         if args[1]~=Workspace then return oldNC(...) end
         
         if method=="Raycast" then
             if typeof(args[2])~="Vector3" or typeof(args[3])~="Vector3" then return oldNC(...) end
             args[3]=(usePos-args[2]).Unit*1000
+            if S.Manipulation and wallbreakParams then args[4]=wallbreakParams end
             return oldNC(table.unpack(args))
         elseif method=="FindPartOnRayWithIgnoreList" or method=="FindPartOnRay" then
             if typeof(args[2])~="Ray" then return oldNC(...) end
             local o=args[2].Origin
             args[2]=Ray.new(o,(usePos-o).Unit*1000)
+            if S.Manipulation and method=="FindPartOnRayWithIgnoreList" then args[3]={} end
             return oldNC(table.unpack(args))
         end
         
