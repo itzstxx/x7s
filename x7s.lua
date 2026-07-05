@@ -2675,18 +2675,7 @@ local function isInFov(root)
     return (dx*dx + dy*dy) <= (S.fov_radius * S.fov_radius)
 end
 
-RunService.RenderStepped:Connect(function()
-    -- Visible solo cuando fov_visible está ON (independiente del filtro)
-    fovCircle.Visible = S.fov_visible
-    if S.fov_visible then
-        fovCircle.Position = getFovCenter()
-        fovCircle.Radius   = S.fov_radius
-        -- Morado cuando filtro ON, gris cuando solo visual
-        fovCircle.Color = S.fov_on
-            and Color3.fromRGB(141, 122, 174)   -- morado
-            or  Color3.fromRGB(110, 110, 110)    -- gris
-    end
-end)
+-- FOV circle actualizado dentro del SA RenderStepped principal (abajo)
 
 
 RunService:BindToRenderStep("x7sCamLock", Enum.RenderPriority.Camera.Value+1, function()
@@ -2732,121 +2721,126 @@ RunService:BindToRenderStep("x7sCamLock", Enum.RenderPriority.Camera.Value+1, fu
     end)
 end)
 
--- ══════════════════════════════════════════════
---  SILENT AIM (Interceptor de Disparos)
--- ══════════════════════════════════════════════
-local function getTargetPartPos(root, partName)
-    if not root or not root.Parent then return root.Position end
-    local char = root.Parent
-    
-    if partName == "Random" then
-        local parts = {"Head", "Torso", "UpperTorso", "LowerTorso"}
-        local rng = math.random(1, #parts)
-        local part = char:FindFirstChild(parts[rng])
-        return part and part.Position or root.Position
-    elseif partName == "Head" then
-        local head = char:FindFirstChild("Head")
-        return head and head.Position or root.Position
-    else
-        local part = char:FindFirstChild(partName)
-        return part and part.Position or root.Position
-    end
-end
+-- ══════════════════════════════════════════════════════════════
+--  SILENT AIM — Variables compartidas (declaradas ANTES del loop)
+-- ══════════════════════════════════════════════════════════════
+local cachedTargetPos = nil
 
--- ══════════════════════════════════════════════════════════════════════════════
---  SILENT AIM - SISTEMA SYYCLIENT (Funciona con MCP de Roblox)
--- ══════════════════════════════════════════════════════════════════════════════
--- ══════════════════════════════════════════════════════════════════════════════
---  SILENT AIM SYSTEM (SyyClient - ULTRA PRECISO + WALLHACK)
---  Mejoras:
---    • Predicción de movimiento del target
---    • Wallhack cuando Visible Check = OFF
---    • Mejor selección de target (distancia pantalla + 3D)
---    • Precisión máxima en hitbox
--- ══════════════════════════════════════════════════════════════════════════════
-
--- SILENT AIM — loop copiado de SyyClient
-RunService.RenderStepped:Connect(function()
-    pcall(function()
-        if S.SilentAimEnabled then
-            local center   = fovCenter2D
-            local bestD    = math.huge
-            local bestPos  = nil
-            local myChar   = player.Character
-            local myRoot   = myChar and myChar:FindFirstChild("HumanoidRootPart")
-            local fovLimit = S.fov_on and S.fov_radius or math.huge
-
-            if S.Manipulation then
-                local chars = {}
-                for _, p in ipairs(_plrList) do
-                    if p ~= player and p.Character then chars[#chars+1] = p.Character end
-                end
-                wallbreakParams.FilterDescendantsInstances = chars
-            end
-
-            for _, p in ipairs(_plrList) do
-                if shouldSkipPlayer(p) then continue end
-                local char = p.Character; if not char then continue end
-                local hum  = char:FindFirstChildOfClass("Humanoid")
-                local root = char:FindFirstChild("HumanoidRootPart")
-                if not hum or hum.Health <= 0 or not root then continue end
-
-                local sp2, onS = camera:WorldToViewportPoint(root.Position)
-                local d2 = (Vector2.new(sp2.X, sp2.Y) - center).Magnitude
-
-                if S.VisibleCheck then
-                    if not onS then continue end
-                    if d2 > fovLimit then continue end
-                    if not S.Manipulation then
-                        local lc = player.Character
-                        if lc then
-                            local ok, obs = pcall(function()
-                                return camera:GetPartsObscuringTarget({root.Position}, {lc, char})
-                            end)
-                            if ok and #obs > 0 then continue end
-                        end
-                    end
-                else
-                    if not onS then continue end
-                    if d2 > fovLimit then continue end
-                    if not S.Manipulation then
-                        local lc = player.Character
-                        if lc then
-                            local ok, obs = pcall(function()
-                                return camera:GetPartsObscuringTarget({root.Position}, {lc, char})
-                            end)
-                            if ok and #obs > 0 then continue end
-                        end
-                    end
-                end
-
-                if d2 < bestD then
-                    bestD = d2
-                    local pn = S.SilentAimTargetPart
-                    if pn == "Random" then
-                        local r = math.random(100)
-                        pn = r <= 30 and "Head" or (r <= 80 and "UpperTorso" or "LowerTorso")
-                    elseif pn == "Pierna" then pn = "LowerTorso"
-                    elseif pn == "Pecho"  then pn = "UpperTorso"
-                    elseif pn == "Combo"  then
-                        local r = math.random(100)
-                        pn = r <= 35 and "LowerTorso" or (r <= 85 and "UpperTorso" or "Head")
-                    end
-                    local hp2 = char:FindFirstChild(pn) or root
-                    bestPos   = hp2.Position
-                end
-            end
-            cachedTargetPos = bestPos
-        else
-            cachedTargetPos = nil
-        end
-    end)
-end)
-
--- HOOK — copiado de SyyClient exacto
 local wallbreakParams = RaycastParams.new()
 wallbreakParams.FilterType = Enum.RaycastFilterType.Include
 wallbreakParams.FilterDescendantsInstances = {}
+
+-- ══════════════════════════════════════════════════════════════
+--  SILENT AIM — Loop principal (idéntico a SyyClient)
+--  • center2D calculado fresco cada frame (igual que SyyClient)
+--  • wallbreakParams actualizado en el mismo frame
+--  • cachedTargetPos escrito aquí, leído por el hook abajo
+--  • Team check: integrado en shouldSkipPlayer()
+-- ══════════════════════════════════════════════════════════════
+local _saFrame = 0
+RunService.RenderStepped:Connect(function()
+    _saFrame = _saFrame + 1
+
+    -- center2D fresco cada frame — igual que SyyClient line 1904
+    local vpSize  = camera.ViewportSize
+    local center2D = Vector2.new(vpSize.X * 0.5, vpSize.Y * 0.5)
+
+    -- Actualizar FOV circle (mismo loop, sin RenderStepped separado)
+    if S.fov_visible then
+        fovCircle.Visible   = true
+        fovCircle.Position  = center2D
+        fovCircle.Radius    = S.fov_radius
+        fovCircle.Color     = S.fov_on
+            and Color3.fromRGB(141, 122, 174)
+            or  Color3.fromRGB(110, 110, 110)
+    else
+        fovCircle.Visible = false
+    end
+
+    -- SA loop corre cada 2 frames — igual que SyyClient `if frame%2==0`
+    if _saFrame % 2 ~= 0 then return end
+
+    pcall(function()
+        -- Actualizar wallbreakParams si Manipulation ON
+        if S.Manipulation then
+            local chars = {}
+            for _, p in ipairs(_plrList) do
+                if p ~= player and p.Character then
+                    chars[#chars + 1] = p.Character
+                end
+            end
+            wallbreakParams.FilterDescendantsInstances = chars
+        end
+
+        if not S.SilentAimEnabled then
+            cachedTargetPos = nil
+            return
+        end
+
+        local myChar   = player.Character
+        local myRoot   = myChar and myChar:FindFirstChild("HumanoidRootPart")
+        local fovLimit = streamModeOn and math.huge or S.fov_radius
+        local bestD    = math.huge
+        local bestPos  = nil
+
+        for _, p in ipairs(_plrList) do
+            -- shouldSkipPlayer: ya tiene player local + whitelist + team check
+            if shouldSkipPlayer(p) then continue end
+
+            local char = p.Character; if not char then continue end
+            local hum  = char:FindFirstChildOfClass("Humanoid")
+            local root = char:FindFirstChild("HumanoidRootPart")
+            if not hum or hum.Health <= 0 or not root then continue end
+
+            local sp2, onS = camera:WorldToViewportPoint(root.Position)
+            local d2 = (Vector2.new(sp2.X, sp2.Y) - center2D).Magnitude
+
+            if S.VisibleCheck then
+                if not onS then continue end
+                if d2 > fovLimit then continue end
+                if not S.Manipulation then
+                    local lc = player.Character
+                    if lc then
+                        local ok, obs = pcall(function()
+                            return camera:GetPartsObscuringTarget({root.Position}, {lc, char})
+                        end)
+                        if ok and #obs > 0 then continue end
+                    end
+                end
+            else
+                if not onS then continue end
+                if d2 > fovLimit then continue end
+                if not S.Manipulation then
+                    local lc = player.Character
+                    if lc then
+                        local ok, obs = pcall(function()
+                            return camera:GetPartsObscuringTarget({root.Position}, {lc, char})
+                        end)
+                        if ok and #obs > 0 then continue end
+                    end
+                end
+            end
+
+            if d2 < bestD then
+                bestD = d2
+                local pn = S.SilentAimTargetPart
+                if pn == "Random" then
+                    local r = math.random(100)
+                    pn = r <= 30 and "Head" or (r <= 80 and "UpperTorso" or "LowerTorso")
+                elseif pn == "Pierna" then pn = "LowerTorso"
+                elseif pn == "Pecho"  then pn = "UpperTorso"
+                elseif pn == "Combo"  then
+                    local r = math.random(100)
+                    pn = r <= 35 and "LowerTorso" or (r <= 85 and "UpperTorso" or "Head")
+                end
+                local hp2 = char:FindFirstChild(pn) or root
+                bestPos   = hp2.Position
+            end
+        end
+
+        cachedTargetPos = bestPos
+    end)
+end)
 
 pcall(function()
     local oldNC
