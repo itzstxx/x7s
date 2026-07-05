@@ -3048,7 +3048,7 @@ UserInputService.InputBegan:Connect(function(inp, proc)
     if kn == S.sa_key then
         S.SilentAimEnabled = not S.SilentAimEnabled; save()
         if refreshers["SilentAimEnabled"] then refreshers["SilentAimEnabled"]() end
-        showNotif("\u2020  Silent Aim", S.SilentAimEnabled and L("n_on") or L("n_off"), S.SilentAimEnabled)
+        showNotif("✝  Silent Aim", S.SilentAimEnabled and L("n_on") or L("n_off"), S.SilentAimEnabled)
         return
     end
 
@@ -3211,4 +3211,5 @@ task.spawn(function()
         end
     end
 end)
+
 
