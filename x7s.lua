@@ -108,7 +108,6 @@ local function mkDefault()
         Manipulation     = false,
         VisibleCheck     = true,
         SilentAimTeamCheck = true,
-        silentaim_key    = "H",
 
 
 
@@ -259,7 +258,6 @@ local Locale = {
         silent_man="Manipulation",    silent_man_d="Forces raycasts to ignore walls so hits register through them.",
         silent_hc="Hit Chance %",     silent_hc_d="Percentage of shots that get redirected to the target.",
         silent_tc="Team Check",       silent_tc_d="Don't aim at teammates (same team).",
-        silentaim_key="Silent Aim Key",
 
         n_on="Enabled", n_off="Disabled", n_reset="Keybind reset",
     },
@@ -311,7 +309,6 @@ local Locale = {
         silent_man="Manipulation",    silent_man_d="Fuerza los raycasts a ignorar paredes para que el hit registre.",
         silent_hc="Hit Chance %",     silent_hc_d="Porcentaje de disparos que se redirigen al objetivo.",
         silent_tc="Team Check",       silent_tc_d="No apunta a compañeros de equipo.",
-        silentaim_key="Tecla Silent Aim",
 
         n_on="Activado", n_off="Desactivado", n_reset="Tecla restablecida",
     }
@@ -1546,8 +1543,6 @@ makeDivider(silentCard)
 makeSlider(silentCard, "silent_hc", "HitChance", 1, 100)
 makeDivider(silentCard)
 makeToggle(silentCard, "silent_tc", "silent_tc_d", "SilentAimTeamCheck")
-makeDivider(silentCard)
-makeKeybind(silentCard, "silentaim_key", "silentaim_key")
 
 local camLockCard = makeCard(pg_aim)
 makeSecHeader(camLockCard, "x", "Cam Lock")
@@ -2703,32 +2698,6 @@ local wallbreakParams = RaycastParams.new()
 wallbreakParams.FilterType = Enum.RaycastFilterType.Include
 wallbreakParams.FilterDescendantsInstances = {}
 
--- Detectar si el tool equipado es un knife/melee
--- El knife en este juego tiene "Slash" o "Throw" como RemoteEvent hijo
--- La pistola tiene "fire" y usa Raycast internamente
-local function isKnifeEquipped()
-    local char = player.Character
-    if not char then return false end
-    for _, obj in ipairs(char:GetChildren()) do
-        if obj:IsA("Tool") then
-            -- Si tiene Slash/Throw/Stealth RE → es knife/melee
-            if obj:FindFirstChild("Slash") or obj:FindFirstChild("Throw")
-               or obj:FindFirstChild("Stealth") or obj:FindFirstChild("FlingKnifeEvent") then
-                return true
-            end
-            -- También detectar por KnifePartsFolder en el char (este juego lo usa)
-        end
-    end
-    -- Fallback: KnifePartsFolder visible en el char (partes no transparentes)
-    local kpf = char:FindFirstChild("KnifePartsFolder")
-    if kpf then
-        for _, p in ipairs(kpf:GetDescendants()) do
-            if p:IsA("BasePart") and p.Transparency < 1 then return true end
-        end
-    end
-    return false
-end
-
 -- Hook __namecall: intercepta Raycast / FindPartOnRay* y redirige al objetivo
 pcall(function()
     if not hookmetamethod then return end
@@ -2738,8 +2707,6 @@ pcall(function()
         local usePos = cachedTargetPos
         if not (S.SilentAimEnabled and usePos) then return oldNC(...) end
         if checkcaller() then return oldNC(...) end
-        -- No redirigir si el jugador lleva knife/melee
-        if isKnifeEquipped() then return oldNC(...) end
         if math.random(100) > S.HitChance then return oldNC(...) end
 
         local args = { ... }
@@ -2988,14 +2955,6 @@ UserInputService.InputBegan:Connect(function(inp, proc)
         S.CamLockEnabled = not S.CamLockEnabled; save()
         if refreshers["CamLockEnabled"] then refreshers["CamLockEnabled"]() end
         showNotif("✝  Cam Lock", S.CamLockEnabled and L("n_on") or L("n_off"), S.CamLockEnabled)
-        return
-    end
-
-    -- Toggle Silent Aim
-    if kn == S.silentaim_key then
-        S.SilentAimEnabled = not S.SilentAimEnabled; save()
-        if refreshers["SilentAimEnabled"] then refreshers["SilentAimEnabled"]() end
-        showNotif("✝  Silent Aim", S.SilentAimEnabled and L("n_on") or L("n_off"), S.SilentAimEnabled)
         return
     end
 
