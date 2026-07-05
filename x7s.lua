@@ -107,6 +107,7 @@ local function mkDefault()
         HitChance        = 100,
         Manipulation     = false,
         VisibleCheck     = true,
+        SilentAimTeamCheck = true,
 
 
 
@@ -189,6 +190,18 @@ local function shouldSkipPlayer(p)
     return false
 end
 
+-- Team check: GetAttribute("Team") = "TeamBlue"/"TeamRed"
+local function isSameTeam(p1, p2)
+    if not p1 or not p2 then return false end
+    local t1 = p1:GetAttribute("Team")
+    local t2 = p2:GetAttribute("Team")
+    if t1 and t2 and typeof(t1)=="string" and typeof(t2)=="string" then
+        return t1 == t2
+    end
+    if p1.Team and p2.Team and p1.Team == p2.Team then return true end
+    return false
+end
+
 local Locale = {
     English = {
         tab_esp="ESP", tab_hbx="HBX", tab_trg="TRG", tab_cfg="CFG",
@@ -244,6 +257,7 @@ local Locale = {
         silent_vis="Visible Check",   silent_vis_d="Only target enemies that are actually visible (no wallbang).",
         silent_man="Manipulation",    silent_man_d="Forces raycasts to ignore walls so hits register through them.",
         silent_hc="Hit Chance %",     silent_hc_d="Percentage of shots that get redirected to the target.",
+        silent_tc="Team Check",       silent_tc_d="Don't aim at teammates (same team).",
 
         n_on="Enabled", n_off="Disabled", n_reset="Keybind reset",
     },
@@ -294,6 +308,7 @@ local Locale = {
         silent_vis="Visible Check",   silent_vis_d="Solo apunta a enemigos que estén realmente a la vista (sin paredes).",
         silent_man="Manipulation",    silent_man_d="Fuerza los raycasts a ignorar paredes para que el hit registre.",
         silent_hc="Hit Chance %",     silent_hc_d="Porcentaje de disparos que se redirigen al objetivo.",
+        silent_tc="Team Check",       silent_tc_d="No apunta a compañeros de equipo.",
 
         n_on="Activado", n_off="Desactivado", n_reset="Tecla restablecida",
     }
@@ -1526,6 +1541,8 @@ makeDivider(silentCard)
 makeToggle(silentCard, "silent_man", "silent_man_d", "Manipulation")
 makeDivider(silentCard)
 makeSlider(silentCard, "silent_hc", "HitChance", 1, 100)
+makeDivider(silentCard)
+makeToggle(silentCard, "silent_tc", "silent_tc_d", "SilentAimTeamCheck")
 
 local camLockCard = makeCard(pg_aim)
 makeSecHeader(camLockCard, "x", "Cam Lock")
@@ -2751,6 +2768,7 @@ RunService.RenderStepped:Connect(function()
     local bestD, bestPos = math.huge, nil
     for _, p in ipairs(_plrList) do
         if shouldSkipPlayer(p) then continue end
+        if S.SilentAimTeamCheck and isSameTeam(player, p) then continue end
         local char = p.Character; if not char then continue end
         local hum  = char:FindFirstChildOfClass("Humanoid")
         local root = char:FindFirstChild("HumanoidRootPart")
