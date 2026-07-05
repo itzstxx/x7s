@@ -102,17 +102,23 @@ local function mkDefault()
         CamLockSafeZone = true,
         -- === TARGET ===
         TargetPart = "Random",
-        -- === MM2 ===
-        mm2_shoot_key = "H",
-        mm2_esp_key   = "J",
-        mm2_shoot_offset = 2.8,
-        mm2_esp_dist     = 300,
-        mm2_gunDropESP   = false,
-        mm2_murdLockEnabled = false,
-        mm2_murdLockKey     = "K",
-        mm2_murdLockStrength = 30,
-        mm2_murdLockFov       = 120,
-        mm2_murdLockWallCheck = true,
+        -- === SILENT AIM (migrado de SyyClient) ===
+        SilentAimEnabled = false,
+        HitChance        = 100,
+        Manipulation     = false,
+        VisibleCheck     = true,
+        SilentAimTeamCheck = true,
+
+
+
+
+
+
+
+
+
+
+
 
         -- === EXTRAS ===
         InfStamina   = false,
@@ -184,6 +190,18 @@ local function shouldSkipPlayer(p)
     return false
 end
 
+-- Team check: GetAttribute("Team") = "TeamBlue"/"TeamRed"
+local function isSameTeam(p1, p2)
+    if not p1 or not p2 then return false end
+    local t1 = p1:GetAttribute("Team")
+    local t2 = p2:GetAttribute("Team")
+    if t1 and t2 and typeof(t1)=="string" and typeof(t2)=="string" then
+        return t1 == t2
+    end
+    if p1.Team and p2.Team and p1.Team == p2.Team then return true end
+    return false
+end
+
 local Locale = {
     English = {
         tab_esp="ESP", tab_hbx="HBX", tab_trg="TRG", tab_cfg="CFG",
@@ -214,7 +232,7 @@ local Locale = {
         camlock_range="Cam Lock Range",     camlock_range_d="Maximum distance to target (50-500).",
         camlock_wallcheck="Wall Check",     camlock_wallcheck_d="Only lock on visible enemies.",
         camlock_safezone="Safe Zone",       camlock_safezone_d="Don't lock on players inside a safe zone.",
-        
+
         whitelist_title="Whitelist Manager", whitelist_add="Add Player", whitelist_remove="Remove",
 
         target_part="Target Part",
@@ -234,7 +252,13 @@ local Locale = {
         st_r1="Reset Toggle UI Keybind",  st_r1_d="Reset this keybind to its default value.",
         st_r2="Reset All Keybinds",       st_r2_d="Reset all keybinds to their default values.",
 
-        mm2_offset="Prediction Offset",
+
+        silent_on="Silent Aim",      silent_on_d="Redirects your shots to the closest enemy automatically.",
+        silent_vis="Visible Check",   silent_vis_d="Only target enemies that are actually visible (no wallbang).",
+        silent_man="Manipulation",    silent_man_d="Forces raycasts to ignore walls so hits register through them.",
+        silent_hc="Hit Chance %",     silent_hc_d="Percentage of shots that get redirected to the target.",
+        silent_tc="Team Check",       silent_tc_d="Don't aim at teammates (same team).",
+
         n_on="Enabled", n_off="Disabled", n_reset="Keybind reset",
     },
     ["Español"] = {
@@ -263,7 +287,7 @@ local Locale = {
         camlock_range="Rango Cam Lock",     camlock_range_d="Distancia máxima al objetivo (50-500).",
         camlock_wallcheck="Wall Check",     camlock_wallcheck_d="Solo bloquea enemigos visibles.",
         camlock_safezone="Safe Zone",       camlock_safezone_d="No bloquea a jugadores dentro de una zona segura.",
-        
+
         whitelist_title="Gestor de Whitelist", whitelist_add="Añadir Jugador", whitelist_remove="Eliminar",
         target_part="Parte Objetivo",
         extras_title="Extras",
@@ -279,7 +303,13 @@ local Locale = {
         st_stream="Stream Mode",       st_stream_d="Oculta la GUI y desactiva el ESP visual. Tecla: RightAlt.",
         st_r1="Restablecer Tecla UI",     st_r1_d="Restablece esta tecla a su valor predeterminado.",
         st_r2="Restablecer Todas",        st_r2_d="Restablece todas las teclas a sus valores predeterminados.",
-        mm2_offset="Offset de Predicción",
+
+        silent_on="Silent Aim",      silent_on_d="Redirige tus disparos al enemigo más cercano automáticamente.",
+        silent_vis="Visible Check",   silent_vis_d="Solo apunta a enemigos que estén realmente a la vista (sin paredes).",
+        silent_man="Manipulation",    silent_man_d="Fuerza los raycasts a ignorar paredes para que el hit registre.",
+        silent_hc="Hit Chance %",     silent_hc_d="Porcentaje de disparos que se redirigen al objetivo.",
+        silent_tc="Team Check",       silent_tc_d="No apunta a compañeros de equipo.",
+
         n_on="Activado", n_off="Desactivado", n_reset="Tecla restablecida",
     }
 }
@@ -403,6 +433,26 @@ panel.BackgroundColor3 = Color3.fromRGB(8, 6, 8)
 panel.BorderSizePixel = 0; panel.ClipsDescendants = true; panel.ZIndex = 2
 local panelStroke = Instance.new("UIStroke", panel)
 panelStroke.Color = Color3.fromRGB(58, 58, 58); panelStroke.Transparency = 0; panelStroke.Thickness = 1
+
+-- == MOBILE ADAPTATION ===========================================
+local isMobile = UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled
+local panelScale = Instance.new("UIScale", panel)
+local glowScale  = Instance.new("UIScale", glow)
+if isMobile then
+    -- Centrar por ancla para que el UIScale escale desde el centro
+    panel.AnchorPoint = Vector2.new(0.5, 0.5)
+    panel.Position    = UDim2.fromScale(0.5, 0.5)
+    glow.AnchorPoint  = Vector2.new(0.5, 0.5)
+    glow.Position     = UDim2.fromScale(0.5, 0.5)
+    local function fitScale()
+        local vp = camera.ViewportSize
+        local s  = math.clamp(math.min(vp.X * 0.95 / GW, vp.Y * 0.92 / GH), 0.4, 1)
+        panelScale.Scale = s
+        glowScale.Scale  = s
+    end
+    fitScale()
+    camera:GetPropertyChangedSignal("ViewportSize"):Connect(fitScale)
+end
 
 local scanlines = Instance.new("Frame", panel)
 scanlines.Name = "Scanlines"
@@ -622,7 +672,7 @@ local function makeContentPage()
 end
 
 -- SVG-like icon labels (usando Unicode para los iconos de nav)
-local isMM2 = true
+
 
 local NAV_DATA = {
     { icon = "*", label = "Inicio" },
@@ -630,9 +680,9 @@ local NAV_DATA = {
     { icon = "+", label = "Extras" },
     { icon = "#", label = "Ajustes" },
 }
-if isMM2 then
-    table.insert(NAV_DATA, { icon = "M", label = "MM2" })
-end
+
+
+
 
 local function setPage(idx)
     if activePage == idx then return end
@@ -1011,22 +1061,32 @@ local function makeSlider(parent, titleKey, stateKey, mn, mx, cb)
     end
     setVal(S[stateKey])
 
+    -- Hit area alto para PC + touch (la barra real es de 4px)
+    local hit = Instance.new("TextButton", row)
+    hit.BackgroundTransparency = 1; hit.Text = ""
+    hit.Size = UDim2.new(1,-28,0,30); hit.Position = UDim2.fromOffset(14,21)
+    hit.ZIndex = 6; hit.AutoButtonColor = false
+
     local sliding = false
-    trk.InputBegan:Connect(function(inp)
-        if inp.UserInputType == Enum.UserInputType.MouseButton1 then
-            sliding = true
-            local abs = trk.AbsolutePosition; local sz = trk.AbsoluteSize
-            if sz.X > 0 then setVal(mn + math.clamp((inp.Position.X-abs.X)/sz.X,0,1)*(mx-mn)) end
+    local function setFromInput(inp)
+        local abs = trk.AbsolutePosition; local sz = trk.AbsoluteSize
+        if sz.X > 0 then setVal(mn + math.clamp((inp.Position.X-abs.X)/sz.X,0,1)*(mx-mn)) end
+    end
+    hit.InputBegan:Connect(function(inp)
+        if inp.UserInputType == Enum.UserInputType.MouseButton1
+        or inp.UserInputType == Enum.UserInputType.Touch then
+            sliding = true; setFromInput(inp)
         end
     end)
     UserInputService.InputChanged:Connect(function(inp)
-        if sliding and inp.UserInputType == Enum.UserInputType.MouseMovement then
-            local abs = trk.AbsolutePosition; local sz = trk.AbsoluteSize
-            if sz.X > 0 then setVal(mn + math.clamp((inp.Position.X-abs.X)/sz.X,0,1)*(mx-mn)) end
+        if sliding and (inp.UserInputType == Enum.UserInputType.MouseMovement
+                     or inp.UserInputType == Enum.UserInputType.Touch) then
+            setFromInput(inp)
         end
     end)
     UserInputService.InputEnded:Connect(function(inp)
-        if inp.UserInputType == Enum.UserInputType.MouseButton1 then sliding = false end
+        if inp.UserInputType == Enum.UserInputType.MouseButton1
+        or inp.UserInputType == Enum.UserInputType.Touch then sliding = false end
     end)
     return row
 end
@@ -1256,22 +1316,32 @@ local function makeColorPicker(parent, label, getR, getG, getB, setRGB)
         end
         setV(rgbVals[ci])
 
+        -- Hit area alto para PC + touch (la barra real es de 4px)
+        local hit2 = Instance.new("TextButton", sRow)
+        hit2.BackgroundTransparency = 1; hit2.Text = ""
+        hit2.Size = UDim2.new(1,-52,1,0); hit2.Position = UDim2.fromOffset(22,0)
+        hit2.ZIndex = 6; hit2.AutoButtonColor = false
+
         local sl2 = false
-        trk2.InputBegan:Connect(function(inp)
-            if inp.UserInputType==Enum.UserInputType.MouseButton1 then
-                sl2=true
-                local a=trk2.AbsolutePosition; local sz=trk2.AbsoluteSize
-                if sz.X>0 then setV((inp.Position.X-a.X)/sz.X*255) end
+        local function setFromInput(inp)
+            local a=trk2.AbsolutePosition; local sz=trk2.AbsoluteSize
+            if sz.X>0 then setV((inp.Position.X-a.X)/sz.X*255) end
+        end
+        hit2.InputBegan:Connect(function(inp)
+            if inp.UserInputType==Enum.UserInputType.MouseButton1
+            or inp.UserInputType==Enum.UserInputType.Touch then
+                sl2=true; setFromInput(inp)
             end
         end)
         UserInputService.InputChanged:Connect(function(inp)
-            if sl2 and inp.UserInputType==Enum.UserInputType.MouseMovement then
-                local a=trk2.AbsolutePosition; local sz=trk2.AbsoluteSize
-                if sz.X>0 then setV((inp.Position.X-a.X)/sz.X*255) end
+            if sl2 and (inp.UserInputType==Enum.UserInputType.MouseMovement
+                     or inp.UserInputType==Enum.UserInputType.Touch) then
+                setFromInput(inp)
             end
         end)
         UserInputService.InputEnded:Connect(function(inp)
-            if inp.UserInputType==Enum.UserInputType.MouseButton1 then sl2=false end
+            if inp.UserInputType==Enum.UserInputType.MouseButton1
+            or inp.UserInputType==Enum.UserInputType.Touch then sl2=false end
         end)
     end
 
@@ -1289,7 +1359,7 @@ local pg_inicio   = pages[1]
 local pg_aim      = pages[2]
 local pg_extras   = pages[3]
 local pg_ajustes  = pages[4]
-local pg_mm2      = isMM2 and pages[5] or nil
+
 
 -- ══ INICIO PAGE ══════════════════════════════════
 
@@ -1459,6 +1529,21 @@ makeToggle(summerCard, "summer_on", "summer_on_d", "summer_on")
 
 
 -- ══ AIM PAGE ═══════════════════════════════════════════════════
+-- == SILENT AIM CARD ==============================================
+local silentCard = makeCard(pg_aim)
+makeSecHeader(silentCard, "o", "Silent Aim")
+makeToggle(silentCard, "silent_on", "silent_on_d", "SilentAimEnabled", function(on)
+    showNotif("✝  Silent Aim", on and L("n_on") or L("n_off"), on)
+end)
+makeDivider(silentCard)
+makeToggle(silentCard, "silent_vis", "silent_vis_d", "VisibleCheck")
+makeDivider(silentCard)
+makeToggle(silentCard, "silent_man", "silent_man_d", "Manipulation")
+makeDivider(silentCard)
+makeSlider(silentCard, "silent_hc", "HitChance", 1, 100)
+makeDivider(silentCard)
+makeToggle(silentCard, "silent_tc", "silent_tc_d", "SilentAimTeamCheck")
+
 local camLockCard = makeCard(pg_aim)
 makeSecHeader(camLockCard, "x", "Cam Lock")
 makeToggle(camLockCard, "camlock_on", "camlock_on_d", "CamLockEnabled", function(on)
@@ -1883,758 +1968,6 @@ local guiColorRow, guiColorPop = makeColorPicker(cfgCard, "GUI Accent Color",
 
 -- Activar página 1 por defecto
 setPage = setPage  -- referencia correcta (definida arriba con forward)
-
--- ══════════════════════════════════════════════════════════════
---  MM2 — Murder Mystery 2 (solo carga si game.GameId == 142823291)
--- ══════════════════════════════════════════════════════════════
-if isMM2 and pg_mm2 then
-
-    -- ===========================================
-    --  MM2 - LOGICA
-    -- ===========================================
-    local mm2ESP_on      = false
-    local mm2EspObjs     = {}
-    local mm2loopThrow   = false
-    local mm2autoGunDrop = false
-    local mm2trapDetect  = false
-    local mm2killAuraCon = nil
-
-    local function mm2_findByTool(toolName)
-        for _, p in ipairs(Players:GetPlayers()) do
-            if p.Backpack:FindFirstChild(toolName) then return p end
-            if p.Character and p.Character:FindFirstChild(toolName) then return p end
-        end
-        return nil
-    end
-    local mm2_findMurderer = function() return mm2_findByTool("Knife") end
-    local mm2_findSheriff  = function() return mm2_findByTool("Gun") end
-
-    local function mm2_findNearest()
-        local best, bestD = nil, math.huge
-        local myHRP = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
-        if not myHRP then return nil end
-        for _, p in ipairs(Players:GetPlayers()) do
-            if p == player then continue end
-            if not p.Character then continue end
-            local hrp = p.Character:FindFirstChild("HumanoidRootPart")
-            if not hrp then continue end
-            local d = (hrp.Position - myHRP.Position).Magnitude
-            if d < bestD then bestD=d; best=p end
-        end
-        return best
-    end
-
-    -- ESP
-    local function mm2_clearESP()
-        for _, hl in pairs(mm2EspObjs) do pcall(function() hl:Destroy() end) end
-        mm2EspObjs = {}
-    end
-    local function mm2_buildESP()
-        mm2_clearESP()
-        if not mm2ESP_on then return end
-        local murd = mm2_findMurderer()
-        local sher = mm2_findSheriff()
-        local myHRP = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
-        local maxDist = S.mm2_esp_dist or 300
-        for _, p in ipairs(Players:GetPlayers()) do
-            if p == player then continue end
-            if not p.Character then continue end
-            -- Filtrar por distancia
-            local pHRP = p.Character:FindFirstChild("HumanoidRootPart")
-            if myHRP and pHRP and (pHRP.Position - myHRP.Position).Magnitude > maxDist then continue end
-            local hl = Instance.new("Highlight")
-            hl.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
-            hl.FillTransparency = 0.5
-            hl.Adornee = p.Character
-            hl.Parent = gui
-            if p == murd then
-                hl.FillColor = Color3.fromRGB(255,30,30); hl.OutlineColor = Color3.fromRGB(255,30,30)
-            elseif p == sher then
-                hl.FillColor = Color3.fromRGB(0,160,255); hl.OutlineColor = Color3.fromRGB(0,160,255)
-            else
-                hl.FillColor = Color3.fromRGB(0,220,80); hl.OutlineColor = Color3.fromRGB(0,220,80)
-            end
-            mm2EspObjs[p] = hl
-        end
-    end
-    -- Actualizar ESP cada 2s para respetar distancia dinamicamente
-    task.spawn(function()
-        while task.wait(2) do
-            if mm2ESP_on then mm2_buildESP() end
-        end
-    end)
-    Players.PlayerAdded:Connect(function(p)
-        p.CharacterAdded:Connect(function() task.wait(0.5); if mm2ESP_on then mm2_buildESP() end end)
-    end)
-    for _, p in ipairs(Players:GetPlayers()) do
-        p.CharacterAdded:Connect(function() task.wait(0.5); if mm2ESP_on then mm2_buildESP() end end)
-    end
-
-    -- Prediccion de posicion
-    local function mm2_getPred(target)
-        local tc = target.Character; if not tc then return Vector3.zero end
-        local hrp = tc:FindFirstChild("HumanoidRootPart"); if not hrp then return Vector3.zero end
-        local vel = hrp.AssemblyLinearVelocity
-        local hum = tc:FindFirstChildOfClass("Humanoid")
-        local md  = hum and hum.MoveDirection or Vector3.zero
-        local off = S.mm2_shoot_offset or 2.8
-        return hrp.Position + (vel*Vector3.new(0.75,0.5,0.75))*(off/15) + md*off
-    end
-
-    -- Disparar sheriff (no falla: teletransporta bala al HRP del murder)
-    local function mm2_shoot()
-        local murd = mm2_findMurderer()
-        if not murd then showNotif("+  MM2","No hay asesino.",false); return end
-        local myChar = player.Character; if not myChar then return end
-        if not myChar:FindFirstChild("Gun") then
-            local hum=myChar:FindFirstChildOfClass("Humanoid")
-            local g=player.Backpack:FindFirstChild("Gun")
-            if hum and g then hum:EquipTool(g) else showNotif("+  MM2","No tienes pistola.",false); return end
-        end
-        local murdChar=murd.Character; if not murdChar then return end
-        local murdHRP=murdChar:FindFirstChild("HumanoidRootPart"); if not murdHRP then return end
-        local gun  = myChar:FindFirstChild("Gun")
-        local rem  = gun and gun:FindFirstChild("Shoot",true)
-        if rem and rem:IsA("RemoteEvent") then
-            -- Disparo desde el HRP del murder hacia el mismo: hit garantizado
-            local murdPos = murdHRP.Position + Vector3.new(0,1,0)
-            rem:FireServer(CFrame.new(murdPos), CFrame.new(murdHRP.Position))
-            showNotif("+  MM2","Disparo enviado.",true)
-        else
-            -- Fallback: buscar cualquier remote en gun
-            for _, v in ipairs(gun:GetDescendants()) do
-                if v:IsA("RemoteEvent") or v:IsA("RemoteFunction") then
-                    local murdPos = murdHRP.Position + Vector3.new(0,1,0)
-                    pcall(function()
-                        if v:IsA("RemoteEvent") then
-                            v:FireServer(CFrame.new(murdPos), CFrame.new(murdHRP.Position))
-                        else
-                            v:InvokeServer(CFrame.new(murdPos), CFrame.new(murdHRP.Position))
-                        end
-                    end)
-                    showNotif("+  MM2","Disparo (fallback) enviado.",true)
-                    return
-                end
-            end
-            showNotif("+  MM2","Remote no encontrado.",false)
-        end
-    end
-
-    -- ===========================================
-    --  MM2 - CAM LOCK AL MURDERER (solo con Gun equipada)
-    -- ===========================================
-    local mm2MurdLockTarget = nil
-
-    local function mm2_hasGunEquipped()
-        local myChar = player.Character
-        if not myChar then return false end
-        local tool = myChar:FindFirstChildOfClass("Tool")
-        return tool ~= nil and tool.Name == "Gun"
-    end
-
-    RunService:BindToRenderStep("x7sMM2MurdLock", Enum.RenderPriority.Camera.Value + 1, function()
-        pcall(function()
-            if not S.mm2_murdLockEnabled then mm2MurdLockTarget = nil; return end
-            if not mm2_hasGunEquipped() then mm2MurdLockTarget = nil; return end
-
-            local murd = mm2_findMurderer()
-            if not murd or murd == player or not murd.Character then mm2MurdLockTarget = nil; return end
-
-            local murdChar = murd.Character
-            local murdHum  = murdChar:FindFirstChildOfClass("Humanoid")
-            local murdRoot = murdChar:FindFirstChild("HumanoidRootPart")
-            if not murdHum or murdHum.Health <= 0 or not murdRoot then mm2MurdLockTarget = nil; return end
-
-            local myChar = player.Character
-
-            -- Wall check opcional
-            if S.mm2_murdLockWallCheck and myChar then
-                local ok, obs = pcall(function()
-                    return camera:GetPartsObscuringTarget({murdRoot.Position}, {myChar, murdChar})
-                end)
-                if ok and #obs > 0 then mm2MurdLockTarget = nil; return end
-            end
-
-            -- FOV check (radio en pantalla, igual al sistema general de FOV)
-            local sp, onScreen = camera:WorldToViewportPoint(murdRoot.Position)
-            if not onScreen then mm2MurdLockTarget = nil; return end
-            local vp = camera.ViewportSize
-            local center = Vector2.new(vp.X * 0.5, vp.Y * 0.5)
-            local dx, dy = sp.X - center.X, sp.Y - center.Y
-            if (dx*dx + dy*dy) > (S.mm2_murdLockFov * S.mm2_murdLockFov) then
-                mm2MurdLockTarget = nil; return
-            end
-
-            mm2MurdLockTarget = murdRoot
-
-            local camPos = camera.CFrame.Position
-            local targetPos = Vector3.new(murdRoot.Position.X, murdRoot.Position.Y + 1.5, murdRoot.Position.Z)
-            local rawDir = targetPos - camPos
-            if rawDir.Magnitude < 0.1 then return end
-            local strength = math.clamp(S.mm2_murdLockStrength, 1, 100) * 0.003
-            local newLook = camera.CFrame.LookVector:Lerp(rawDir.Unit, strength)
-            if newLook.Magnitude > 0.01 then
-                camera.CFrame = CFrame.lookAt(camPos, camPos + newLook.Unit)
-            end
-        end)
-    end)
-
-    -- Lanzar cuchillo asesino
-    local function mm2_knifeThrow(silent)
-        local murd=mm2_findMurderer()
-        if murd ~= player then
-            if not silent then showNotif("+  MM2","No eres el asesino.",false) end; return
-        end
-        local myChar=player.Character; if not myChar then return end
-        if not myChar:FindFirstChild("Knife") then
-            local hum=myChar:FindFirstChildOfClass("Humanoid")
-            local k=player.Backpack:FindFirstChild("Knife")
-            if hum and k then hum:EquipTool(k) else
-                if not silent then showNotif("+  MM2","No tienes cuchillo.",false) end; return
-            end
-        end
-        local tgt=mm2_findNearest(); if not tgt or not tgt.Character then
-            if not silent then showNotif("+  MM2","No hay jugador cercano.",false) end; return
-        end
-        local tgtHRP=tgt.Character:FindFirstChild("HumanoidRootPart"); if not tgtHRP then return end
-        local knife=myChar:FindFirstChild("Knife"); if not knife then return end
-        local throwEv=knife:FindFirstChild("Events",true) and knife:FindFirstChild("Events").KnifeThrown
-        if throwEv then
-            local myHRP=myChar:FindFirstChild("HumanoidRootPart")
-            throwEv:FireServer(CFrame.new(myHRP and myHRP.Position or tgtHRP.Position),CFrame.new(mm2_getPred(tgt)))
-            if not silent then showNotif("+  MM2","Cuchillo lanzado.",true) end
-        end
-    end
-
-    -- Matar cercano como asesino (slash)
-    local function mm2_killNearest()
-        local murd=mm2_findMurderer()
-        if murd ~= player then showNotif("+  MM2","No eres el asesino.",false); return end
-        local myChar=player.Character; if not myChar then return end
-        if not myChar:FindFirstChild("Knife") then
-            local hum=myChar:FindFirstChildOfClass("Humanoid")
-            local k=player.Backpack:FindFirstChild("Knife")
-            if hum and k then hum:EquipTool(k) else showNotif("+  MM2","No tienes cuchillo.",false); return end
-        end
-        local tgt=mm2_findNearest(); if not tgt or not tgt.Character then showNotif("+  MM2","Nadie cerca.",false); return end
-        local tgtHRP=tgt.Character:FindFirstChild("HumanoidRootPart"); if not tgtHRP then return end
-        local myHRP=myChar:FindFirstChild("HumanoidRootPart"); if not myHRP then return end
-        tgtHRP.Anchored=true
-        tgtHRP.CFrame=myHRP.CFrame+myHRP.CFrame.LookVector*2
-        task.wait(0.1)
-        local knife=myChar:FindFirstChild("Knife")
-        local stab=knife and knife:FindFirstChild("Stab",true)
-        if stab then stab:FireServer("Slash"); showNotif("+  MM2","Kill enviado.",true) end
-    end
-
-    -- Matar a todos como asesino
-    local function mm2_killAll()
-        local murd=mm2_findMurderer()
-        if murd ~= player then showNotif("+  MM2","No eres el asesino.",false); return end
-        local myChar=player.Character; if not myChar then return end
-        if not myChar:FindFirstChild("Knife") then
-            local hum=myChar:FindFirstChildOfClass("Humanoid")
-            local k=player.Backpack:FindFirstChild("Knife")
-            if hum and k then hum:EquipTool(k) else showNotif("+  MM2","No tienes cuchillo.",false); return end
-        end
-        local myHRP=myChar:FindFirstChild("HumanoidRootPart"); if not myHRP then return end
-        for _, p in ipairs(Players:GetPlayers()) do
-            if p==player then continue end
-            if p.Character and p.Character:FindFirstChild("HumanoidRootPart") then
-                p.Character.HumanoidRootPart.Anchored=true
-                p.Character.HumanoidRootPart.CFrame=myHRP.CFrame+myHRP.CFrame.LookVector*1
-            end
-        end
-        local knife=myChar:FindFirstChild("Knife")
-        local stab=knife and knife:FindFirstChild("Stab",true)
-        if stab then stab:FireServer("Slash"); showNotif("+  MM2","Kill all enviado.",true) end
-    end
-
-    -- Fling
-    local function mm2_fling(tgt)
-        if not tgt or not tgt.Character then showNotif("+  MM2","Objetivo invalido.",false); return end
-        local myChar=player.Character; if not myChar then return end
-        local myHRP=myChar:FindFirstChild("HumanoidRootPart"); if not myHRP then return end
-        local tgtHRP=tgt.Character:FindFirstChild("HumanoidRootPart"); if not tgtHRP then return end
-        local myHum=myChar:FindFirstChildOfClass("Humanoid"); if not myHum then return end
-        local oldPos=myHRP.CFrame
-        local bv=Instance.new("BodyVelocity",myHRP)
-        bv.Velocity=Vector3.new(9e8,9e8,9e8); bv.MaxForce=Vector3.new(1/0,1/0,1/0)
-        myHum:SetStateEnabled(Enum.HumanoidStateType.Seated,false)
-        local t=tick()
-        repeat
-            myHRP.CFrame=CFrame.new(tgtHRP.Position)+Vector3.new(0,1.5,0)
-            myHRP.Velocity=Vector3.new(9e7,9e7*10,9e7)
-            myHRP.RotVelocity=Vector3.new(9e8,9e8,9e8)
-            task.wait()
-        until tgtHRP.Velocity.Magnitude>500 or tick()-t>3
-        bv:Destroy()
-        myHum:SetStateEnabled(Enum.HumanoidStateType.Seated,true)
-        myHRP.CFrame=oldPos
-        showNotif("+  MM2","Fling enviado.",true)
-    end
-
-    -- Loop knife throw
-    task.spawn(function()
-        while task.wait(1.5) do
-            if mm2loopThrow then mm2_knifeThrow(true) end
-        end
-    end)
-
-    -- Kill aura loop
-    local function mm2_setKillAura(on)
-        if mm2killAuraCon then mm2killAuraCon:Disconnect(); mm2killAuraCon=nil end
-        if not on then return end
-        mm2killAuraCon = RunService.Heartbeat:Connect(function()
-            local myChar=player.Character; if not myChar then return end
-            local myHRP=myChar:FindFirstChild("HumanoidRootPart"); if not myHRP then return end
-            local knife=myChar:FindFirstChild("Knife"); if not knife then return end
-            local stab=knife:FindFirstChild("Stab",true); if not stab then return end
-            for _, p in ipairs(Players:GetPlayers()) do
-                if p==player then continue end
-                if not p.Character then continue end
-                local hrp=p.Character:FindFirstChild("HumanoidRootPart"); if not hrp then continue end
-                if (hrp.Position-myHRP.Position).Magnitude < 7 then
-                    hrp.Anchored=true
-                    hrp.CFrame=myHRP.CFrame+myHRP.CFrame.LookVector*2
-                    task.wait(0.1)
-                    stab:FireServer("Slash")
-                    return
-                end
-            end
-        end)
-    end
-
-    -- ===========================================
-    --  MM2 - HELPERS UI
-    -- ===========================================
-    local function mm2Divider(parent)
-        local d=Instance.new("Frame",parent)
-        d.Size=UDim2.new(1,0,0,1); d.BackgroundColor3=Color3.fromRGB(38,32,50); d.BorderSizePixel=0
-    end
-
-    local function mm2Toggle(parent, label, getState, onToggle)
-        local row=Instance.new("Frame",parent)
-        row.Size=UDim2.new(1,0,0,42); row.BackgroundTransparency=1
-        local tl=Instance.new("TextLabel",row)
-        tl.Size=UDim2.new(1,-90,0,16); tl.Position=UDim2.fromOffset(14,13)
-        tl.BackgroundTransparency=1; tl.Text=label
-        tl.TextColor3=Color3.fromRGB(215,215,215); tl.Font=Enum.Font.GothamMedium; tl.TextSize=12
-        tl.TextXAlignment=Enum.TextXAlignment.Left; tl.TextWrapped=true
-        local track=Instance.new("Frame",row)
-        track.Size=UDim2.fromOffset(42,22); track.Position=UDim2.new(1,-56,0.5,-11)
-        track.BackgroundColor3=Color3.fromRGB(38,32,54); track.BorderSizePixel=0
-        local tc=Instance.new("UICorner",track); tc.CornerRadius=UDim.new(1,0)
-        local thumb=Instance.new("Frame",track)
-        thumb.Size=UDim2.fromOffset(16,16); thumb.Position=UDim2.new(0,3,0.5,-8)
-        thumb.BackgroundColor3=Color3.fromRGB(180,170,200); thumb.BorderSizePixel=0
-        local thc=Instance.new("UICorner",thumb); thc.CornerRadius=UDim.new(1,0)
-        local function refresh()
-            local on=getState()
-            local col = on and accentColor or Color3.fromRGB(38,32,54)
-            local pos = on and UDim2.new(1,-19,0.5,-8) or UDim2.new(0,3,0.5,-8)
-            track.BackgroundColor3 = col
-            thumb.Position = pos
-            TweenService:Create(track,TweenInfo.new(0.15),{BackgroundColor3=col}):Play()
-            TweenService:Create(thumb,TweenInfo.new(0.15),{Position=pos}):Play()
-        end
-        refresh()
-        local btn=Instance.new("TextButton",row)
-        btn.Size=UDim2.new(1,0,1,0); btn.BackgroundTransparency=1; btn.Text=""
-        btn.MouseButton1Click:Connect(function()
-            onToggle(not getState())
-            task.defer(refresh) -- defer para que getState() refleje el nuevo valor
-        end)
-        -- Tambien actualizar cuando se activa/desactiva por keybind
-        RunService.Heartbeat:Connect(function()
-            local on=getState()
-            local expectedCol = on and accentColor or Color3.fromRGB(38,32,54)
-            if (track.BackgroundColor3 - expectedCol).Magnitude > 0.01 then
-                refresh()
-            end
-        end)
-        return refresh
-    end
-
-    local function mm2Btn(parent, label, cb)
-        local btn=Instance.new("TextButton",parent)
-        btn.Size=UDim2.new(1,0,0,36); btn.BackgroundColor3=Color3.fromRGB(20,16,28)
-        btn.BorderSizePixel=0; btn.Text=label
-        btn.TextColor3=accentColor; btn.Font=Enum.Font.GothamBold; btn.TextSize=12
-        btn.AutoButtonColor=false; btn.TextWrapped=true
-        local bs=Instance.new("UIStroke",btn); bs.Color=accentColor; bs.Thickness=1; bs.Transparency=0.7
-        btn.MouseButton1Click:Connect(cb)
-    end
-
-    local function mm2BtnRed(parent, label, cb)
-        local btn=Instance.new("TextButton",parent)
-        btn.Size=UDim2.new(1,0,0,36); btn.BackgroundColor3=Color3.fromRGB(28,10,10)
-        btn.BorderSizePixel=0; btn.Text=label
-        btn.TextColor3=Color3.fromRGB(255,80,80); btn.Font=Enum.Font.GothamBold; btn.TextSize=12
-        btn.AutoButtonColor=false; btn.TextWrapped=true
-        local bs=Instance.new("UIStroke",btn); bs.Color=Color3.fromRGB(255,80,80); bs.Thickness=1; bs.Transparency=0.7
-        btn.MouseButton1Click:Connect(cb)
-    end
-
-    local function mm2Keybind(parent, label, getKey, setKey)
-        local row=Instance.new("Frame",parent)
-        row.Size=UDim2.new(1,0,0,42); row.BackgroundTransparency=1
-        local tl=Instance.new("TextLabel",row)
-        tl.Size=UDim2.new(1,-110,0,16); tl.Position=UDim2.fromOffset(14,13)
-        tl.BackgroundTransparency=1; tl.Text=label
-        tl.TextColor3=Color3.fromRGB(215,215,215); tl.Font=Enum.Font.GothamMedium; tl.TextSize=12
-        tl.TextXAlignment=Enum.TextXAlignment.Left
-        local kb=Instance.new("TextButton",row)
-        kb.Size=UDim2.fromOffset(80,26); kb.Position=UDim2.new(1,-94,0.5,-13)
-        kb.BackgroundColor3=Color3.fromRGB(22,18,32); kb.BorderSizePixel=0
-        kb.Text="["..getKey().."]"; kb.TextColor3=accentColor; kb.Font=Enum.Font.GothamBold; kb.TextSize=11
-        local ks=Instance.new("UIStroke",kb); ks.Color=accentColor; ks.Thickness=1
-        local listening=false
-        kb.MouseButton1Click:Connect(function()
-            if listening then return end; listening=true; kb.Text="..."
-            local conn; conn=UserInputService.InputBegan:Connect(function(inp,proc)
-                if proc then return end
-                if inp.UserInputType==Enum.UserInputType.Keyboard then
-                    setKey(inp.KeyCode.Name); save()
-                    kb.Text="["..getKey().."]"; listening=false; conn:Disconnect()
-                end
-            end)
-        end)
-    end
-
-    local function mm2Label(parent, txt)
-        local lbl=Instance.new("TextLabel",parent)
-        lbl.Size=UDim2.new(1,0,0,0); lbl.AutomaticSize=Enum.AutomaticSize.Y
-        lbl.BackgroundTransparency=1; lbl.Text=txt
-        lbl.TextColor3=Color3.fromRGB(150,140,170); lbl.Font=Enum.Font.Gotham
-        lbl.TextSize=11; lbl.TextWrapped=true; lbl.TextXAlignment=Enum.TextXAlignment.Left
-        local pad=Instance.new("UIPadding",lbl)
-        pad.PaddingLeft=UDim.new(0,14); pad.PaddingRight=UDim.new(0,14)
-        pad.PaddingTop=UDim.new(0,6); pad.PaddingBottom=UDim.new(0,6)
-    end
-
-    local function mm2GridBtns(parent, buttons)
-        local grid=Instance.new("Frame",parent)
-        grid.Size=UDim2.new(1,0,0,0); grid.AutomaticSize=Enum.AutomaticSize.Y
-        grid.BackgroundTransparency=1
-        local gl=Instance.new("UIGridLayout",grid)
-        gl.CellSize=UDim2.new(0.5,-4,0,36); gl.CellPadding=UDim2.fromOffset(4,4)
-        gl.SortOrder=Enum.SortOrder.LayoutOrder
-        for _, b in ipairs(buttons) do
-            local btn=Instance.new("TextButton",grid)
-            btn.BackgroundColor3=Color3.fromRGB(20,16,28); btn.BorderSizePixel=0
-            btn.Text=b[1]; btn.TextColor3=accentColor; btn.Font=Enum.Font.GothamBold
-            btn.TextSize=11; btn.AutoButtonColor=false; btn.TextWrapped=true; btn.TextScaled=false
-            local bs=Instance.new("UIStroke",btn); bs.Color=accentColor; bs.Thickness=1; bs.Transparency=0.7
-            btn.MouseButton1Click:Connect(b[2])
-        end
-        return grid
-    end
-
-    -- ===========================================
-    --  MM2 - UI CARDS
-    -- ===========================================
-
-    -- -- ESP ------------------------------------
-    local espCard=makeCard(pg_mm2)
-    makeSecHeader(espCard,"o","ESPs")
-    mm2Toggle(espCard,"Players (Rojo=Asesino / Azul=Sheriff / Verde=Inocente)",
-        function() return mm2ESP_on end,
-        function(v) mm2ESP_on=v; if v then mm2_buildESP() else mm2_clearESP() end
-            showNotif("+  MM2 ESP",v and "Activado" or "Desactivado",v) end)
-    mm2Divider(espCard)
-    -- Gun Drop ESP
-    local mm2GunDropHL = nil
-    local function mm2_clearGunESP()
-        if mm2GunDropHL then pcall(function() mm2GunDropHL:Destroy() end); mm2GunDropHL=nil end
-    end
-    local function mm2_buildGunESP()
-        mm2_clearGunESP()
-        if not (S.mm2_gunDropESP) then return end
-        local map = Workspace:FindFirstChild("Map") or Workspace:FindFirstChild("MainMap")
-        local gunDrop = map and map:FindFirstChild("GunDrop",true) or Workspace:FindFirstChild("GunDrop",true)
-        if gunDrop then
-            mm2GunDropHL = Instance.new("Highlight")
-            mm2GunDropHL.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
-            mm2GunDropHL.FillColor = Color3.fromRGB(255,255,0)
-            mm2GunDropHL.OutlineColor = Color3.fromRGB(255,255,0)
-            mm2GunDropHL.FillTransparency = 0.3
-            mm2GunDropHL.Adornee = gunDrop
-            mm2GunDropHL.Parent = gui
-        end
-    end
-    -- Detectar gun drop en tiempo real
-    Workspace.DescendantAdded:Connect(function(ch)
-        if ch.Name=="GunDrop" and S.mm2_gunDropESP then
-            task.wait(0.2); mm2_buildGunESP()
-            showNotif("+  MM2","Gun dropped! ESP activo.",true)
-        end
-    end)
-    Workspace.DescendantRemoving:Connect(function(ch)
-        if ch.Name=="GunDrop" then mm2_clearGunESP() end
-    end)
-    mm2Toggle(espCard,"Dropped Gun ESP",
-        function() return S.mm2_gunDropESP or false end,
-        function(v) S.mm2_gunDropESP=v; save()
-            if v then mm2_buildGunESP() else mm2_clearGunESP() end
-        end)
-    mm2Divider(espCard)
-    mm2Toggle(espCard,"Traps ESP",
-        function() return mm2trapDetect end,
-        function(v)
-            mm2trapDetect=v
-            if v then
-                for _,obj in ipairs(Workspace:GetDescendants()) do
-                    if obj.Name=="Trap" and (obj.Parent:IsA("Folder") or obj.Parent:IsA("Model")) then
-                        pcall(function() obj.Transparency=0 end)
-                    end
-                end
-            end
-        end)
-    mm2Divider(espCard)
-    mm2Keybind(espCard,"Tecla ESP",function() return S.mm2_esp_key end,function(k) S.mm2_esp_key=k end)
-    mm2Divider(espCard)
-    -- Distancia maxima Players ESP
-    do
-        if not S.mm2_esp_dist then S.mm2_esp_dist = 300 end
-        local row=Instance.new("Frame",espCard)
-        row.Size=UDim2.new(1,0,0,42); row.BackgroundTransparency=1
-        local tl=Instance.new("TextLabel",row)
-        tl.Size=UDim2.new(1,-110,0,16); tl.Position=UDim2.fromOffset(14,13)
-        tl.BackgroundTransparency=1; tl.Text="Distancia Players ESP"
-        tl.TextColor3=Color3.fromRGB(215,215,215); tl.Font=Enum.Font.GothamMedium; tl.TextSize=12
-        tl.TextXAlignment=Enum.TextXAlignment.Left
-        local valLbl=Instance.new("TextLabel",row)
-        valLbl.Size=UDim2.fromOffset(42,16); valLbl.Position=UDim2.new(1,-96,0,13)
-        valLbl.BackgroundTransparency=1; valLbl.Text=tostring(S.mm2_esp_dist)
-        valLbl.TextColor3=accentColor; valLbl.Font=Enum.Font.GothamBold; valLbl.TextSize=11
-        valLbl.TextXAlignment=Enum.TextXAlignment.Center
-        local minus=Instance.new("TextButton",row)
-        minus.Size=UDim2.fromOffset(26,26); minus.Position=UDim2.new(1,-28,0.5,-13)
-        minus.BackgroundColor3=Color3.fromRGB(22,18,28); minus.BorderSizePixel=0
-        minus.Text="-"; minus.TextColor3=accentColor; minus.Font=Enum.Font.GothamBold; minus.TextSize=16
-        minus.MouseButton1Click:Connect(function()
-            S.mm2_esp_dist=math.max(10,S.mm2_esp_dist-25); valLbl.Text=tostring(S.mm2_esp_dist); save()
-            if mm2ESP_on then mm2_buildESP() end
-        end)
-        local plus=Instance.new("TextButton",row)
-        plus.Size=UDim2.fromOffset(26,26); plus.Position=UDim2.new(1,-56,0.5,-13)
-        plus.BackgroundColor3=Color3.fromRGB(22,18,28); plus.BorderSizePixel=0
-        plus.Text="+"; plus.TextColor3=accentColor; plus.Font=Enum.Font.GothamBold; plus.TextSize=16
-        plus.MouseButton1Click:Connect(function()
-            S.mm2_esp_dist=math.min(9999,S.mm2_esp_dist+25); valLbl.Text=tostring(S.mm2_esp_dist); save()
-            if mm2ESP_on then mm2_buildESP() end
-        end)
-    end
-    mm2Divider(espCard)
-    mm2Btn(espCard,"R  Recargar ESP",function() mm2_buildESP(); showNotif("+  MM2","ESP recargado.",true) end)
-
-    -- -- Cam Lock Murderer (Sheriff con Gun) ------
-    local murdLockCard=makeCard(pg_mm2)
-    makeSecHeader(murdLockCard,"x","Cam Lock Murderer")
-    mm2Label(murdLockCard,"Bloquea la camara automaticamente en el asesino mientras tengas la Gun equipada (Sheriff).")
-    mm2Divider(murdLockCard)
-    mm2Toggle(murdLockCard,"Activar Cam Lock Murderer",
-        function() return S.mm2_murdLockEnabled end,
-        function(v) S.mm2_murdLockEnabled=v; save()
-            showNotif("+  MM2 Cam Lock",v and "Activado" or "Desactivado",v) end)
-    mm2Divider(murdLockCard)
-    mm2Keybind(murdLockCard,"Tecla Activar/Desactivar",function() return S.mm2_murdLockKey end,function(k) S.mm2_murdLockKey=k; save() end)
-    mm2Divider(murdLockCard)
-    do
-        local row=Instance.new("Frame",murdLockCard)
-        row.Size=UDim2.new(1,0,0,42); row.BackgroundTransparency=1
-        local tl=Instance.new("TextLabel",row)
-        tl.Size=UDim2.new(1,-110,0,16); tl.Position=UDim2.fromOffset(14,13)
-        tl.BackgroundTransparency=1; tl.Text="Fuerza (suavidad)"
-        tl.TextColor3=Color3.fromRGB(215,215,215); tl.Font=Enum.Font.GothamMedium; tl.TextSize=12
-        tl.TextXAlignment=Enum.TextXAlignment.Left
-        local valLbl=Instance.new("TextLabel",row)
-        valLbl.Size=UDim2.fromOffset(42,16); valLbl.Position=UDim2.new(1,-96,0,13)
-        valLbl.BackgroundTransparency=1; valLbl.Text=tostring(S.mm2_murdLockStrength)
-        valLbl.TextColor3=accentColor; valLbl.Font=Enum.Font.GothamBold; valLbl.TextSize=11
-        valLbl.TextXAlignment=Enum.TextXAlignment.Center
-        local minus=Instance.new("TextButton",row)
-        minus.Size=UDim2.fromOffset(26,26); minus.Position=UDim2.new(1,-28,0.5,-13)
-        minus.BackgroundColor3=Color3.fromRGB(22,18,28); minus.BorderSizePixel=0
-        minus.Text="-"; minus.TextColor3=accentColor; minus.Font=Enum.Font.GothamBold; minus.TextSize=16
-        minus.MouseButton1Click:Connect(function()
-            S.mm2_murdLockStrength=math.max(1,S.mm2_murdLockStrength-5); valLbl.Text=tostring(S.mm2_murdLockStrength); save()
-        end)
-        local plus=Instance.new("TextButton",row)
-        plus.Size=UDim2.fromOffset(26,26); plus.Position=UDim2.new(1,-56,0.5,-13)
-        plus.BackgroundColor3=Color3.fromRGB(22,18,28); plus.BorderSizePixel=0
-        plus.Text="+"; plus.TextColor3=accentColor; plus.Font=Enum.Font.GothamBold; plus.TextSize=16
-        plus.MouseButton1Click:Connect(function()
-            S.mm2_murdLockStrength=math.min(100,S.mm2_murdLockStrength+5); valLbl.Text=tostring(S.mm2_murdLockStrength); save()
-        end)
-    end
-    mm2Divider(murdLockCard)
-    do
-        local row=Instance.new("Frame",murdLockCard)
-        row.Size=UDim2.new(1,0,0,42); row.BackgroundTransparency=1
-        local tl=Instance.new("TextLabel",row)
-        tl.Size=UDim2.new(1,-110,0,16); tl.Position=UDim2.fromOffset(14,13)
-        tl.BackgroundTransparency=1; tl.Text="FOV (radio en pantalla)"
-        tl.TextColor3=Color3.fromRGB(215,215,215); tl.Font=Enum.Font.GothamMedium; tl.TextSize=12
-        tl.TextXAlignment=Enum.TextXAlignment.Left
-        local valLbl=Instance.new("TextLabel",row)
-        valLbl.Size=UDim2.fromOffset(42,16); valLbl.Position=UDim2.new(1,-96,0,13)
-        valLbl.BackgroundTransparency=1; valLbl.Text=tostring(S.mm2_murdLockFov)
-        valLbl.TextColor3=accentColor; valLbl.Font=Enum.Font.GothamBold; valLbl.TextSize=11
-        valLbl.TextXAlignment=Enum.TextXAlignment.Center
-        local minus=Instance.new("TextButton",row)
-        minus.Size=UDim2.fromOffset(26,26); minus.Position=UDim2.new(1,-28,0.5,-13)
-        minus.BackgroundColor3=Color3.fromRGB(22,18,28); minus.BorderSizePixel=0
-        minus.Text="-"; minus.TextColor3=accentColor; minus.Font=Enum.Font.GothamBold; minus.TextSize=16
-        minus.MouseButton1Click:Connect(function()
-            S.mm2_murdLockFov=math.max(20,S.mm2_murdLockFov-10); valLbl.Text=tostring(S.mm2_murdLockFov); save()
-        end)
-        local plus=Instance.new("TextButton",row)
-        plus.Size=UDim2.fromOffset(26,26); plus.Position=UDim2.new(1,-56,0.5,-13)
-        plus.BackgroundColor3=Color3.fromRGB(22,18,28); plus.BorderSizePixel=0
-        plus.Text="+"; plus.TextColor3=accentColor; plus.Font=Enum.Font.GothamBold; plus.TextSize=16
-        plus.MouseButton1Click:Connect(function()
-            S.mm2_murdLockFov=math.min(500,S.mm2_murdLockFov+10); valLbl.Text=tostring(S.mm2_murdLockFov); save()
-        end)
-    end
-    mm2Divider(murdLockCard)
-    mm2Toggle(murdLockCard,"Wall Check",
-        function() return S.mm2_murdLockWallCheck end,
-        function(v) S.mm2_murdLockWallCheck=v; save() end)
-
-    -- -- Herramientas ----------------------------
-    local toolCard=makeCard(pg_mm2)
-    makeSecHeader(toolCard,"+","Herramientas")
-    mm2Btn(toolCard,"Shoot murderer",mm2_shoot)
-    mm2Divider(toolCard)
-    mm2Keybind(toolCard,"Tecla Disparar",function() return S.mm2_shoot_key end,function(k) S.mm2_shoot_key=k end)
-    mm2Divider(toolCard)
-    do
-        local row=Instance.new("Frame",toolCard)
-        row.Size=UDim2.new(1,0,0,42); row.BackgroundTransparency=1
-        local tl=Instance.new("TextLabel",row)
-        tl.Size=UDim2.new(1,-110,0,16); tl.Position=UDim2.fromOffset(14,13)
-        tl.BackgroundTransparency=1; tl.Text="Shoot position offset"
-        tl.TextColor3=Color3.fromRGB(215,215,215); tl.Font=Enum.Font.GothamMedium; tl.TextSize=12
-        tl.TextXAlignment=Enum.TextXAlignment.Left
-        local valLbl=Instance.new("TextLabel",row)
-        valLbl.Size=UDim2.fromOffset(36,16); valLbl.Position=UDim2.new(1,-90,0,13)
-        valLbl.BackgroundTransparency=1; valLbl.Text=tostring(S.mm2_shoot_offset or 2.8)
-        valLbl.TextColor3=accentColor; valLbl.Font=Enum.Font.GothamBold; valLbl.TextSize=11
-        valLbl.TextXAlignment=Enum.TextXAlignment.Center
-        local minus=Instance.new("TextButton",row)
-        minus.Size=UDim2.fromOffset(26,26); minus.Position=UDim2.new(1,-28,0.5,-13)
-        minus.BackgroundColor3=Color3.fromRGB(22,18,28); minus.BorderSizePixel=0
-        minus.Text="-"; minus.TextColor3=accentColor; minus.Font=Enum.Font.GothamBold; minus.TextSize=16
-        minus.MouseButton1Click:Connect(function()
-            S.mm2_shoot_offset=math.max(0,math.floor((S.mm2_shoot_offset or 2.8)*10-5)/10)
-            valLbl.Text=tostring(S.mm2_shoot_offset); save()
-        end)
-        local plus=Instance.new("TextButton",row)
-        plus.Size=UDim2.fromOffset(26,26); plus.Position=UDim2.new(1,-56,0.5,-13)
-        plus.BackgroundColor3=Color3.fromRGB(22,18,28); plus.BorderSizePixel=0
-        plus.Text="+"; plus.TextColor3=accentColor; plus.Font=Enum.Font.GothamBold; plus.TextSize=16
-        plus.MouseButton1Click:Connect(function()
-            S.mm2_shoot_offset=math.min(15,math.floor((S.mm2_shoot_offset or 2.8)*10+5)/10)
-            valLbl.Text=tostring(S.mm2_shoot_offset); save()
-        end)
-    end
-    mm2Divider(toolCard)
-    mm2Btn(toolCard,"Knife throw (al mas cercano)",function() mm2_knifeThrow(false) end)
-    mm2Divider(toolCard)
-    mm2Toggle(toolCard,"Auto knife throw",
-        function() return mm2loopThrow end,
-        function(v) mm2loopThrow=v end)
-    mm2Divider(toolCard)
-    mm2GridBtns(toolCard,{
-        {"Teleport to map", function()
-            local map=Workspace:FindFirstChild("Map") or Workspace:FindFirstChild("MainMap")
-            if map then player.Character:MoveTo(map:GetPivot().Position) else showNotif("+  MM2","No se encontro el mapa.",false) end
-        end},
-        {"Teleport to lobby", function()
-            local lobby=Workspace:FindFirstChild("Lobby")
-            if lobby then player.Character:MoveTo(lobby:GetPivot().Position) else showNotif("+  MM2","No se encontro lobby.",false) end
-        end},
-        {"Fling Murderer", function()
-            local m=mm2_findMurderer(); if m then mm2_fling(m) else showNotif("+  MM2","No hay asesino.",false) end
-        end},
-        {"Fling Sheriff", function()
-            local s=mm2_findSheriff(); if s then mm2_fling(s) else showNotif("+  MM2","No hay sheriff.",false) end
-        end},
-        {"Copy murderer name", function()
-            local m=mm2_findMurderer()
-            if m then pcall(function() setclipboard(m.Name) end); showNotif("+  MM2","Copiado: "..m.Name,true)
-            else showNotif("+  MM2","No hay asesino.",false) end
-        end},
-        {"Copy sheriff name", function()
-            local s=mm2_findSheriff()
-            if s then pcall(function() setclipboard(s.Name) end); showNotif("+  MM2","Copiado: "..s.Name,true)
-            else showNotif("+  MM2","No hay sheriff.",false) end
-        end},
-    })
-    mm2Divider(toolCard)
-    mm2Toggle(toolCard,"Automatically get gun on drop",
-        function() return mm2autoGunDrop end,
-        function(v) mm2autoGunDrop=v end)
-    Workspace.DescendantAdded:Connect(function(ch)
-        if ch.Name=="GunDrop" and mm2autoGunDrop then
-            task.wait(0.5)
-            local prev=player.Character:GetPivot()
-            player.Character:MoveTo(ch.Position)
-            player.Backpack.ChildAdded:Wait()
-            player.Character:PivotTo(prev)
-        end
-    end)
-
-    -- -- Detectables -----------------------------
-    local detCard=makeCard(pg_mm2)
-    makeSecHeader(detCard,"!","Detectables")
-    mm2Label(detCard,"Las siguientes opciones pueden ser detectadas por el juego.")
-    mm2BtnRed(detCard,"Kill closest player as murderer",mm2_killNearest)
-    mm2Divider(detCard)
-    mm2Toggle(detCard,"Murderer kill aura",
-        function() return mm2killAuraCon ~= nil end,
-        function(v)
-            local murd=mm2_findMurderer()
-            if v and murd ~= player then showNotif("+  MM2","No eres el asesino.",false); return end
-            mm2_setKillAura(v)
-            showNotif("+  MM2 Kill Aura",v and "Activado" or "Desactivado",v)
-        end)
-    mm2Divider(detCard)
-    mm2BtnRed(detCard,"Kill EVERYONE as murderer",mm2_killAll)
-    mm2Divider(detCard)
-    mm2BtnRed(detCard,"Hold everyone hostage",function()
-        local myChar=player.Character; if not myChar then return end
-        local myHRP=myChar:FindFirstChild("HumanoidRootPart"); if not myHRP then return end
-        for _,p in ipairs(Players:GetPlayers()) do
-            if p==player then continue end
-            if p.Character and p.Character:FindFirstChild("HumanoidRootPart") then
-                p.Character.HumanoidRootPart.Anchored=true
-                p.Character.HumanoidRootPart.CFrame=myHRP.CFrame+myHRP.CFrame.LookVector*5
-            end
-        end
-        showNotif("+  MM2","Todos detenidos.",true)
-    end)
-
-    -- -- Keybinds globales MM2 -----------------
-    UserInputService.InputBegan:Connect(function(inp,proc)
-        if proc then return end
-        if inp.UserInputType~=Enum.UserInputType.Keyboard then return end
-        local kn=inp.KeyCode.Name
-        if kn==S.mm2_esp_key then
-            mm2ESP_on=not mm2ESP_on
-            if mm2ESP_on then mm2_buildESP() else mm2_clearESP() end
-            showNotif("+  MM2 ESP",mm2ESP_on and "Activado" or "Desactivado",mm2ESP_on)
-        end
-        if kn==S.mm2_shoot_key then mm2_shoot() end
-        if kn==S.mm2_murdLockKey then
-            S.mm2_murdLockEnabled = not S.mm2_murdLockEnabled; save()
-            showNotif("+  MM2 Cam Lock",S.mm2_murdLockEnabled and "Activado" or "Desactivado",S.mm2_murdLockEnabled)
-        end
-    end)
-
-end -- fin bloque isMM2
 pages[1].Visible = true
 navBtns[1].BackgroundColor3 = Color3.fromRGB(36,30,46)
 navBtns[1].BackgroundTransparency = 0.5
@@ -3033,13 +2366,13 @@ end
 applyHitbox = function(p, on)
     if not p.Character then return end
     local root = p.Character:FindFirstChild("HumanoidRootPart"); if not root then return end
-    
+
     if on then
         -- NO tocar root.Size (congela al jugador)
         -- Crear un Part proxy invisible soldado al root
         if not _hbxOriginals[p] then
             _hbxOriginals[p] = { proxy = nil, weld = nil }
-            
+
             local s = S.hbx_size * 2
             local proxy = Instance.new("Part")
             proxy.Name = "x7sHitboxProxy"
@@ -3053,14 +2386,14 @@ applyHitbox = function(p, on)
             proxy.TopSurface = Enum.SurfaceType.Smooth
             proxy.BottomSurface = Enum.SurfaceType.Smooth
             proxy.Parent = p.Character
-            
+
             local weld = Instance.new("Weld")
             weld.Name = "x7sHbxWeld"
             weld.Part0 = root
             weld.Part1 = proxy
             weld.C0 = CFrame.new(0, 0, 0)
             weld.Parent = root
-            
+
             _hbxOriginals[p].proxy = proxy
             _hbxOriginals[p].weld = weld
         end
@@ -3130,7 +2463,7 @@ RunService.RenderStepped:Connect(function()
             if obj.itemTag   then obj.itemTag.Visible   = false end
             continue
         end
-        
+
         local char = p.Character
         local function allOff()
             for _, hl in pairs(obj.highlights) do pcall(function() hl.Enabled = false end) end
@@ -3169,7 +2502,7 @@ RunService.RenderStepped:Connect(function()
             local targetSize = isVis2 
                 and (S.hbx_size * 2)      -- Expandido si está visible
                 or  2                      -- Normal si está detrás de pared
-            
+
             pcall(function()
                 local currentSize = _hbxOriginals[p].proxy.Size.X
                 if math.abs(currentSize - targetSize) > 0.1 then
@@ -3356,6 +2689,134 @@ local camLockTarget=nil
 -- ══════════════════════════════════════════════
 --  FOV CIRCLE (igual a SyyClient)
 -- ══════════════════════════════════════════════
+-- ===============================================================
+--  SILENT AIM (migrado de SyyClient - VisibleCheck/Manipulation/HitChance)
+-- ===============================================================
+local cachedTargetPos = nil
+
+local wallbreakParams = RaycastParams.new()
+wallbreakParams.FilterType = Enum.RaycastFilterType.Include
+wallbreakParams.FilterDescendantsInstances = {}
+
+-- Hook __namecall: intercepta Raycast / FindPartOnRay* y redirige al objetivo
+pcall(function()
+    if not hookmetamethod then return end
+    local oldNC
+    oldNC = hookmetamethod(game, "__namecall", newcclosure(function(...)
+        local method = getnamecallmethod()
+        local usePos = cachedTargetPos
+        if not (S.SilentAimEnabled and usePos) then return oldNC(...) end
+        if checkcaller() then return oldNC(...) end
+        if math.random(100) > S.HitChance then return oldNC(...) end
+
+        local args = { ... }
+        if args[1] ~= workspace then return oldNC(...) end
+
+        if method == "Raycast" then
+            if typeof(args[2]) ~= "Vector3" or typeof(args[3]) ~= "Vector3" then return oldNC(...) end
+            args[3] = (usePos - args[2]).Unit * 1000
+            if S.Manipulation then args[4] = wallbreakParams end
+            return oldNC(table.unpack(args))
+        elseif method == "FindPartOnRayWithIgnoreList" or method == "FindPartOnRay" then
+            if typeof(args[2]) ~= "Ray" then return oldNC(...) end
+            local o = args[2].Origin
+            args[2] = Ray.new(o, (usePos - o).Unit * 1000)
+            if S.Manipulation and method == "FindPartOnRayWithIgnoreList" then args[3] = {} end
+            return oldNC(table.unpack(args))
+        end
+        return oldNC(...)
+    end))
+end)
+
+-- Deteccion de disparo (PC: click izq / Movil: lado derecho de pantalla)
+local saIsFiring = false
+UserInputService.InputBegan:Connect(function(inp)
+    if inp.UserInputType == Enum.UserInputType.MouseButton1 then saIsFiring = true
+    elseif inp.UserInputType == Enum.UserInputType.Touch then
+        if inp.Position.X > camera.ViewportSize.X * 0.35 then saIsFiring = true end
+    end
+end)
+UserInputService.InputEnded:Connect(function(inp)
+    if inp.UserInputType == Enum.UserInputType.MouseButton1
+    or inp.UserInputType == Enum.UserInputType.Touch then
+        task.delay(0.08, function() saIsFiring = false end)
+    end
+end)
+
+-- Calculo del objetivo cada 2 frames (misma logica que SyyClient)
+local _saFrame = 0
+RunService.RenderStepped:Connect(function()
+    _saFrame = _saFrame + 1
+    if _saFrame % 2 ~= 0 then return end
+
+    if not S.SilentAimEnabled then cachedTargetPos = nil; return end
+
+    local myChar = player.Character
+    local vp = camera.ViewportSize
+    local center = Vector2.new(vp.X * 0.5, vp.Y * 0.5)
+    local fovLimit = streamModeOn and math.huge or S.fov_radius
+
+    -- wallbreakParams solo se refresca si Manipulation esta ON
+    if S.Manipulation then
+        local chars = {}
+        for _, p in ipairs(_plrList) do
+            if p ~= player and p.Character then chars[#chars+1] = p.Character end
+        end
+        wallbreakParams.FilterDescendantsInstances = chars
+    end
+
+    local bestD, bestPos = math.huge, nil
+    for _, p in ipairs(_plrList) do
+        if shouldSkipPlayer(p) then continue end
+        if S.SilentAimTeamCheck and isSameTeam(player, p) then continue end
+        local char = p.Character; if not char then continue end
+        local hum  = char:FindFirstChildOfClass("Humanoid")
+        local root = char:FindFirstChild("HumanoidRootPart")
+        if not hum or hum.Health <= 0 or not root then continue end
+
+        local sp2, onS = camera:WorldToViewportPoint(root.Position)
+        local d2 = (Vector2.new(sp2.X, sp2.Y) - center).Magnitude
+
+        if S.VisibleCheck then
+            if not onS then continue end
+            if d2 > fovLimit then continue end
+            if not S.Manipulation then
+                local ok, obs = pcall(function()
+                    return camera:GetPartsObscuringTarget({root.Position}, {myChar, char})
+                end)
+                if ok and #obs > 0 then continue end
+            end
+        else
+            if not streamModeOn and d2 > fovLimit then continue end
+            if not onS then continue end
+            if not S.Manipulation then
+                local ok, obs = pcall(function()
+                    return camera:GetPartsObscuringTarget({root.Position}, {myChar, char})
+                end)
+                if ok and #obs > 0 then continue end
+            end
+        end
+
+        if d2 < bestD then
+            bestD = d2
+            local pn = S.TargetPart
+            if pn == "Random" then
+                local r = math.random(100)
+                pn = r <= 30 and "Head" or (r <= 80 and "UpperTorso" or "LowerTorso")
+            elseif pn == "Pierna" then pn = "LowerTorso"
+            elseif pn == "Pecho"  then pn = "UpperTorso"
+            elseif pn == "Combo"  then
+                local r = math.random(100)
+                pn = r <= 35 and "LowerTorso" or (r <= 85 and "UpperTorso" or "Head")
+            end
+            local hp = char:FindFirstChild(pn) or root
+            bestPos = hp.Position
+        end
+    end
+    cachedTargetPos = bestPos
+end)
+
+
 local fovCircle = Drawing.new("Circle")
 fovCircle.Visible      = false
 fovCircle.Thickness    = 1.5
@@ -3536,6 +2997,62 @@ task.defer(function()
 end)
 
 
+-- == BOTON FLOTANTE (abrir/cerrar GUI en movil) - drag estable ===
+if isMobile then
+    local FB_SZ = 54
+    local fb = Instance.new("TextButton", gui)
+    fb.Name = "x7sToggle"; fb.Size = UDim2.fromOffset(FB_SZ, FB_SZ)
+    fb.Position = UDim2.fromOffset(16, math.floor(camera.ViewportSize.Y * 0.4))
+    fb.BackgroundColor3 = Color3.fromRGB(12, 9, 18); fb.BorderSizePixel = 0
+    fb.Text = "x7s"; fb.TextColor3 = accentColor
+    fb.Font = Enum.Font.GothamBlack; fb.TextSize = 15; fb.ZIndex = 250
+    fb.AutoButtonColor = false; fb.Active = true
+    Instance.new("UICorner", fb).CornerRadius = UDim.new(1, 0)
+    local fbs = Instance.new("UIStroke", fb); fbs.Color = accentColor; fbs.Thickness = 1.5; fbs.Transparency = 0.3
+
+    local DRAG_THRESHOLD = 8           -- px antes de considerarlo arrastre (no tap)
+    local dragInput, dragStart, startPos, moved = nil, nil, nil, false
+
+    fb.InputBegan:Connect(function(inp)
+        if inp.UserInputType == Enum.UserInputType.Touch
+        or inp.UserInputType == Enum.UserInputType.MouseButton1 then
+            dragInput = inp
+            dragStart = inp.Position
+            startPos  = fb.Position       -- UDim2 en offset puro
+            moved = false
+            fbs.Transparency = 0          -- feedback al presionar
+            inp.Changed:Connect(function()
+                if dragInput == inp and inp.UserInputState == Enum.UserInputState.End then
+                    dragInput = nil
+                    fbs.Transparency = 0.3
+                    if not moved then
+                        -- tap = toggle del panel
+                        local show = not panel.Visible
+                        panel.Visible = show; glow.Visible = show
+                        if show then panel.BackgroundTransparency = 0 end
+                    end
+                end
+            end)
+        end
+    end)
+
+    -- Sigue el dedo SOLO tras cruzar el umbral (un tap NO mueve la burbuja)
+    UserInputService.InputChanged:Connect(function(inp)
+        if dragInput ~= inp then return end
+        if inp.UserInputType ~= Enum.UserInputType.Touch
+       and inp.UserInputType ~= Enum.UserInputType.MouseMovement then return end
+        local delta = inp.Position - dragStart
+        if not moved then
+            if delta.Magnitude < DRAG_THRESHOLD then return end  -- ignora jitter del tap
+            moved = true
+        end
+        local vp = camera.ViewportSize
+        fb.Position = UDim2.fromOffset(
+            math.clamp(startPos.X.Offset + delta.X, 0, vp.X - FB_SZ),
+            math.clamp(startPos.Y.Offset + delta.Y, 0, vp.Y - FB_SZ))
+    end)
+end
+
 task.spawn(function()
     local remote = game:GetService("ReplicatedStorage").Packages.Networking:WaitForChild("RE/Events/CollectEventSpawnable")
     local folder = workspace:WaitForChild("Spawnables"):WaitForChild("SpawnablesClient")
@@ -3557,5 +3074,3 @@ task.spawn(function()
         end
     end
 end)
-
-print("   "..S.gui_key.." = GUI  ·  "..S.esp_key.." = ESP  ·  "..S.hbx_key.." = HBX  ·  "..S.camlock_key.." = CamLock")
