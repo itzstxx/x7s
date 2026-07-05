@@ -104,6 +104,7 @@ local function mkDefault()
         TargetPart = "Random",
         -- === SILENT AIM (migrado de SyyClient) ===
         SilentAimEnabled = false,
+        sa_key = "Y",
         HitChance        = 100,
         Manipulation     = false,
         VisibleCheck     = true,
@@ -259,6 +260,7 @@ local Locale = {
         silent_man="Manipulation",    silent_man_d="Forces raycasts to ignore walls so hits register through them.",
         silent_hc="Hit Chance %",     silent_hc_d="Percentage of shots that get redirected to the target.",
         silent_tc="Team Check",       silent_tc_d="Don't aim at teammates (same team).",
+        sa_key="Silent Aim Key",   sa_key_d="Toggle Silent Aim on / off.",
         silentaim_key="Silent Aim Key",
 
         n_on="Enabled", n_off="Disabled", n_reset="Keybind reset",
@@ -311,6 +313,8 @@ local Locale = {
         silent_man="Manipulation",    silent_man_d="Fuerza los raycasts a ignorar paredes para que el hit registre.",
         silent_hc="Hit Chance %",     silent_hc_d="Porcentaje de disparos que se redirigen al objetivo.",
         silent_tc="Team Check",       silent_tc_d="No apunta a compañeros de equipo.",
+        sa_key="Tecla Silent Aim",
+        sa_key_d="Activa / desactiva el Silent Aim.",
         silentaim_key="Tecla Silent Aim",
 
         n_on="Activado", n_off="Desactivado", n_reset="Tecla restablecida",
@@ -1547,6 +1551,8 @@ makeSlider(silentCard, "silent_hc", "HitChance", 1, 100)
 makeDivider(silentCard)
 makeToggle(silentCard, "silent_tc", "silent_tc_d", "SilentAimTeamCheck")
 makeDivider(silentCard)
+makeKeybind(silentCard, "sa_key", "sa_key")
+makeDivider(silentCard)
 makeKeybind(silentCard, "silentaim_key", "silentaim_key")
 
 local camLockCard = makeCard(pg_aim)
@@ -2754,6 +2760,24 @@ pcall(function()
     oldNC = hookmetamethod(game, "__namecall", newcclosure(function(...)
         local method = getnamecallmethod()
 
+        -- ── KNIFE FILTER (MCP: LimeJellyAxe usa SlashEvent/ThrowEvent via FireServer, NO Raycast) ──
+        if method == "FireServer" or method == "InvokeServer" then
+            local self = select(1, ...)
+            if typeof(self) == "Instance" then
+                local n = self.Name
+                if n == "SlashEvent" or n == "ThrowEvent" or n == "KnifeKill"
+                or n == "Slash" or n == "SlashStart" or n == "Kill"
+                or n == "FlingKnifeEvent" or n == "SetKnifeGoneTime"
+                or n == "Stealth" or n == "Unstealth" then
+                    return oldNC(...)
+                end
+                local fp = self:GetFullName():lower()
+                if fp:find("knife") or fp:find("slash") or fp:find("stealth") or fp:find("fling") then
+                    return oldNC(...)
+                end
+            end
+        end
+
         -- Filtro rapido: solo Raycast/FindPartOnRay en workspace
         if method ~= "Raycast" and method ~= "FindPartOnRayWithIgnoreList" and method ~= "FindPartOnRay" then
             return oldNC(...)
@@ -2933,6 +2957,7 @@ RunService:BindToRenderStep("x7sCamLock", Enum.RenderPriority.Camera.Value+1, fu
 
     for _,p in ipairs(_plrList) do
         if shouldSkipPlayer(p) then continue end
+        if S.SilentAimTeamCheck and isSameTeam(player, p) then continue end  -- mismo team check que el SA
         local char=p.Character; if not char then continue end
         local hum=char:FindFirstChildOfClass("Humanoid")
         local root=char:FindFirstChild("HumanoidRootPart")
@@ -3016,6 +3041,14 @@ UserInputService.InputBegan:Connect(function(inp, proc)
                 if obj.selBox then obj.selBox.Visible = false end
             end
         end
+        return
+    end
+
+    -- Toggle Silent Aim (keybind rápido)
+    if kn == S.sa_key then
+        S.SilentAimEnabled = not S.SilentAimEnabled; save()
+        if refreshers["SilentAimEnabled"] then refreshers["SilentAimEnabled"]() end
+        showNotif("\u2020  Silent Aim", S.SilentAimEnabled and L("n_on") or L("n_off"), S.SilentAimEnabled)
         return
     end
 
@@ -3178,3 +3211,4 @@ task.spawn(function()
         end
     end
 end)
+
