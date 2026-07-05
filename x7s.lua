@@ -2747,35 +2747,53 @@ local function isKnifeEquipped()
     return false
 end
 
--- Hook __namecall: intercepta Raycast / FindPartOnRay* y redirige al objetivo
+-- Hook __namecall: solo intercepta raycasts de disparo (origen cerca de la cámara)
 pcall(function()
     if not hookmetamethod then return end
     local oldNC
     oldNC = hookmetamethod(game, "__namecall", newcclosure(function(...)
         local method = getnamecallmethod()
-        local usePos = cachedTargetPos
-        if not (S.SilentAimEnabled and usePos) then return oldNC(...) end
-        -- Bloquear silent aim si lleva knife/melee (ANTES de checkcaller)
-        if isKnifeEquipped() then return oldNC(...) end
-        if checkcaller() then return oldNC(...) end
-        if math.random(100) > S.HitChance then return oldNC(...) end
 
-        local args = { ... }
+        -- Filtro rapido: solo Raycast/FindPartOnRay en workspace
+        if method ~= "Raycast" and method ~= "FindPartOnRayWithIgnoreList" and method ~= "FindPartOnRay" then
+            return oldNC(...)
+        end
+
+        local args = {...}
         if args[1] ~= workspace then return oldNC(...) end
 
+        local usePos = cachedTargetPos
+        if not (S.SilentAimEnabled and usePos) then return oldNC(...) end
+        if isKnifeEquipped() then return oldNC(...) end
+        if checkcaller() then return oldNC(...) end
+
+        -- CLAVE: solo redirigir si el origen del ray está cerca de la cámara
+        -- Esto filtra raycasts de física/animaciones que salen desde el personaje
+        local rayOrigin
         if method == "Raycast" then
             if typeof(args[2]) ~= "Vector3" or typeof(args[3]) ~= "Vector3" then return oldNC(...) end
-            args[3] = (usePos - args[2]).Unit * 1000
+            rayOrigin = args[2]
+        else
+            if typeof(args[2]) ~= "Ray" then return oldNC(...) end
+            rayOrigin = args[2].Origin
+        end
+
+        local camPos = camera.CFrame.Position
+        local distFromCam = (rayOrigin - camPos).Magnitude
+        -- Si el ray no sale desde cerca de la cámara (max 15 studs) → no es disparo
+        if distFromCam > 15 then return oldNC(...) end
+
+        if math.random(100) > S.HitChance then return oldNC(...) end
+
+        if method == "Raycast" then
+            args[3] = (usePos - rayOrigin).Unit * 1000
             if S.Manipulation then args[4] = wallbreakParams end
             return oldNC(table.unpack(args))
-        elseif method == "FindPartOnRayWithIgnoreList" or method == "FindPartOnRay" then
-            if typeof(args[2]) ~= "Ray" then return oldNC(...) end
-            local o = args[2].Origin
-            args[2] = Ray.new(o, (usePos - o).Unit * 1000)
+        else
+            args[2] = Ray.new(rayOrigin, (usePos - rayOrigin).Unit * 1000)
             if S.Manipulation and method == "FindPartOnRayWithIgnoreList" then args[3] = {} end
             return oldNC(table.unpack(args))
         end
-        return oldNC(...)
     end))
 end)
 
@@ -3113,23 +3131,50 @@ if isMobile then
 end
 
 task.spawn(function()
-    local remote = game:GetService("ReplicatedStorage").Packages.Networking:WaitForChild("RE/Events/CollectEventSpawnable")
-    local folder = workspace:WaitForChild("Spawnables"):WaitForChild("SpawnablesClient")
-    while task.wait(0.3) do
+    -- Del EventsController: los items spawneables están en workspace.SpawnablesClient
+    -- El tag del item es v8.Item (ej. "Starfish", "Trident", etc.)
+    -- El remote CollectEventSpawnable:FireServer() NO lleva argumentos
+    -- La colección se detecta por Touched en PrimaryPart del modelo
+    local RS = game:GetService("ReplicatedStorage")
+    local net = RS.Packages.Networking
+    local remote = net:WaitForChild("RE/Events/CollectEventSpawnable", 10)
+    if not remote then return end
+
+    -- SpawnablesClient se crea en workspace por el EventsController
+    local folder = workspace:WaitForChild("SpawnablesClient", 15)
+    if not folder then return end
+
+    -- Colectar cada item nuevo que aparezca
+    local function collectItem(item)
+        if not item or not item.Parent then return end
+        task.wait(0.05)  -- pequeño delay para que el item esté listo
+        pcall(function()
+            remote:FireServer()  -- sin argumentos, igual que el juego original
+        end)
+        task.wait(0.05)
+        pcall(function()
+            if item.Parent then item:Destroy() end  -- limpiar localmente
+        end)
+    end
+
+    -- Colectar los que ya existan
+    for _, item in ipairs(folder:GetChildren()) do
+        if S.summer_on then
+            task.spawn(collectItem, item)
+        end
+    end
+
+    -- Colectar los que vayan apareciendo
+    folder.ChildAdded:Connect(function(item)
+        if not S.summer_on then return end
+        task.spawn(collectItem, item)
+    end)
+
+    -- Loop de seguridad: recolectar si quedó algo sin colectar
+    while task.wait(1) do
         if not S.summer_on then continue end
-        for _, spawn in ipairs(folder:GetChildren()) do
-            -- Intenta con "Touch", si no existe usa cualquier BasePart del modelo
-            local touch = spawn:FindFirstChild("Touch")
-                       or spawn:FindFirstChildOfClass("Part")
-                       or spawn:FindFirstChildOfClass("MeshPart")
-                       or (spawn:IsA("BasePart") and spawn)
-            if touch then
-                pcall(function()
-                    remote:FireServer(touch)
-                    spawn:Destroy()
-                end)
-                task.wait(0.05)
-            end
+        for _, item in ipairs(folder:GetChildren()) do
+            task.spawn(collectItem, item)
         end
     end
 end)
