@@ -88,6 +88,7 @@ local function mkDefault()
         hbx_on=false, hbx_size=5, hbx_show=false, hbx_show2=false, hbx_key="G",
         hbx_vis_check=true,
         stream_mode=false,
+        summer_on=false,
         panel_bg=true, notifs=true, lang="English", gui_key="L",
         -- ✨ WHITELIST (nuevo sistema)
         Whitelist={},
@@ -99,16 +100,13 @@ local function mkDefault()
         camlock_key = "F",
         fov_on = false, fov_visible = true, fov_radius = 120,
         CamLockSafeZone = true,
-        -- === SILENT AIM (SyyClient System) ===
-        SilentAimEnabled = false,
-        VisibleCheck = true,
-        Manipulation = false,
-        SilentAimTeamCheck = true,
-        HitChance = 100,
-        silentaim_key = "H",
-        SilentAimTargetPart = "Head",
         -- === TARGET ===
         TargetPart = "Random",
+        -- === SILENT AIM (migrado de SyyClient) ===
+        SilentAimEnabled = false,
+        HitChance        = 100,
+        Manipulation     = false,
+        VisibleCheck     = true,
 
 
 
@@ -184,31 +182,10 @@ local function removeWhitelist(name)
 end
 
 -- Función auxiliar para saltarse en loops
--- isSameTeam: lee GetAttribute("Team") en tiempo real cada frame
--- Confirmado via MCP: "TeamRed" / "TeamBlue" — aleatorio por spawn
-local function isSameTeam(p)
-    local ok1, myT = pcall(function() return player:GetAttribute("Team") end)
-    local ok2, pT  = pcall(function() return p:GetAttribute("Team") end)
-    if ok1 and ok2 and myT and pT and typeof(myT)=="string" and typeof(pT)=="string" and myT~="" and pT~="" then
-        return myT == pT
-    end
-    local ok3, myS = pcall(function() return player:GetAttribute("Spawn") end)
-    local ok4, pS  = pcall(function() return p:GetAttribute("Spawn") end)
-    if ok3 and ok4 and myS and pS and typeof(myS)=="string" and typeof(pS)=="string" and myS~="" and pS~="" then
-        return myS == pS
-    end
-    local ok5, myTm = pcall(function() return player.Team end)
-    local ok6, pTm  = pcall(function() return p.Team end)
-    if ok5 and ok6 and myTm and pTm and myTm == pTm then return true end
-    return false
-end
-
--- shouldSkipPlayer: team check integrado (igual que SyyClient.shouldSkip)
 local function shouldSkipPlayer(p)
-    if not p or not p.Parent then return true end
-    if p == player then return true end
-    if isWhitelisted(p) then return true end
-    if S.SilentAimTeamCheck and isSameTeam(p) then return true end
+    if not p or not p.Parent then return true end  -- Validación
+    if p == player then return true end            -- Tu personaje
+    if isWhitelisted(p) then return true end       -- En whitelist
     return false
 end
 
@@ -243,11 +220,6 @@ local Locale = {
         camlock_wallcheck="Wall Check",     camlock_wallcheck_d="Only lock on visible enemies.",
         camlock_safezone="Safe Zone",       camlock_safezone_d="Don't lock on players inside a safe zone.",
 
-        silentaim_on="Silent Aim",         silentaim_on_d="Redirects shots to the closest enemy.",
-        silentaim_wallcheck="Visible Check", silentaim_wallcheck_d="Only aim at visible enemies. OFF = wallhack.",
-        hitmanip="Manipulation",             manipulation_d="Raycast ignores walls and obstacles.",
-        silentaim_teamcheck="Team Check",    silentaim_teamcheck_d="Don't aim at teammates.",
-
         whitelist_title="Whitelist Manager", whitelist_add="Add Player", whitelist_remove="Remove",
 
         target_part="Target Part",
@@ -257,6 +229,8 @@ local Locale = {
         ext_distance="Distance",              ext_distance_d="Shows the distance to each enemy in meters.",
         ext_item_hand="Item in Hand",         ext_item_hand_d="Shows what item the enemy is holding.",
 
+        summer_on="Summer 2026",    summer_on_d="Collects Summer 2026 drops automatically. Only in matches.",
+
         st_bg="Toggle Panel Background",
         st_notif="Enable Notifications",
         st_lang="Language",
@@ -265,6 +239,11 @@ local Locale = {
         st_r1="Reset Toggle UI Keybind",  st_r1_d="Reset this keybind to its default value.",
         st_r2="Reset All Keybinds",       st_r2_d="Reset all keybinds to their default values.",
 
+
+        silent_on="Silent Aim",      silent_on_d="Redirects your shots to the closest enemy automatically.",
+        silent_vis="Visible Check",   silent_vis_d="Only target enemies that are actually visible (no wallbang).",
+        silent_man="Manipulation",    silent_man_d="Forces raycasts to ignore walls so hits register through them.",
+        silent_hc="Hit Chance %",     silent_hc_d="Percentage of shots that get redirected to the target.",
 
         n_on="Enabled", n_off="Disabled", n_reset="Keybind reset",
     },
@@ -295,11 +274,6 @@ local Locale = {
         camlock_wallcheck="Wall Check",     camlock_wallcheck_d="Solo bloquea enemigos visibles.",
         camlock_safezone="Safe Zone",       camlock_safezone_d="No bloquea a jugadores dentro de una zona segura.",
 
-        silentaim_on="Silent Aim",         silentaim_on_d="Redirige los disparos al enemigo más cercano.",
-        silentaim_wallcheck="Visible Check", silentaim_wallcheck_d="Solo apunta a enemigos visibles. OFF = wallhack.",
-        hitmanip="Manipulation",             manipulation_d="El raycast ignora paredes y obstáculos.",
-        silentaim_teamcheck="Team Check",    silentaim_teamcheck_d="No apunta a compañeros de equipo.",
-
         whitelist_title="Gestor de Whitelist", whitelist_add="Añadir Jugador", whitelist_remove="Eliminar",
         target_part="Parte Objetivo",
         extras_title="Extras",
@@ -307,6 +281,7 @@ local Locale = {
         ext_health_bar="Barra de Salud",      ext_health_bar_d="Dibuja una barra de vida junto a cada enemigo.",
         ext_distance="Distancia",             ext_distance_d="Muestra la distancia a cada enemigo en metros.",
         ext_item_hand="Ítem en la Mano",      ext_item_hand_d="Muestra qué ítem sostiene el enemigo.",
+        summer_on="Summer 2026",     summer_on_d="Recolecta los drops del Summer 2026 automáticamente. Solo en partidas.",
         st_bg="Fondo del Panel",
         st_notif="Activar Notificaciones",
         st_lang="Idioma",
@@ -314,6 +289,11 @@ local Locale = {
         st_stream="Stream Mode",       st_stream_d="Oculta la GUI y desactiva el ESP visual. Tecla: RightAlt.",
         st_r1="Restablecer Tecla UI",     st_r1_d="Restablece esta tecla a su valor predeterminado.",
         st_r2="Restablecer Todas",        st_r2_d="Restablece todas las teclas a sus valores predeterminados.",
+
+        silent_on="Silent Aim",      silent_on_d="Redirige tus disparos al enemigo más cercano automáticamente.",
+        silent_vis="Visible Check",   silent_vis_d="Solo apunta a enemigos que estén realmente a la vista (sin paredes).",
+        silent_man="Manipulation",    silent_man_d="Fuerza los raycasts a ignorar paredes para que el hit registre.",
+        silent_hc="Hit Chance %",     silent_hc_d="Porcentaje de disparos que se redirigen al objetivo.",
 
         n_on="Activado", n_off="Desactivado", n_reset="Tecla restablecida",
     }
@@ -438,6 +418,26 @@ panel.BackgroundColor3 = Color3.fromRGB(8, 6, 8)
 panel.BorderSizePixel = 0; panel.ClipsDescendants = true; panel.ZIndex = 2
 local panelStroke = Instance.new("UIStroke", panel)
 panelStroke.Color = Color3.fromRGB(58, 58, 58); panelStroke.Transparency = 0; panelStroke.Thickness = 1
+
+-- == MOBILE ADAPTATION ===========================================
+local isMobile = UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled
+local panelScale = Instance.new("UIScale", panel)
+local glowScale  = Instance.new("UIScale", glow)
+if isMobile then
+    -- Centrar por ancla para que el UIScale escale desde el centro
+    panel.AnchorPoint = Vector2.new(0.5, 0.5)
+    panel.Position    = UDim2.fromScale(0.5, 0.5)
+    glow.AnchorPoint  = Vector2.new(0.5, 0.5)
+    glow.Position     = UDim2.fromScale(0.5, 0.5)
+    local function fitScale()
+        local vp = camera.ViewportSize
+        local s  = math.clamp(math.min(vp.X * 0.95 / GW, vp.Y * 0.92 / GH), 0.4, 1)
+        panelScale.Scale = s
+        glowScale.Scale  = s
+    end
+    fitScale()
+    camera:GetPropertyChangedSignal("ViewportSize"):Connect(fitScale)
+end
 
 local scanlines = Instance.new("Frame", panel)
 scanlines.Name = "Scanlines"
@@ -1046,22 +1046,32 @@ local function makeSlider(parent, titleKey, stateKey, mn, mx, cb)
     end
     setVal(S[stateKey])
 
+    -- Hit area alto para PC + touch (la barra real es de 4px)
+    local hit = Instance.new("TextButton", row)
+    hit.BackgroundTransparency = 1; hit.Text = ""
+    hit.Size = UDim2.new(1,-28,0,30); hit.Position = UDim2.fromOffset(14,21)
+    hit.ZIndex = 6; hit.AutoButtonColor = false
+
     local sliding = false
-    trk.InputBegan:Connect(function(inp)
-        if inp.UserInputType == Enum.UserInputType.MouseButton1 then
-            sliding = true
-            local abs = trk.AbsolutePosition; local sz = trk.AbsoluteSize
-            if sz.X > 0 then setVal(mn + math.clamp((inp.Position.X-abs.X)/sz.X,0,1)*(mx-mn)) end
+    local function setFromInput(inp)
+        local abs = trk.AbsolutePosition; local sz = trk.AbsoluteSize
+        if sz.X > 0 then setVal(mn + math.clamp((inp.Position.X-abs.X)/sz.X,0,1)*(mx-mn)) end
+    end
+    hit.InputBegan:Connect(function(inp)
+        if inp.UserInputType == Enum.UserInputType.MouseButton1
+        or inp.UserInputType == Enum.UserInputType.Touch then
+            sliding = true; setFromInput(inp)
         end
     end)
     UserInputService.InputChanged:Connect(function(inp)
-        if sliding and inp.UserInputType == Enum.UserInputType.MouseMovement then
-            local abs = trk.AbsolutePosition; local sz = trk.AbsoluteSize
-            if sz.X > 0 then setVal(mn + math.clamp((inp.Position.X-abs.X)/sz.X,0,1)*(mx-mn)) end
+        if sliding and (inp.UserInputType == Enum.UserInputType.MouseMovement
+                     or inp.UserInputType == Enum.UserInputType.Touch) then
+            setFromInput(inp)
         end
     end)
     UserInputService.InputEnded:Connect(function(inp)
-        if inp.UserInputType == Enum.UserInputType.MouseButton1 then sliding = false end
+        if inp.UserInputType == Enum.UserInputType.MouseButton1
+        or inp.UserInputType == Enum.UserInputType.Touch then sliding = false end
     end)
     return row
 end
@@ -1291,22 +1301,32 @@ local function makeColorPicker(parent, label, getR, getG, getB, setRGB)
         end
         setV(rgbVals[ci])
 
+        -- Hit area alto para PC + touch (la barra real es de 4px)
+        local hit2 = Instance.new("TextButton", sRow)
+        hit2.BackgroundTransparency = 1; hit2.Text = ""
+        hit2.Size = UDim2.new(1,-52,1,0); hit2.Position = UDim2.fromOffset(22,0)
+        hit2.ZIndex = 6; hit2.AutoButtonColor = false
+
         local sl2 = false
-        trk2.InputBegan:Connect(function(inp)
-            if inp.UserInputType==Enum.UserInputType.MouseButton1 then
-                sl2=true
-                local a=trk2.AbsolutePosition; local sz=trk2.AbsoluteSize
-                if sz.X>0 then setV((inp.Position.X-a.X)/sz.X*255) end
+        local function setFromInput(inp)
+            local a=trk2.AbsolutePosition; local sz=trk2.AbsoluteSize
+            if sz.X>0 then setV((inp.Position.X-a.X)/sz.X*255) end
+        end
+        hit2.InputBegan:Connect(function(inp)
+            if inp.UserInputType==Enum.UserInputType.MouseButton1
+            or inp.UserInputType==Enum.UserInputType.Touch then
+                sl2=true; setFromInput(inp)
             end
         end)
         UserInputService.InputChanged:Connect(function(inp)
-            if sl2 and inp.UserInputType==Enum.UserInputType.MouseMovement then
-                local a=trk2.AbsolutePosition; local sz=trk2.AbsoluteSize
-                if sz.X>0 then setV((inp.Position.X-a.X)/sz.X*255) end
+            if sl2 and (inp.UserInputType==Enum.UserInputType.MouseMovement
+                     or inp.UserInputType==Enum.UserInputType.Touch) then
+                setFromInput(inp)
             end
         end)
         UserInputService.InputEnded:Connect(function(inp)
-            if inp.UserInputType==Enum.UserInputType.MouseButton1 then sl2=false end
+            if inp.UserInputType==Enum.UserInputType.MouseButton1
+            or inp.UserInputType==Enum.UserInputType.Touch then sl2=false end
         end)
     end
 
@@ -1487,9 +1507,26 @@ end)
 makeDivider(hbxCard)
 makeKeybind(hbxCard, "hbx_key", "hbx_key")
 
+-- ══ SUMMER 2026 ═══════════════════════════════════
+local summerCard = makeCard(pg_inicio)
+makeSecHeader(summerCard, "*", "Summer 2026")
+makeToggle(summerCard, "summer_on", "summer_on_d", "summer_on")
 
 
 -- ══ AIM PAGE ═══════════════════════════════════════════════════
+-- == SILENT AIM CARD ==============================================
+local silentCard = makeCard(pg_aim)
+makeSecHeader(silentCard, "o", "Silent Aim")
+makeToggle(silentCard, "silent_on", "silent_on_d", "SilentAimEnabled", function(on)
+    showNotif("✝  Silent Aim", on and L("n_on") or L("n_off"), on)
+end)
+makeDivider(silentCard)
+makeToggle(silentCard, "silent_vis", "silent_vis_d", "VisibleCheck")
+makeDivider(silentCard)
+makeToggle(silentCard, "silent_man", "silent_man_d", "Manipulation")
+makeDivider(silentCard)
+makeSlider(silentCard, "silent_hc", "HitChance", 1, 100)
+
 local camLockCard = makeCard(pg_aim)
 makeSecHeader(camLockCard, "x", "Cam Lock")
 makeToggle(camLockCard, "camlock_on", "camlock_on_d", "CamLockEnabled", function(on)
@@ -1505,19 +1542,6 @@ makeDivider(camLockCard)
 makeToggle(camLockCard, "camlock_safezone", "camlock_safezone_d", "CamLockSafeZone")
 makeDivider(camLockCard)
 makeKeybind(camLockCard, "camlock_key", "camlock_key")
-
--- ══ SILENT AIM CARD ═══════════════════════════════════════════════════
-local silentAimCard = makeCard(pg_aim)
-makeSecHeader(silentAimCard, "S", "Silent Aim")
-makeToggle(silentAimCard, "silentaim_on", "silentaim_on_d", "SilentAimEnabled", function(on)
-    showNotif("✝  Silent Aim", on and L("n_on") or L("n_off"), on)
-end)
-makeDivider(silentAimCard)
-makeToggle(silentAimCard, "silentaim_wallcheck", "silentaim_wallcheck_d", "VisibleCheck")
-makeDivider(silentAimCard)
-makeToggle(silentAimCard, "hitmanip", "manipulation_d", "Manipulation")
-makeDivider(silentAimCard)
-makeToggle(silentAimCard, "silentaim_teamcheck", "silentaim_teamcheck_d", "SilentAimTeamCheck")
 
 -- ══ FOV CIRCLE CARD ═══════════════════════════════════════════
 local fovCard = makeCard(pg_aim)
@@ -2643,15 +2667,138 @@ end)
 --  CAM LOCK (EXACTAMENTE igual a SyyClient)
 -- ══════════════════════════════════════════════
 local camLockTarget=nil
-local silentAimTarget=nil
-
--- Variable para almacenar el mouse original hit
-local originalMouseHit = nil
 
 
 -- ══════════════════════════════════════════════
 --  FOV CIRCLE (igual a SyyClient)
 -- ══════════════════════════════════════════════
+-- ===============================================================
+--  SILENT AIM (migrado de SyyClient - VisibleCheck/Manipulation/HitChance)
+-- ===============================================================
+local cachedTargetPos = nil
+
+local wallbreakParams = RaycastParams.new()
+wallbreakParams.FilterType = Enum.RaycastFilterType.Include
+wallbreakParams.FilterDescendantsInstances = {}
+
+-- Hook __namecall: intercepta Raycast / FindPartOnRay* y redirige al objetivo
+pcall(function()
+    if not hookmetamethod then return end
+    local oldNC
+    oldNC = hookmetamethod(game, "__namecall", newcclosure(function(...)
+        local method = getnamecallmethod()
+        local usePos = cachedTargetPos
+        if not (S.SilentAimEnabled and usePos) then return oldNC(...) end
+        if checkcaller() then return oldNC(...) end
+        if math.random(100) > S.HitChance then return oldNC(...) end
+
+        local args = { ... }
+        if args[1] ~= workspace then return oldNC(...) end
+
+        if method == "Raycast" then
+            if typeof(args[2]) ~= "Vector3" or typeof(args[3]) ~= "Vector3" then return oldNC(...) end
+            args[3] = (usePos - args[2]).Unit * 1000
+            if S.Manipulation then args[4] = wallbreakParams end
+            return oldNC(table.unpack(args))
+        elseif method == "FindPartOnRayWithIgnoreList" or method == "FindPartOnRay" then
+            if typeof(args[2]) ~= "Ray" then return oldNC(...) end
+            local o = args[2].Origin
+            args[2] = Ray.new(o, (usePos - o).Unit * 1000)
+            if S.Manipulation and method == "FindPartOnRayWithIgnoreList" then args[3] = {} end
+            return oldNC(table.unpack(args))
+        end
+        return oldNC(...)
+    end))
+end)
+
+-- Deteccion de disparo (PC: click izq / Movil: lado derecho de pantalla)
+local saIsFiring = false
+UserInputService.InputBegan:Connect(function(inp)
+    if inp.UserInputType == Enum.UserInputType.MouseButton1 then saIsFiring = true
+    elseif inp.UserInputType == Enum.UserInputType.Touch then
+        if inp.Position.X > camera.ViewportSize.X * 0.35 then saIsFiring = true end
+    end
+end)
+UserInputService.InputEnded:Connect(function(inp)
+    if inp.UserInputType == Enum.UserInputType.MouseButton1
+    or inp.UserInputType == Enum.UserInputType.Touch then
+        task.delay(0.08, function() saIsFiring = false end)
+    end
+end)
+
+-- Calculo del objetivo cada 2 frames (misma logica que SyyClient)
+local _saFrame = 0
+RunService.RenderStepped:Connect(function()
+    _saFrame = _saFrame + 1
+    if _saFrame % 2 ~= 0 then return end
+
+    if not S.SilentAimEnabled then cachedTargetPos = nil; return end
+
+    local myChar = player.Character
+    local vp = camera.ViewportSize
+    local center = Vector2.new(vp.X * 0.5, vp.Y * 0.5)
+    local fovLimit = streamModeOn and math.huge or S.fov_radius
+
+    -- wallbreakParams solo se refresca si Manipulation esta ON
+    if S.Manipulation then
+        local chars = {}
+        for _, p in ipairs(_plrList) do
+            if p ~= player and p.Character then chars[#chars+1] = p.Character end
+        end
+        wallbreakParams.FilterDescendantsInstances = chars
+    end
+
+    local bestD, bestPos = math.huge, nil
+    for _, p in ipairs(_plrList) do
+        if shouldSkipPlayer(p) then continue end
+        local char = p.Character; if not char then continue end
+        local hum  = char:FindFirstChildOfClass("Humanoid")
+        local root = char:FindFirstChild("HumanoidRootPart")
+        if not hum or hum.Health <= 0 or not root then continue end
+
+        local sp2, onS = camera:WorldToViewportPoint(root.Position)
+        local d2 = (Vector2.new(sp2.X, sp2.Y) - center).Magnitude
+
+        if S.VisibleCheck then
+            if not onS then continue end
+            if d2 > fovLimit then continue end
+            if not S.Manipulation then
+                local ok, obs = pcall(function()
+                    return camera:GetPartsObscuringTarget({root.Position}, {myChar, char})
+                end)
+                if ok and #obs > 0 then continue end
+            end
+        else
+            if not streamModeOn and d2 > fovLimit then continue end
+            if not onS then continue end
+            if not S.Manipulation then
+                local ok, obs = pcall(function()
+                    return camera:GetPartsObscuringTarget({root.Position}, {myChar, char})
+                end)
+                if ok and #obs > 0 then continue end
+            end
+        end
+
+        if d2 < bestD then
+            bestD = d2
+            local pn = S.TargetPart
+            if pn == "Random" then
+                local r = math.random(100)
+                pn = r <= 30 and "Head" or (r <= 80 and "UpperTorso" or "LowerTorso")
+            elseif pn == "Pierna" then pn = "LowerTorso"
+            elseif pn == "Pecho"  then pn = "UpperTorso"
+            elseif pn == "Combo"  then
+                local r = math.random(100)
+                pn = r <= 35 and "LowerTorso" or (r <= 85 and "UpperTorso" or "Head")
+            end
+            local hp = char:FindFirstChild(pn) or root
+            bestPos = hp.Position
+        end
+    end
+    cachedTargetPos = bestPos
+end)
+
+
 local fovCircle = Drawing.new("Circle")
 fovCircle.Visible      = false
 fovCircle.Thickness    = 1.5
@@ -2675,7 +2822,18 @@ local function isInFov(root)
     return (dx*dx + dy*dy) <= (S.fov_radius * S.fov_radius)
 end
 
--- FOV circle actualizado dentro del SA RenderStepped principal (abajo)
+RunService.RenderStepped:Connect(function()
+    -- Visible solo cuando fov_visible está ON (independiente del filtro)
+    fovCircle.Visible = S.fov_visible
+    if S.fov_visible then
+        fovCircle.Position = getFovCenter()
+        fovCircle.Radius   = S.fov_radius
+        -- Morado cuando filtro ON, gris cuando solo visual
+        fovCircle.Color = S.fov_on
+            and Color3.fromRGB(141, 122, 174)   -- morado
+            or  Color3.fromRGB(110, 110, 110)    -- gris
+    end
+end)
 
 
 RunService:BindToRenderStep("x7sCamLock", Enum.RenderPriority.Camera.Value+1, function()
@@ -2721,179 +2879,6 @@ RunService:BindToRenderStep("x7sCamLock", Enum.RenderPriority.Camera.Value+1, fu
     end)
 end)
 
--- ══════════════════════════════════════════════════════════════
---  SILENT AIM — Variables compartidas (declaradas ANTES del loop)
--- ══════════════════════════════════════════════════════════════
-local cachedTargetPos = nil
-
-local wallbreakParams = RaycastParams.new()
-wallbreakParams.FilterType = Enum.RaycastFilterType.Include
-wallbreakParams.FilterDescendantsInstances = {}
-
--- ══════════════════════════════════════════════════════════════
---  SILENT AIM — Loop principal (idéntico a SyyClient)
---  • center2D calculado fresco cada frame (igual que SyyClient)
---  • wallbreakParams actualizado en el mismo frame
---  • cachedTargetPos escrito aquí, leído por el hook abajo
---  • Team check: integrado en shouldSkipPlayer()
--- ══════════════════════════════════════════════════════════════
-local _saFrame = 0
-RunService.RenderStepped:Connect(function()
-    _saFrame = _saFrame + 1
-
-    -- center2D fresco cada frame — igual que SyyClient line 1904
-    local vpSize  = camera.ViewportSize
-    local center2D = Vector2.new(vpSize.X * 0.5, vpSize.Y * 0.5)
-
-    -- Actualizar FOV circle (mismo loop, sin RenderStepped separado)
-    if S.fov_visible then
-        fovCircle.Visible   = true
-        fovCircle.Position  = center2D
-        fovCircle.Radius    = S.fov_radius
-        fovCircle.Color     = S.fov_on
-            and Color3.fromRGB(141, 122, 174)
-            or  Color3.fromRGB(110, 110, 110)
-    else
-        fovCircle.Visible = false
-    end
-
-    -- SA loop corre cada 2 frames — igual que SyyClient `if frame%2==0`
-    if _saFrame % 2 ~= 0 then return end
-
-    pcall(function()
-        -- Actualizar wallbreakParams si Manipulation ON
-        if S.Manipulation then
-            local chars = {}
-            for _, p in ipairs(_plrList) do
-                if p ~= player and p.Character then
-                    chars[#chars + 1] = p.Character
-                end
-            end
-            wallbreakParams.FilterDescendantsInstances = chars
-        end
-
-        if not S.SilentAimEnabled then
-            cachedTargetPos = nil
-            return
-        end
-
-        local myChar   = player.Character
-        local myRoot   = myChar and myChar:FindFirstChild("HumanoidRootPart")
-        local fovLimit = streamModeOn and math.huge or S.fov_radius
-        local bestD    = math.huge
-        local bestPos  = nil
-
-        for _, p in ipairs(_plrList) do
-            -- shouldSkipPlayer: ya tiene player local + whitelist + team check
-            if shouldSkipPlayer(p) then continue end
-
-            local char = p.Character; if not char then continue end
-            local hum  = char:FindFirstChildOfClass("Humanoid")
-            local root = char:FindFirstChild("HumanoidRootPart")
-            if not hum or hum.Health <= 0 or not root then continue end
-
-            local sp2, onS = camera:WorldToViewportPoint(root.Position)
-            local d2 = (Vector2.new(sp2.X, sp2.Y) - center2D).Magnitude
-
-            if S.VisibleCheck then
-                if not onS then continue end
-                if d2 > fovLimit then continue end
-                if not S.Manipulation then
-                    local lc = player.Character
-                    if lc then
-                        local ok, obs = pcall(function()
-                            return camera:GetPartsObscuringTarget({root.Position}, {lc, char})
-                        end)
-                        if ok and #obs > 0 then continue end
-                    end
-                end
-            else
-                if not onS then continue end
-                if d2 > fovLimit then continue end
-                if not S.Manipulation then
-                    local lc = player.Character
-                    if lc then
-                        local ok, obs = pcall(function()
-                            return camera:GetPartsObscuringTarget({root.Position}, {lc, char})
-                        end)
-                        if ok and #obs > 0 then continue end
-                    end
-                end
-            end
-
-            if d2 < bestD then
-                bestD = d2
-                local pn = S.SilentAimTargetPart
-                if pn == "Random" then
-                    local r = math.random(100)
-                    pn = r <= 30 and "Head" or (r <= 80 and "UpperTorso" or "LowerTorso")
-                elseif pn == "Pierna" then pn = "LowerTorso"
-                elseif pn == "Pecho"  then pn = "UpperTorso"
-                elseif pn == "Combo"  then
-                    local r = math.random(100)
-                    pn = r <= 35 and "LowerTorso" or (r <= 85 and "UpperTorso" or "Head")
-                end
-                local hp2 = char:FindFirstChild(pn) or root
-                bestPos   = hp2.Position
-            end
-        end
-
-        cachedTargetPos = bestPos
-    end)
-end)
-
-pcall(function()
-    local oldNC
-    oldNC = hookmetamethod(game, "__namecall", newcclosure(function(...)
-        local method = getnamecallmethod()
-
-        -- ── UNIVERSAL SILENT AIM: FireServer / InvokeServer ──────────
-        if S.SilentAimEnabled and not checkcaller() and not streamModeOn
-           and (method == "FireServer" or method == "InvokeServer") then
-            local usePos2 = nil
-            if S.SilentAimEnabled and cachedTargetPos then usePos2 = cachedTargetPos end
-            if usePos2 and math.random(100) <= S.HitChance then
-                local args = {...}
-                local myC = player.Character
-                local myR = myC and myC:FindFirstChild("HumanoidRootPart")
-                local replaced = false
-                for i = 2, math.min(#args, 8) do
-                    if typeof(args[i]) == "Vector3" then
-                        local v = args[i]
-                        if v.Magnitude > 2 then
-                            if myR then
-                                local d = (v - myR.Position).Magnitude
-                                if d > 5 and d < 2000 then args[i] = usePos2; replaced = true end
-                            end
-                        end
-                    end
-                end
-                if replaced then return oldNC(table.unpack(args)) end
-            end
-        end
-
-        -- ── RAYCAST SILENT AIM ───────────────────────────────────────
-        local usePos = nil
-        if S.SilentAimEnabled and cachedTargetPos then usePos = cachedTargetPos end
-        if not usePos then return oldNC(...) end
-        if checkcaller() then return oldNC(...) end
-        if math.random(100) > S.HitChance then return oldNC(...) end
-        local args = {...}
-        if args[1] ~= Workspace then return oldNC(...) end
-        if method == "Raycast" then
-            if typeof(args[2]) ~= "Vector3" or typeof(args[3]) ~= "Vector3" then return oldNC(...) end
-            args[3] = (usePos - args[2]).Unit * 1000
-            if S.Manipulation then args[4] = wallbreakParams end
-            return oldNC(table.unpack(args))
-        elseif method == "FindPartOnRayWithIgnoreList" or method == "FindPartOnRay" then
-            if typeof(args[2]) ~= "Ray" then return oldNC(...) end
-            local o = args[2].Origin; args[2] = Ray.new(o, (usePos - o).Unit * 1000)
-            if S.Manipulation and method == "FindPartOnRayWithIgnoreList" then args[3] = {} end
-            return oldNC(table.unpack(args))
-        end
-        return oldNC(...)
-    end))
-end)
 
 -- ══════════════════════════════════════════════
 --  KEYBINDS globales
@@ -2955,14 +2940,6 @@ UserInputService.InputBegan:Connect(function(inp, proc)
         return
     end
 
-    -- Toggle Silent Aim
-    if kn == S.silentaim_key then
-        S.SilentAimEnabled = not S.SilentAimEnabled; save()
-        if refreshers["SilentAimEnabled"] then refreshers["SilentAimEnabled"]() end
-        showNotif("✝  Silent Aim", S.SilentAimEnabled and L("n_on") or L("n_off"), S.SilentAimEnabled)
-        return
-    end
-
     -- Toggle Hitbox
     if kn == S.hbx_key then
         S.hbx_on = not S.hbx_on; save()
@@ -2999,4 +2976,83 @@ end)
 
 task.defer(function()
     panel.BackgroundTransparency = S.panel_bg and 0 or 0.15
+end)
+
+
+-- == BOTON FLOTANTE (abrir/cerrar GUI en movil) - drag estable ===
+if isMobile then
+    local FB_SZ = 54
+    local fb = Instance.new("TextButton", gui)
+    fb.Name = "x7sToggle"; fb.Size = UDim2.fromOffset(FB_SZ, FB_SZ)
+    fb.Position = UDim2.fromOffset(16, math.floor(camera.ViewportSize.Y * 0.4))
+    fb.BackgroundColor3 = Color3.fromRGB(12, 9, 18); fb.BorderSizePixel = 0
+    fb.Text = "x7s"; fb.TextColor3 = accentColor
+    fb.Font = Enum.Font.GothamBlack; fb.TextSize = 15; fb.ZIndex = 250
+    fb.AutoButtonColor = false; fb.Active = true
+    Instance.new("UICorner", fb).CornerRadius = UDim.new(1, 0)
+    local fbs = Instance.new("UIStroke", fb); fbs.Color = accentColor; fbs.Thickness = 1.5; fbs.Transparency = 0.3
+
+    local DRAG_THRESHOLD = 8           -- px antes de considerarlo arrastre (no tap)
+    local dragInput, dragStart, startPos, moved = nil, nil, nil, false
+
+    fb.InputBegan:Connect(function(inp)
+        if inp.UserInputType == Enum.UserInputType.Touch
+        or inp.UserInputType == Enum.UserInputType.MouseButton1 then
+            dragInput = inp
+            dragStart = inp.Position
+            startPos  = fb.Position       -- UDim2 en offset puro
+            moved = false
+            fbs.Transparency = 0          -- feedback al presionar
+            inp.Changed:Connect(function()
+                if dragInput == inp and inp.UserInputState == Enum.UserInputState.End then
+                    dragInput = nil
+                    fbs.Transparency = 0.3
+                    if not moved then
+                        -- tap = toggle del panel
+                        local show = not panel.Visible
+                        panel.Visible = show; glow.Visible = show
+                        if show then panel.BackgroundTransparency = 0 end
+                    end
+                end
+            end)
+        end
+    end)
+
+    -- Sigue el dedo SOLO tras cruzar el umbral (un tap NO mueve la burbuja)
+    UserInputService.InputChanged:Connect(function(inp)
+        if dragInput ~= inp then return end
+        if inp.UserInputType ~= Enum.UserInputType.Touch
+       and inp.UserInputType ~= Enum.UserInputType.MouseMovement then return end
+        local delta = inp.Position - dragStart
+        if not moved then
+            if delta.Magnitude < DRAG_THRESHOLD then return end  -- ignora jitter del tap
+            moved = true
+        end
+        local vp = camera.ViewportSize
+        fb.Position = UDim2.fromOffset(
+            math.clamp(startPos.X.Offset + delta.X, 0, vp.X - FB_SZ),
+            math.clamp(startPos.Y.Offset + delta.Y, 0, vp.Y - FB_SZ))
+    end)
+end
+
+task.spawn(function()
+    local remote = game:GetService("ReplicatedStorage").Packages.Networking:WaitForChild("RE/Events/CollectEventSpawnable")
+    local folder = workspace:WaitForChild("Spawnables"):WaitForChild("SpawnablesClient")
+    while task.wait(0.3) do
+        if not S.summer_on then continue end
+        for _, spawn in ipairs(folder:GetChildren()) do
+            -- Intenta con "Touch", si no existe usa cualquier BasePart del modelo
+            local touch = spawn:FindFirstChild("Touch")
+                       or spawn:FindFirstChildOfClass("Part")
+                       or spawn:FindFirstChildOfClass("MeshPart")
+                       or (spawn:IsA("BasePart") and spawn)
+            if touch then
+                pcall(function()
+                    remote:FireServer(touch)
+                    spawn:Destroy()
+                end)
+                task.wait(0.05)
+            end
+        end
+    end
 end)
