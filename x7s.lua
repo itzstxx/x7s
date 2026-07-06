@@ -2417,6 +2417,66 @@ local _plrList = Players:GetPlayers()
 Players.PlayerAdded:Connect(function()    _plrList = Players:GetPlayers() end)
 Players.PlayerRemoving:Connect(function() task.defer(function() _plrList = Players:GetPlayers() end) end)
 
+-- Pre-declarar para knife detection (se reusa en el hook más abajo)
+local cachedTargetPos = nil
+
+-- ══════════════════════════════════════════════════════════════
+--  KNIFE AUTO-DETECT — desactiva Silent Aim al equipar el cuchillo
+--  El knife real tiene SlashEvent + ThrowEvent como RemoteEvents
+--  (el nombre del tool es skin: FlareGun, LeafKnife, etc.)
+--  La pistola tiene GunKill + Gunshot (Sound) en el Handle
+-- ══════════════════════════════════════════════════════════════
+local _saBeforeKnife = false  -- guarda el estado del SA antes de equipar el knife
+
+local function isKnifeTool(tool)
+    if not tool or not tool:IsA("Tool") then return false end
+    -- El script del knife siempre tiene SlashEvent y ThrowEvent
+    return tool:FindFirstChild("SlashEvent") ~= nil
+        or tool:FindFirstChild("ThrowEvent") ~= nil
+        or (tool:FindFirstChild("SlashEvent", true) ~= nil)
+end
+
+local function onToolEquipped(tool)
+    if isKnifeTool(tool) then
+        -- Guardar estado actual y desactivar SA
+        _saBeforeKnife = S.SilentAimEnabled
+        if S.SilentAimEnabled then
+            S.SilentAimEnabled = false
+            cachedTargetPos = nil
+            if refreshers["SilentAimEnabled"] then refreshers["SilentAimEnabled"]() end
+        end
+    end
+end
+
+local function onToolUnequipped(tool)
+    if isKnifeTool(tool) then
+        -- Restaurar estado SA que tenía antes
+        if _saBeforeKnife and not S.SilentAimEnabled then
+            S.SilentAimEnabled = true
+            if refreshers["SilentAimEnabled"] then refreshers["SilentAimEnabled"]() end
+        end
+        _saBeforeKnife = false
+    end
+end
+
+-- Conectar al personaje actual y a respawns
+local function connectCharacterTools(char)
+    -- Detectar tool ya equipada al spawnear
+    for _, obj in ipairs(char:GetChildren()) do
+        if obj:IsA("Tool") then onToolEquipped(obj) end
+    end
+    -- Detectar equipado/desequipado en tiempo real
+    char.ChildAdded:Connect(function(obj)
+        if obj:IsA("Tool") then onToolEquipped(obj) end
+    end)
+    char.ChildRemoved:Connect(function(obj)
+        if obj:IsA("Tool") then onToolUnequipped(obj) end
+    end)
+end
+
+if player.Character then connectCharacterTools(player.Character) end
+player.CharacterAdded:Connect(connectCharacterTools)
+
 -- ══════════════════════════════════════════════
 --  RENDER LOOP
 -- ══════════════════════════════════════════════
@@ -2692,7 +2752,6 @@ local camLockTarget=nil
 -- ===============================================================
 --  SILENT AIM (migrado de SyyClient - VisibleCheck/Manipulation/HitChance)
 -- ===============================================================
-local cachedTargetPos = nil
 
 local wallbreakParams = RaycastParams.new()
 wallbreakParams.FilterType = Enum.RaycastFilterType.Include
