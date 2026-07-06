@@ -2422,23 +2422,42 @@ local cachedTargetPos = nil
 
 -- ══════════════════════════════════════════════════════════════
 --  KNIFE AUTO-DETECT — desactiva Silent Aim al equipar el cuchillo
---  El knife real tiene SlashEvent + ThrowEvent como RemoteEvents
---  (el nombre del tool es skin: FlareGun, LeafKnife, etc.)
---  La pistola tiene GunKill + Gunshot (Sound) en el Handle
+--
+--  Cómo diferenciamos knife de pistola (confirmado con Dex + script fuente):
+--  • DefaultGun (pistola) → Handle tiene Sound "GunKill" y "Gunshot"
+--  • Knife (cualquier skin) → NO tiene GunKill/Gunshot en el Handle
+--    El knife usa Net:RemoteEvent() → los remotes están en RS, no en el tool
+--
+--  Método: si el tool equipado NO tiene "GunKill" en ningún descendiente
+--  y tampoco tiene un "Handle" con sounds de arma → es el knife
 -- ══════════════════════════════════════════════════════════════
-local _saBeforeKnife = false  -- guarda el estado del SA antes de equipar el knife
+local _saBeforeKnife = false
 
 local function isKnifeTool(tool)
     if not tool or not tool:IsA("Tool") then return false end
-    -- El script del knife siempre tiene SlashEvent y ThrowEvent
-    return tool:FindFirstChild("SlashEvent") ~= nil
-        or tool:FindFirstChild("ThrowEvent") ~= nil
-        or (tool:FindFirstChild("SlashEvent", true) ~= nil)
+    -- La pistola SIEMPRE tiene GunKill y Gunshot en el Handle
+    local handle = tool:FindFirstChild("Handle")
+    if handle then
+        if handle:FindFirstChild("GunKill") or handle:FindFirstChild("Gunshot") then
+            return false  -- es pistola
+        end
+    end
+    -- Si tiene un Handle sin sounds de pistola → es knife
+    -- También checar por nombre de sounds en cualquier descendiente
+    for _, obj in ipairs(tool:GetDescendants()) do
+        if obj:IsA("Sound") then
+            local n = obj.Name:lower()
+            if n == "gunkill" or n == "gunshot" or n == "shoot" or n == "fire" then
+                return false  -- es pistola
+            end
+        end
+    end
+    -- Ningún sound de pistola → es knife/melee
+    return true
 end
 
 local function onToolEquipped(tool)
     if isKnifeTool(tool) then
-        -- Guardar estado actual y desactivar SA
         _saBeforeKnife = S.SilentAimEnabled
         if S.SilentAimEnabled then
             S.SilentAimEnabled = false
@@ -2450,7 +2469,6 @@ end
 
 local function onToolUnequipped(tool)
     if isKnifeTool(tool) then
-        -- Restaurar estado SA que tenía antes
         if _saBeforeKnife and not S.SilentAimEnabled then
             S.SilentAimEnabled = true
             if refreshers["SilentAimEnabled"] then refreshers["SilentAimEnabled"]() end
@@ -2459,13 +2477,10 @@ local function onToolUnequipped(tool)
     end
 end
 
--- Conectar al personaje actual y a respawns
 local function connectCharacterTools(char)
-    -- Detectar tool ya equipada al spawnear
     for _, obj in ipairs(char:GetChildren()) do
         if obj:IsA("Tool") then onToolEquipped(obj) end
     end
-    -- Detectar equipado/desequipado en tiempo real
     char.ChildAdded:Connect(function(obj)
         if obj:IsA("Tool") then onToolEquipped(obj) end
     end)
