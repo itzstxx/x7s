@@ -2432,6 +2432,7 @@ local cachedTargetPos = nil
 --  y tampoco tiene un "Handle" con sounds de arma → es el knife
 -- ══════════════════════════════════════════════════════════════
 local _saBeforeKnife = false
+local _gunEquipped    = false  -- true mientras la pistola está equipada
 
 local function isKnifeTool(tool)
     if not tool or not tool:IsA("Tool") then return false end
@@ -2458,22 +2459,35 @@ end
 
 local function onToolEquipped(tool)
     if isKnifeTool(tool) then
+        -- Equipó el knife → apagar silent aim
+        _gunEquipped = false
         _saBeforeKnife = S.SilentAimEnabled
         if S.SilentAimEnabled then
             S.SilentAimEnabled = false
             cachedTargetPos = nil
             if refreshers["SilentAimEnabled"] then refreshers["SilentAimEnabled"]() end
         end
+    else
+        -- Equipó la pistola u otra arma → marcar gun activa
+        -- Los cuchillos en el aire NO deben recibir auto-aim
+        _gunEquipped = true
+        cachedTargetPos = nil  -- limpiar posición cacheada para no redirigir knives en vuelo
     end
 end
 
 local function onToolUnequipped(tool)
     if isKnifeTool(tool) then
+        -- Desequipó el knife
         if _saBeforeKnife and not S.SilentAimEnabled then
             S.SilentAimEnabled = true
             if refreshers["SilentAimEnabled"] then refreshers["SilentAimEnabled"]() end
         end
         _saBeforeKnife = false
+        _gunEquipped = false
+    else
+        -- Desequipó la pistola
+        _gunEquipped = false
+        cachedTargetPos = nil
     end
 end
 
@@ -2779,7 +2793,10 @@ pcall(function()
     oldNC = hookmetamethod(game, "__namecall", newcclosure(function(...)
         local method = getnamecallmethod()
         local usePos = cachedTargetPos
+        -- No redirigir si silent está apagado, sin target, o si la gun está equipada
+        -- (evita que knives en el aire se auto-dirijan al cambiar a gun)
         if not (S.SilentAimEnabled and usePos) then return oldNC(...) end
+        if _gunEquipped then return oldNC(...) end
         if checkcaller() then return oldNC(...) end
         if math.random(100) > S.HitChance then return oldNC(...) end
 
@@ -2823,7 +2840,8 @@ RunService.RenderStepped:Connect(function()
     _saFrame = _saFrame + 1
     if _saFrame % 2 ~= 0 then return end
 
-    if not S.SilentAimEnabled then cachedTargetPos = nil; return end
+    -- Si la pistola está equipada, no calcular target (los knives en el aire no deben seguir a nadie)
+    if not S.SilentAimEnabled or _gunEquipped then cachedTargetPos = nil; return end
 
     local myChar = player.Character
     local vp = camera.ViewportSize
