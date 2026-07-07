@@ -242,7 +242,7 @@ local Locale = {
         ext_distance="Distance",              ext_distance_d="Shows the distance to each enemy in meters.",
         ext_item_hand="Item in Hand",         ext_item_hand_d="Shows what item the enemy is holding.",
 
-        summer_on="Summer 2026",    summer_on_d="Collects Summer 2026 drops automatically. Only in matches.",
+        summer_on="Atlantis Event",  summer_on_d="Collects Atlantis event drops automatically. Only in matches.",
 
         st_bg="Toggle Panel Background",
         st_notif="Enable Notifications",
@@ -295,7 +295,7 @@ local Locale = {
         ext_health_bar="Barra de Salud",      ext_health_bar_d="Dibuja una barra de vida junto a cada enemigo.",
         ext_distance="Distancia",             ext_distance_d="Muestra la distancia a cada enemigo en metros.",
         ext_item_hand="Ítem en la Mano",      ext_item_hand_d="Muestra qué ítem sostiene el enemigo.",
-        summer_on="Summer 2026",     summer_on_d="Recolecta los drops del Summer 2026 automáticamente. Solo en partidas.",
+        summer_on="Atlantis Event",  summer_on_d="Recolecta los drops del Atlantis Event automáticamente. Solo en partidas.",
         st_bg="Fondo del Panel",
         st_notif="Activar Notificaciones",
         st_lang="Idioma",
@@ -2417,6 +2417,81 @@ local _plrList = Players:GetPlayers()
 Players.PlayerAdded:Connect(function()    _plrList = Players:GetPlayers() end)
 Players.PlayerRemoving:Connect(function() task.defer(function() _plrList = Players:GetPlayers() end) end)
 
+-- Pre-declarar para knife detection (se reusa en el hook más abajo)
+local cachedTargetPos = nil
+
+-- ══════════════════════════════════════════════════════════════
+--  KNIFE AUTO-DETECT — desactiva Silent Aim al equipar el cuchillo
+--
+--  Cómo diferenciamos knife de pistola (confirmado con Dex + script fuente):
+--  • DefaultGun (pistola) → Handle tiene Sound "GunKill" y "Gunshot"
+--  • Knife (cualquier skin) → NO tiene GunKill/Gunshot en el Handle
+--    El knife usa Net:RemoteEvent() → los remotes están en RS, no en el tool
+--
+--  Método: si el tool equipado NO tiene "GunKill" en ningún descendiente
+--  y tampoco tiene un "Handle" con sounds de arma → es el knife
+-- ══════════════════════════════════════════════════════════════
+local _saBeforeKnife = false
+
+local function isKnifeTool(tool)
+    if not tool or not tool:IsA("Tool") then return false end
+    -- La pistola SIEMPRE tiene GunKill y Gunshot en el Handle
+    local handle = tool:FindFirstChild("Handle")
+    if handle then
+        if handle:FindFirstChild("GunKill") or handle:FindFirstChild("Gunshot") then
+            return false  -- es pistola
+        end
+    end
+    -- Si tiene un Handle sin sounds de pistola → es knife
+    -- También checar por nombre de sounds en cualquier descendiente
+    for _, obj in ipairs(tool:GetDescendants()) do
+        if obj:IsA("Sound") then
+            local n = obj.Name:lower()
+            if n == "gunkill" or n == "gunshot" or n == "shoot" or n == "fire" then
+                return false  -- es pistola
+            end
+        end
+    end
+    -- Ningún sound de pistola → es knife/melee
+    return true
+end
+
+local function onToolEquipped(tool)
+    if isKnifeTool(tool) then
+        _saBeforeKnife = S.SilentAimEnabled
+        if S.SilentAimEnabled then
+            S.SilentAimEnabled = false
+            cachedTargetPos = nil
+            if refreshers["SilentAimEnabled"] then refreshers["SilentAimEnabled"]() end
+        end
+    end
+end
+
+local function onToolUnequipped(tool)
+    if isKnifeTool(tool) then
+        if _saBeforeKnife and not S.SilentAimEnabled then
+            S.SilentAimEnabled = true
+            if refreshers["SilentAimEnabled"] then refreshers["SilentAimEnabled"]() end
+        end
+        _saBeforeKnife = false
+    end
+end
+
+local function connectCharacterTools(char)
+    for _, obj in ipairs(char:GetChildren()) do
+        if obj:IsA("Tool") then onToolEquipped(obj) end
+    end
+    char.ChildAdded:Connect(function(obj)
+        if obj:IsA("Tool") then onToolEquipped(obj) end
+    end)
+    char.ChildRemoved:Connect(function(obj)
+        if obj:IsA("Tool") then onToolUnequipped(obj) end
+    end)
+end
+
+if player.Character then connectCharacterTools(player.Character) end
+player.CharacterAdded:Connect(connectCharacterTools)
+
 -- ══════════════════════════════════════════════
 --  RENDER LOOP
 -- ══════════════════════════════════════════════
@@ -2692,7 +2767,6 @@ local camLockTarget=nil
 -- ===============================================================
 --  SILENT AIM (migrado de SyyClient - VisibleCheck/Manipulation/HitChance)
 -- ===============================================================
-local cachedTargetPos = nil
 
 local wallbreakParams = RaycastParams.new()
 wallbreakParams.FilterType = Enum.RaycastFilterType.Include
@@ -2704,27 +2778,43 @@ pcall(function()
     local oldNC
     oldNC = hookmetamethod(game, "__namecall", newcclosure(function(...)
         local method = getnamecallmethod()
+        if method ~= "Raycast" and method ~= "FindPartOnRayWithIgnoreList" and method ~= "FindPartOnRay" then
+            return oldNC(...)
+        end
         local usePos = cachedTargetPos
         if not (S.SilentAimEnabled and usePos) then return oldNC(...) end
         if checkcaller() then return oldNC(...) end
-        if math.random(100) > S.HitChance then return oldNC(...) end
 
         local args = { ... }
         if args[1] ~= workspace then return oldNC(...) end
 
+        -- Obtener el origen del ray
+        local rayOrigin
         if method == "Raycast" then
             if typeof(args[2]) ~= "Vector3" or typeof(args[3]) ~= "Vector3" then return oldNC(...) end
-            args[3] = (usePos - args[2]).Unit * 1000
+            rayOrigin = args[2]
+        else
+            if typeof(args[2]) ~= "Ray" then return oldNC(...) end
+            rayOrigin = args[2].Origin
+        end
+
+        -- CLAVE: el knife throw sale desde la mano/handle del personaje
+        -- La pistola sale desde la cámara
+        -- Si el origen está a más de 8 studs de la cámara → es el knife → no redirigir
+        local camPos = workspace.CurrentCamera.CFrame.Position
+        if (rayOrigin - camPos).Magnitude > 8 then return oldNC(...) end
+
+        if math.random(100) > S.HitChance then return oldNC(...) end
+
+        if method == "Raycast" then
+            args[3] = (usePos - rayOrigin).Unit * 1000
             if S.Manipulation then args[4] = wallbreakParams end
             return oldNC(table.unpack(args))
-        elseif method == "FindPartOnRayWithIgnoreList" or method == "FindPartOnRay" then
-            if typeof(args[2]) ~= "Ray" then return oldNC(...) end
-            local o = args[2].Origin
-            args[2] = Ray.new(o, (usePos - o).Unit * 1000)
+        else
+            args[2] = Ray.new(rayOrigin, (usePos - rayOrigin).Unit * 1000)
             if S.Manipulation and method == "FindPartOnRayWithIgnoreList" then args[3] = {} end
             return oldNC(table.unpack(args))
         end
-        return oldNC(...)
     end))
 end)
 
@@ -3054,23 +3144,48 @@ if isMobile then
 end
 
 task.spawn(function()
-    local remote = game:GetService("ReplicatedStorage").Packages.Networking:WaitForChild("RE/Events/CollectEventSpawnable")
-    local folder = workspace:WaitForChild("Spawnables"):WaitForChild("SpawnablesClient")
-    while task.wait(0.3) do
+    -- Del EventsController fuente confirmado:
+    -- • La carpeta es workspace.SpawnablesClient (creada por el juego al iniciar)
+    -- • El remote es CollectEventSpawnable:FireServer() sin argumentos
+    -- • La colección ocurre cuando PrimaryPart.Touched detecta el personaje local
+    -- • Simplemente replicamos ese Touched automáticamente
+    local RS = game:GetService("ReplicatedStorage")
+    local net = RS:WaitForChild("Packages"):WaitForChild("Networking")
+    local remote = net:WaitForChild("RE/Events/CollectEventSpawnable", 15)
+    if not remote then return end
+
+    -- Esperar a que el juego cree SpawnablesClient en workspace
+    local folder = workspace:WaitForChild("SpawnablesClient", 30)
+    if not folder then return end
+
+    local function collectItem(item)
+        if not item or not item.Parent then return end
+        if not S.summer_on then return end
+        task.wait(0.05)
+        pcall(function()
+            -- El juego usa FireServer() sin argumentos (confirmado en EventsController línea 1405)
+            remote:FireServer()
+        end)
+        task.wait(0.05)
+        pcall(function() if item.Parent then item:Destroy() end end)
+    end
+
+    -- Recolectar items ya presentes
+    for _, item in ipairs(folder:GetChildren()) do
+        if S.summer_on then task.spawn(collectItem, item) end
+    end
+
+    -- Recolectar al aparecer nuevos
+    folder.ChildAdded:Connect(function(item)
+        if not S.summer_on then return end
+        task.spawn(collectItem, item)
+    end)
+
+    -- Loop de seguridad por si algo queda sin recolectar
+    while task.wait(0.5) do
         if not S.summer_on then continue end
-        for _, spawn in ipairs(folder:GetChildren()) do
-            -- Intenta con "Touch", si no existe usa cualquier BasePart del modelo
-            local touch = spawn:FindFirstChild("Touch")
-                       or spawn:FindFirstChildOfClass("Part")
-                       or spawn:FindFirstChildOfClass("MeshPart")
-                       or (spawn:IsA("BasePart") and spawn)
-            if touch then
-                pcall(function()
-                    remote:FireServer(touch)
-                    spawn:Destroy()
-                end)
-                task.wait(0.05)
-            end
+        for _, item in ipairs(folder:GetChildren()) do
+            task.spawn(collectItem, item)
         end
     end
 end)
