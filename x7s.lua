@@ -677,7 +677,7 @@ end
 local NAV_DATA = {
     { icon = "*", label = "Inicio" },
     { icon = "o", label = "Aim" },
-    { icon = "+", label = "Ez" },
+    { icon = "+", label = "Extras" },
     { icon = "#", label = "Ajustes" },
 }
 
@@ -2417,95 +2417,6 @@ local _plrList = Players:GetPlayers()
 Players.PlayerAdded:Connect(function()    _plrList = Players:GetPlayers() end)
 Players.PlayerRemoving:Connect(function() task.defer(function() _plrList = Players:GetPlayers() end) end)
 
--- Pre-declarar para knife detection (se reusa en el hook más abajo)
-local cachedTargetPos = nil
-
--- ══════════════════════════════════════════════════════════════
---  KNIFE AUTO-DETECT — desactiva Silent Aim al equipar el cuchillo
---
---  Cómo diferenciamos knife de pistola (confirmado con Dex + script fuente):
---  • DefaultGun (pistola) → Handle tiene Sound "GunKill" y "Gunshot"
---  • Knife (cualquier skin) → NO tiene GunKill/Gunshot en el Handle
---    El knife usa Net:RemoteEvent() → los remotes están en RS, no en el tool
---
---  Método: si el tool equipado NO tiene "GunKill" en ningún descendiente
---  y tampoco tiene un "Handle" con sounds de arma → es el knife
--- ══════════════════════════════════════════════════════════════
-local _saBeforeKnife = false
-local _gunEquipped    = false  -- true mientras la pistola está equipada
-
-local function isKnifeTool(tool)
-    if not tool or not tool:IsA("Tool") then return false end
-    -- La pistola SIEMPRE tiene GunKill y Gunshot en el Handle
-    local handle = tool:FindFirstChild("Handle")
-    if handle then
-        if handle:FindFirstChild("GunKill") or handle:FindFirstChild("Gunshot") then
-            return false  -- es pistola
-        end
-    end
-    -- Si tiene un Handle sin sounds de pistola → es knife
-    -- También checar por nombre de sounds en cualquier descendiente
-    for _, obj in ipairs(tool:GetDescendants()) do
-        if obj:IsA("Sound") then
-            local n = obj.Name:lower()
-            if n == "gunkill" or n == "gunshot" or n == "shoot" or n == "fire" then
-                return false  -- es pistola
-            end
-        end
-    end
-    -- Ningún sound de pistola → es knife/melee
-    return true
-end
-
-local function onToolEquipped(tool)
-    if isKnifeTool(tool) then
-        -- Equipó el knife → apagar silent aim
-        _gunEquipped = false
-        _saBeforeKnife = S.SilentAimEnabled
-        if S.SilentAimEnabled then
-            S.SilentAimEnabled = false
-            cachedTargetPos = nil
-            if refreshers["SilentAimEnabled"] then refreshers["SilentAimEnabled"]() end
-        end
-    else
-        -- Equipó la pistola u otra arma → marcar gun activa
-        -- Los cuchillos en el aire NO deben recibir auto-aim
-        _gunEquipped = true
-        cachedTargetPos = nil  -- limpiar posición cacheada para no redirigir knives en vuelo
-    end
-end
-
-local function onToolUnequipped(tool)
-    if isKnifeTool(tool) then
-        -- Desequipó el knife
-        if _saBeforeKnife and not S.SilentAimEnabled then
-            S.SilentAimEnabled = true
-            if refreshers["SilentAimEnabled"] then refreshers["SilentAimEnabled"]() end
-        end
-        _saBeforeKnife = false
-        _gunEquipped = false
-    else
-        -- Desequipó la pistola
-        _gunEquipped = false
-        cachedTargetPos = nil
-    end
-end
-
-local function connectCharacterTools(char)
-    for _, obj in ipairs(char:GetChildren()) do
-        if obj:IsA("Tool") then onToolEquipped(obj) end
-    end
-    char.ChildAdded:Connect(function(obj)
-        if obj:IsA("Tool") then onToolEquipped(obj) end
-    end)
-    char.ChildRemoved:Connect(function(obj)
-        if obj:IsA("Tool") then onToolUnequipped(obj) end
-    end)
-end
-
-if player.Character then connectCharacterTools(player.Character) end
-player.CharacterAdded:Connect(connectCharacterTools)
-
 -- ══════════════════════════════════════════════
 --  RENDER LOOP
 -- ══════════════════════════════════════════════
@@ -2781,6 +2692,7 @@ local camLockTarget=nil
 -- ===============================================================
 --  SILENT AIM (migrado de SyyClient - VisibleCheck/Manipulation/HitChance)
 -- ===============================================================
+local cachedTargetPos = nil
 
 local wallbreakParams = RaycastParams.new()
 wallbreakParams.FilterType = Enum.RaycastFilterType.Include
@@ -2793,8 +2705,6 @@ pcall(function()
     oldNC = hookmetamethod(game, "__namecall", newcclosure(function(...)
         local method = getnamecallmethod()
         local usePos = cachedTargetPos
-        -- No redirigir si silent está apagado, sin target, o si la gun está equipada
-        -- (evita que knives en el aire se auto-dirijan al cambiar a gun)
         if not (S.SilentAimEnabled and usePos) then return oldNC(...) end
         if checkcaller() then return oldNC(...) end
         if math.random(100) > S.HitChance then return oldNC(...) end
@@ -2804,23 +2714,12 @@ pcall(function()
 
         if method == "Raycast" then
             if typeof(args[2]) ~= "Vector3" or typeof(args[3]) ~= "Vector3" then return oldNC(...) end
-            -- Si la gun está equipada, solo redirigir raycasts que se originen CERCA de la cámara
-            -- (disparos de pistola). Los knives volando hacen sus raycasts desde lejos → los ignoramos
-            if _gunEquipped then
-                local camPos = camera.CFrame.Position
-                if (args[2] - camPos).Magnitude > 20 then return oldNC(...) end
-            end
             args[3] = (usePos - args[2]).Unit * 1000
             if S.Manipulation then args[4] = wallbreakParams end
             return oldNC(table.unpack(args))
         elseif method == "FindPartOnRayWithIgnoreList" or method == "FindPartOnRay" then
             if typeof(args[2]) ~= "Ray" then return oldNC(...) end
             local o = args[2].Origin
-            -- Misma lógica: si gun equipada y origen lejos de la cámara → knife en vuelo, saltar
-            if _gunEquipped then
-                local camPos = camera.CFrame.Position
-                if (o - camPos).Magnitude > 20 then return oldNC(...) end
-            end
             args[2] = Ray.new(o, (usePos - o).Unit * 1000)
             if S.Manipulation and method == "FindPartOnRayWithIgnoreList" then args[3] = {} end
             return oldNC(table.unpack(args))
@@ -2850,8 +2749,6 @@ RunService.RenderStepped:Connect(function()
     _saFrame = _saFrame + 1
     if _saFrame % 2 ~= 0 then return end
 
-    -- Solo detener si silent aim está apagado (el target se calcula igual aunque gun esté equipada,
-    -- el filtro de knives se hace en el hook por distancia al origen del raycast)
     if not S.SilentAimEnabled then cachedTargetPos = nil; return end
 
     local myChar = player.Character
