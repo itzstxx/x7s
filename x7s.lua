@@ -677,7 +677,7 @@ end
 local NAV_DATA = {
     { icon = "*", label = "Inicio" },
     { icon = "o", label = "Aim" },
-    { icon = "+", label = "Extras" },
+    { icon = "+", label = "Ez" },
     { icon = "#", label = "Ajustes" },
 }
 
