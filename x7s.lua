@@ -2796,7 +2796,6 @@ pcall(function()
         -- No redirigir si silent está apagado, sin target, o si la gun está equipada
         -- (evita que knives en el aire se auto-dirijan al cambiar a gun)
         if not (S.SilentAimEnabled and usePos) then return oldNC(...) end
-        if _gunEquipped then return oldNC(...) end
         if checkcaller() then return oldNC(...) end
         if math.random(100) > S.HitChance then return oldNC(...) end
 
@@ -2805,12 +2804,23 @@ pcall(function()
 
         if method == "Raycast" then
             if typeof(args[2]) ~= "Vector3" or typeof(args[3]) ~= "Vector3" then return oldNC(...) end
+            -- Si la gun está equipada, solo redirigir raycasts que se originen CERCA de la cámara
+            -- (disparos de pistola). Los knives volando hacen sus raycasts desde lejos → los ignoramos
+            if _gunEquipped then
+                local camPos = camera.CFrame.Position
+                if (args[2] - camPos).Magnitude > 20 then return oldNC(...) end
+            end
             args[3] = (usePos - args[2]).Unit * 1000
             if S.Manipulation then args[4] = wallbreakParams end
             return oldNC(table.unpack(args))
         elseif method == "FindPartOnRayWithIgnoreList" or method == "FindPartOnRay" then
             if typeof(args[2]) ~= "Ray" then return oldNC(...) end
             local o = args[2].Origin
+            -- Misma lógica: si gun equipada y origen lejos de la cámara → knife en vuelo, saltar
+            if _gunEquipped then
+                local camPos = camera.CFrame.Position
+                if (o - camPos).Magnitude > 20 then return oldNC(...) end
+            end
             args[2] = Ray.new(o, (usePos - o).Unit * 1000)
             if S.Manipulation and method == "FindPartOnRayWithIgnoreList" then args[3] = {} end
             return oldNC(table.unpack(args))
@@ -2840,8 +2850,9 @@ RunService.RenderStepped:Connect(function()
     _saFrame = _saFrame + 1
     if _saFrame % 2 ~= 0 then return end
 
-    -- Si la pistola está equipada, no calcular target (los knives en el aire no deben seguir a nadie)
-    if not S.SilentAimEnabled or _gunEquipped then cachedTargetPos = nil; return end
+    -- Solo detener si silent aim está apagado (el target se calcula igual aunque gun esté equipada,
+    -- el filtro de knives se hace en el hook por distancia al origen del raycast)
+    if not S.SilentAimEnabled then cachedTargetPos = nil; return end
 
     local myChar = player.Character
     local vp = camera.ViewportSize
