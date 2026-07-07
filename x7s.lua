@@ -2417,81 +2417,6 @@ local _plrList = Players:GetPlayers()
 Players.PlayerAdded:Connect(function()    _plrList = Players:GetPlayers() end)
 Players.PlayerRemoving:Connect(function() task.defer(function() _plrList = Players:GetPlayers() end) end)
 
--- Pre-declarar para knife detection (se reusa en el hook más abajo)
-local cachedTargetPos = nil
-
--- ══════════════════════════════════════════════════════════════
---  KNIFE AUTO-DETECT — desactiva Silent Aim al equipar el cuchillo
---
---  Cómo diferenciamos knife de pistola (confirmado con Dex + script fuente):
---  • DefaultGun (pistola) → Handle tiene Sound "GunKill" y "Gunshot"
---  • Knife (cualquier skin) → NO tiene GunKill/Gunshot en el Handle
---    El knife usa Net:RemoteEvent() → los remotes están en RS, no en el tool
---
---  Método: si el tool equipado NO tiene "GunKill" en ningún descendiente
---  y tampoco tiene un "Handle" con sounds de arma → es el knife
--- ══════════════════════════════════════════════════════════════
-local _saBeforeKnife = false
-
-local function isKnifeTool(tool)
-    if not tool or not tool:IsA("Tool") then return false end
-    -- La pistola SIEMPRE tiene GunKill y Gunshot en el Handle
-    local handle = tool:FindFirstChild("Handle")
-    if handle then
-        if handle:FindFirstChild("GunKill") or handle:FindFirstChild("Gunshot") then
-            return false  -- es pistola
-        end
-    end
-    -- Si tiene un Handle sin sounds de pistola → es knife
-    -- También checar por nombre de sounds en cualquier descendiente
-    for _, obj in ipairs(tool:GetDescendants()) do
-        if obj:IsA("Sound") then
-            local n = obj.Name:lower()
-            if n == "gunkill" or n == "gunshot" or n == "shoot" or n == "fire" then
-                return false  -- es pistola
-            end
-        end
-    end
-    -- Ningún sound de pistola → es knife/melee
-    return true
-end
-
-local function onToolEquipped(tool)
-    if isKnifeTool(tool) then
-        _saBeforeKnife = S.SilentAimEnabled
-        if S.SilentAimEnabled then
-            S.SilentAimEnabled = false
-            cachedTargetPos = nil
-            if refreshers["SilentAimEnabled"] then refreshers["SilentAimEnabled"]() end
-        end
-    end
-end
-
-local function onToolUnequipped(tool)
-    if isKnifeTool(tool) then
-        if _saBeforeKnife and not S.SilentAimEnabled then
-            S.SilentAimEnabled = true
-            if refreshers["SilentAimEnabled"] then refreshers["SilentAimEnabled"]() end
-        end
-        _saBeforeKnife = false
-    end
-end
-
-local function connectCharacterTools(char)
-    for _, obj in ipairs(char:GetChildren()) do
-        if obj:IsA("Tool") then onToolEquipped(obj) end
-    end
-    char.ChildAdded:Connect(function(obj)
-        if obj:IsA("Tool") then onToolEquipped(obj) end
-    end)
-    char.ChildRemoved:Connect(function(obj)
-        if obj:IsA("Tool") then onToolUnequipped(obj) end
-    end)
-end
-
-if player.Character then connectCharacterTools(player.Character) end
-player.CharacterAdded:Connect(connectCharacterTools)
-
 -- ══════════════════════════════════════════════
 --  RENDER LOOP
 -- ══════════════════════════════════════════════
@@ -2767,6 +2692,7 @@ local camLockTarget=nil
 -- ===============================================================
 --  SILENT AIM (migrado de SyyClient - VisibleCheck/Manipulation/HitChance)
 -- ===============================================================
+local cachedTargetPos = nil
 
 local wallbreakParams = RaycastParams.new()
 wallbreakParams.FilterType = Enum.RaycastFilterType.Include
