@@ -2709,10 +2709,6 @@ local function isKnifeInFlight()
         if n == "ThrowingKnife" or n == "ThrowingServerKnife" then
             return true
         end
-        -- También buscar por tag del knife
-        if obj:HasTag and obj:HasTag("ThrowingKnife") then
-            return true
-        end
     end
     return false
 end
