@@ -2698,54 +2698,6 @@ local wallbreakParams = RaycastParams.new()
 wallbreakParams.FilterType = Enum.RaycastFilterType.Include
 wallbreakParams.FilterDescendantsInstances = {}
 
--- ══════════════════════════════════════════════
--- KNIFE BLOCK: bloquea silent aim mientras el knife
--- está equipado O en vuelo en el workspace
--- ══════════════════════════════════════════════
-local knifeInFlight = false  -- true mientras haya un knife volando
-
-local function isKnifeTool(name)
-    local lower = name:lower()
-    return lower:find("knife") or lower:find("kunai") or lower:find("throwing")
-end
-
-local function hasKnifeEquipped()
-    local char = player.Character
-    if not char then return false end
-    for _, v in ipairs(char:GetChildren()) do
-        if v:IsA("Tool") and isKnifeTool(v.Name) then return true end
-    end
-    return false
-end
-
--- Detecta cuando el knife sale al workspace (fue lanzado) y cuando desaparece
-local function watchForKnifeThrow(char)
-    char.ChildAdded:Connect(function(child)
-        -- El knife se desequipa (va al workspace como modelo volando)
-        -- En Blox Fruits el knife lanzado aparece en workspace con nombre similar
-    end)
-end
-
--- Monitorea RenderedObjects y workspace para knife volando
-local function isKnifeFlying()
-    -- Busca en workspace directamente modelos con nombre de knife
-    for _, obj in ipairs(workspace:GetChildren()) do
-        if isKnifeTool(obj.Name) then return true end
-    end
-    -- También en RenderedObjects si existe
-    local ro = workspace:FindFirstChild("RenderedObjects")
-    if ro then
-        for _, obj in ipairs(ro:GetChildren()) do
-            if isKnifeTool(obj.Name) then return true end
-        end
-    end
-    return false
-end
-
-local function knifeBlocked()
-    return hasKnifeEquipped() or isKnifeFlying()
-end
-
 -- Hook __namecall: intercepta Raycast / FindPartOnRay* y redirige al objetivo
 pcall(function()
     if not hookmetamethod then return end
@@ -2755,8 +2707,6 @@ pcall(function()
         local usePos = cachedTargetPos
         if not (S.SilentAimEnabled and usePos) then return oldNC(...) end
         if checkcaller() then return oldNC(...) end
-        -- Si el knife está equipado O en vuelo, no redirigir nada
-        if knifeBlocked() then return oldNC(...) end
         if math.random(100) > S.HitChance then return oldNC(...) end
 
         local args = { ... }
@@ -2800,8 +2750,6 @@ RunService.RenderStepped:Connect(function()
     if _saFrame % 2 ~= 0 then return end
 
     if not S.SilentAimEnabled then cachedTargetPos = nil; return end
-    -- No calcular objetivo si el knife está equipado o en vuelo
-    if knifeBlocked() then cachedTargetPos = nil; return end
 
     local myChar = player.Character
     local vp = camera.ViewportSize
