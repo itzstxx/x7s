@@ -2827,11 +2827,7 @@ RunService.RenderStepped:Connect(function()
                 pn = r <= 35 and "LowerTorso" or (r <= 85 and "UpperTorso" or "Head")
             end
             local hp = char:FindFirstChild(pn) or root
-            -- Fix: usar la Y del propio jugador para evitar que el personaje se incline al atacar
-            local myChar2 = player.Character
-            local myRoot2 = myChar2 and myChar2:FindFirstChild("HumanoidRootPart")
-            local myY = myRoot2 and myRoot2.Position.Y or hp.Position.Y
-            bestPos = Vector3.new(hp.Position.X, myY + 1.5, hp.Position.Z)
+            bestPos = hp.Position
         end
     end
     cachedTargetPos = bestPos
