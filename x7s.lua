@@ -2698,21 +2698,6 @@ local wallbreakParams = RaycastParams.new()
 wallbreakParams.FilterType = Enum.RaycastFilterType.Include
 wallbreakParams.FilterDescendantsInstances = {}
 
--- Detectar si hay un cuchillo volando en RenderedObjects
--- El script del knife crea los modelos con nombre "ThrowingKnife" / "ThrowingServerKnife"
--- (confirmado en addIgnoreParts línea 56 del KnifeLocalScript)
-local function isKnifeInFlight()
-    local ro = workspace:FindFirstChild("RenderedObjects")
-    if not ro then return false end
-    for _, obj in ipairs(ro:GetChildren()) do
-        local n = obj.Name
-        if n == "ThrowingKnife" or n == "ThrowingServerKnife" then
-            return true
-        end
-    end
-    return false
-end
-
 -- Hook __namecall: intercepta Raycast / FindPartOnRay* y redirige al objetivo
 pcall(function()
     if not hookmetamethod then return end
@@ -2722,8 +2707,6 @@ pcall(function()
         local usePos = cachedTargetPos
         if not (S.SilentAimEnabled and usePos) then return oldNC(...) end
         if checkcaller() then return oldNC(...) end
-        -- No redirigir mientras haya un cuchillo volando en el mundo
-        if isKnifeInFlight() then return oldNC(...) end
         if math.random(100) > S.HitChance then return oldNC(...) end
 
         local args = { ... }
